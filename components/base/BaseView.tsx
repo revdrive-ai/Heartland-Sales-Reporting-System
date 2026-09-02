@@ -46,6 +46,7 @@ const EVENT_MAX_DAYS = 84; // ≤ 12 weeks = an event window; longer = always-on
 const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";
+const LANES_KEY = "hhShowLanes"; // default on
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -70,13 +71,21 @@ export default function BaseView({ data }: { data: BaseData }) {
   const router = useRouter();
   const [seasHide, setSeasHide] = useState(false);
   const [showPY, setShowPY] = useState(false);
+  const [showLanes, setShowLanes] = useState(true);
 
   useEffect(() => {
     try {
       setSeasHide(localStorage.getItem(SEAS_KEY) === "1");
       setShowPY(localStorage.getItem(PY_KEY) === "1");
+      setShowLanes(localStorage.getItem(LANES_KEY) !== "0");
     } catch {}
   }, []);
+  const toggleLanes = () => {
+    setShowLanes((v) => {
+      try { localStorage.setItem(LANES_KEY, v ? "0" : "1"); } catch {}
+      return !v;
+    });
+  };
   const togglePY = () => {
     setShowPY((v) => {
       try { localStorage.setItem(PY_KEY, v ? "0" : "1"); } catch {}
@@ -156,7 +165,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       // Dedicated always-on lanes: one strip per EDLP-style program, pinned
       // under the x-axis on the same week scale — strip = the program is
       // live that week, gap = it is not.
-      if (!bands.lanes.length) return;
+      if (!showLanes || !bands.lanes.length) return;
       const { ctx, chartArea, scales } = chart;
       const x = scales.x;
       if (!x || !chartArea) return;
@@ -191,7 +200,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       }
       ctx.restore();
     },
-  }), [bands, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [bands, showLanes, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liftPct = data.totals.base > 0 ? (data.totals.incremental / data.totals.base) * 100 : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
@@ -200,7 +209,7 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   const opts = useMemo(() => {
     const o = gridOptions();
-    const laneSpace = bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0;
+    const laneSpace = showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0;
     return {
       ...o,
       layout: { padding: { bottom: laneSpace } },
@@ -221,7 +230,7 @@ export default function BaseView({ data }: { data: BaseData }) {
         },
       },
     };
-  }, [activeByWeek, bands, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeByWeek, bands, showLanes, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view active">
@@ -322,6 +331,13 @@ export default function BaseView({ data }: { data: BaseData }) {
                 {showPY ? "✓ Year-ago actuals" : "Year-ago actuals"}
               </span>
               <span
+                className={"minichip" + (showLanes ? " on" : "")}
+                onClick={toggleLanes}
+                title={showLanes ? "Hide the always-on program lanes under the chart" : "Show one lane per always-on program (EDLP etc.) under the chart"}
+              >
+                {showLanes ? "✓ Always-on lanes" : "Always-on lanes"}
+              </span>
+              <span
                 className={"minichip" + (seasHide ? " on" : "")}
                 onClick={toggleSeas}
                 title={seasHide ? "Bring the seasonality card back beside the chart" : "Hide the seasonality card and widen this chart to the full row"}
@@ -330,9 +346,9 @@ export default function BaseView({ data }: { data: BaseData }) {
               </span>
             </div>
           </div>
-          <div className="chartbox" style={{ height: 320 + (bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
+          <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
             <Line
-              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + bands.lanes.length}
+              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + (showLanes ? bands.lanes.length : 0)}
               plugins={[bandPlugin]}
               data={{
                 labels: data.points.map((p) => p.week.slice(5)),
