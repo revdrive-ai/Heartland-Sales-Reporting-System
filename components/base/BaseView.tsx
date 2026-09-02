@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Chart as MixedChart, Line } from "react-chartjs-2";
+import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -126,6 +126,16 @@ export default function BaseView({ data }: { data: BaseData }) {
     const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric, win: data.win, ...patch });
     router.push(`/base?${p.toString()}`);
   };
+
+  /* The projected series with the last actualized week copied in, so the
+     orange projection line connects to the end of the blue actualized line. */
+  const planProjected = useMemo(() => {
+    if (!data.plan) return [];
+    const arr = [...data.plan.projected];
+    const seam = data.plan.actualizedWeeks - 1;
+    if (seam >= 0 && seam < arr.length && arr[seam] === null) arr[seam] = data.plan.actualized[seam];
+    return arr;
+  }, [data.plan]);
 
   const events = data.overlays.filter((o) => durationDays(o) <= EVENT_MAX_DAYS);
   const alwaysOn = data.overlays.filter((o) => durationDays(o) > EVENT_MAX_DAYS);
@@ -388,7 +398,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="c-head">
             <h3>
               {data.plan
-                ? <>Plan {data.win} — {data.plan.sourceYear} actualized base (bars) + projection (line)</>
+                ? <>Plan {data.win} — {data.plan.sourceYear} actualized base + projected remainder</>
                 : <>Weekly {data.metric} — actual vs NIQ base · event windows shaded</>}
             </h3>
             <div className="chip-row">
@@ -417,26 +427,27 @@ export default function BaseView({ data }: { data: BaseData }) {
           </div>
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
             {data.plan ? (
-              <MixedChart
-                type="line"
+              <Line
                 key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win}
                 plugins={[bandPlugin]}
                 data={{
                   labels: data.points.map((p) => p.week.slice(5)),
                   datasets: [
                     {
-                      type: "bar" as const,
                       label: `${data.plan.sourceYear} base — actualized`,
                       data: data.plan.actualized,
+                      borderColor: cssToken("--accent"),
                       backgroundColor: cssToken("--accent"),
-                      borderRadius: 2,
-                      barPercentage: 0.9,
-                      categoryPercentage: 0.92,
+                      borderWidth: 2,
+                      tension: 0.25,
+                      spanGaps: false,
+                      pointRadius: 0,
+                      pointHoverRadius: 4,
                     },
                     {
-                      type: "line" as const,
                       label: "Projected base — rest of year",
-                      data: data.plan.projected,
+                      // repeats the last actualized week so the two lines connect
+                      data: planProjected,
                       borderColor: cssToken("--warn"),
                       backgroundColor: cssToken("--warn"),
                       borderDash: [6, 4],
@@ -498,7 +509,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           </div>
           <div className="note">
             {data.plan
-              ? <>◇ <b>Plan {data.win}</b>: blue bars carry the <b>actual NIQ base</b> from the matching {data.plan.sourceYear} weeks
+              ? <>◇ <b>Plan {data.win}</b>: the blue line carries the <b>actual NIQ base</b> from the matching {data.plan.sourceYear} weeks
                 — as far as {data.plan.sourceYear} has actualized ({data.plan.actualizedWeeks} weeks, through {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}).
                 The amber dashed line <b>projects the rest of the year</b>: the latest-52-week average base shaped by this
                 selection&apos;s seasonality engine. Both firm up as {data.plan.sourceYear} weeks land. Opening this view logged{" "}
