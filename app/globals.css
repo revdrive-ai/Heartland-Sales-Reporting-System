@@ -1,7 +1,7 @@
 
 /* ============ THEME VARIABLES ============ */
 :root{
-  /* Default = Splenda Bright */
+  /* Single platform theme (the mockup's Splenda Bright palette) */
   --bg:#f5f6f8; --surface:#ffffff; --surface-2:#fbfbfd; --line:#e7e9ee;
   --ink:#1a1d23; --ink-2:#5b6472; --ink-3:#6e7889;
   --brand:#ffd400; --brand-ink:#1a1d23; --brand-soft:#fff7cc;
@@ -11,24 +11,6 @@
   --good:#15a05a; --good-soft:#e3f6ec; --warn:#e08a00; --warn-soft:#fdf0d8; --bad:#d6483b; --bad-soft:#fbe6e4;
   --radius:14px; --shadow:0 1px 2px rgba(20,24,35,.06),0 6px 20px rgba(20,24,35,.05);
   --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-}
-/* Theme B — Portfolio Multi-brand */
-[data-theme="portfolio"]{
-  --bg:#f4f2f7; --surface:#ffffff; --surface-2:#faf9fc; --line:#eae6f0;
-  --ink:#231b2e; --ink-2:#5e5670; --ink-3:#7a7292;
-  --brand:#ffd400; --brand-ink:#231b2e; --brand-soft:#fff7cc;
-  --accent:#6d28d9; --accent-soft:#efe7fc;
-  --sidebar-bg:#ffffff; --sidebar-ink:#473e57; --sidebar-active-bg:#efe7fc; --sidebar-active-ink:#5b21b6;
-  --topbar-bg:#ffffff; --topbar-ink:#231b2e;
-}
-/* Theme C — Splenda Refined (dark sidebar) */
-[data-theme="refined"]{
-  --bg:#eef1f5; --surface:#ffffff; --surface-2:#f7f9fc; --line:#e3e8f0;
-  --ink:#0f1729; --ink-2:#56607a; --ink-3:#6d7994;
-  --brand:#ffd400; --brand-ink:#0f1729; --brand-soft:#fff5c2;
-  --accent:#1d4ed8; --accent-soft:#e7eeff;
-  --sidebar-bg:#101a33; --sidebar-ink:#aeb9d4; --sidebar-active-bg:#1c2a4d; --sidebar-active-ink:#ffd400;
-  --topbar-bg:#101a33; --topbar-ink:#ffffff;
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
@@ -42,18 +24,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .brand small{font-weight:600;opacity:.7;font-size:11px;text-transform:uppercase;letter-spacing:1px}
 .topbar .filters{display:flex;gap:10px;margin-left:8px}
 .fchip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.55);border:1px solid rgba(0,0,0,.08);color:inherit;padding:6px 11px;border-radius:9px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
-[data-theme="refined"] .fchip,[data-theme="portfolio"] .fchip{background:var(--surface-2)}
 .fchip .lbl{opacity:.6;font-weight:600}
 .fchip svg{width:13px;height:13px;opacity:.5}
 .topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
 .ask{display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;padding:9px 15px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
-[data-theme="refined"] .ask{background:var(--brand);color:var(--brand-ink)}
 .ask .spark{font-size:14px}
-.themepick{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.5);border:1px solid rgba(0,0,0,.08);border-radius:10px;padding:4px}
-[data-theme="refined"] .themepick,[data-theme="portfolio"] .themepick{background:var(--surface-2)}
-.themepick button{border:none;background:transparent;color:inherit;font:inherit;font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:7px;cursor:pointer;opacity:.6}
-.themepick button.on{background:var(--surface);opacity:1;box-shadow:var(--shadow)}
-[data-theme="refined"] .themepick button.on{background:#1c2a4d;color:var(--brand)}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
 
 /* ============ SIDEBAR ============ */
@@ -64,10 +39,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .side::-webkit-scrollbar-track{background:transparent}
 .side::-webkit-scrollbar-thumb{background:rgba(125,135,155,.45);border-radius:6px;border:2px solid transparent;background-clip:content-box}
 .side:hover::-webkit-scrollbar-thumb{background:rgba(125,135,155,.7);background-clip:content-box}
-[data-theme="refined"] .side{border-right-color:#1c2a4d}
 .navgroup{margin-bottom:22px}
 .navgroup h4{font-size:10.5px;text-transform:uppercase;letter-spacing:1.3px;color:var(--ink-3);margin:0 8px 9px;font-weight:800}
-[data-theme="refined"] .navgroup h4{color:#6b78a0}
 .navitem{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:10px;color:var(--sidebar-ink);cursor:pointer;font-weight:600;font-size:13.5px;margin-bottom:2px;transition:background .12s}
 .navitem .ic{font-size:16px;width:20px;text-align:center}
 .navitem:hover{background:var(--sidebar-active-bg)}
@@ -75,10 +48,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .navitem .tag{margin-left:auto;font-size:9.5px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--brand);color:var(--brand-ink)}
 .navitem .badge{margin-left:auto;font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:var(--bad-soft);color:var(--bad)}
 .sidefoot{margin-top:8px;padding:12px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line)}
-[data-theme="refined"] .sidefoot{background:#16234a;border-color:#243a66}
 .sidefoot .t{font-weight:800;font-size:12px;margin-bottom:3px}
 .sidefoot .d{font-size:11px;color:var(--ink-2);line-height:1.4}
-[data-theme="refined"] .sidefoot .d{color:#9aa6c4}
 .transition-pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;color:var(--good);background:var(--good-soft);padding:3px 8px;border-radius:20px;margin-top:8px}
 
 /* ============ MAIN ============ */
@@ -210,7 +181,6 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .src-pos{background:#e3f6ec;color:#15803d}
 .src-erp{background:#fdf0d8;color:#b45309}
 .src-spins{background:#f3e8ff;color:#7c3aed}
-[data-theme="refined"] .src-nielsen{background:#16234a;color:#7ea2ff}
 .r-win{background:var(--good-soft);color:var(--good)}
 .r-loss{background:var(--bad-soft);color:var(--bad)}
 .r-watch{background:var(--warn-soft);color:var(--warn)}
@@ -326,10 +296,6 @@ code.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px
 .wf .wfs.on .num{background:var(--brand);border-color:transparent;color:var(--brand-ink)}
 .wf .sep{color:var(--ink-3);font-size:11px}
 .wf .loop{font-size:10.5px;font-weight:800;color:var(--accent);margin-left:4px;white-space:nowrap}
-
-/* ===== Floating mockup controls ===== */
-.mockupbar{position:fixed;left:16px;bottom:16px;z-index:80;display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:7px 8px 7px 12px;box-shadow:0 8px 30px rgba(0,0,0,.14)}
-.mockupbar .mb-l{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--ink-3)}
 
 /* ===== Topbar filter dropdowns ===== */
 .fchip{position:relative}

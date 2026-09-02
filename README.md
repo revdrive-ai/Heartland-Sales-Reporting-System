@@ -15,8 +15,8 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
 ## Status
 
 - ✅ App shell: topbar (global filter chips, Ask Heartland panel), sidebar (all 16 views),
-  three mockup themes (Splenda Bright / Portfolio / Refined), welcome overlay, toasts —
-  ported 1:1 from the demo (`app/globals.css` is the demo stylesheet verbatim).
+  single platform theme, welcome overlay, toasts —
+  ported from the demo (`app/globals.css` is the demo stylesheet with the alternate themes removed).
 - ✅ Data modules: `lib/data/nielsenPull.ts` (13 Albertsons division TAs + the 25-column NIQ
   contract), `lib/data/alignmentKey.ts` (customer alignment hierarchy + mock stats).
 - ✅ **The data seam**: views read/write only through `lib/repo/` (async functions returning

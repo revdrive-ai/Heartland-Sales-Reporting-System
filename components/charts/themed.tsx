@@ -23,16 +23,11 @@ export function cssToken(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888";
 }
 
-/** Bumps on mount and whenever data-theme changes, so charts repaint with
-    the new tokens. Key chart components on this value. */
+/** Bumps once on the first client paint, when the CSS tokens become
+    readable — key chart components on this value so colors resolve. */
 export function useThemeTick(): number {
   const [tick, setTick] = useState(0);
-  useEffect(() => {
-    setTick((t) => t + 1); // first client paint, tokens now readable
-    const mo = new MutationObserver(() => setTick((t) => t + 1));
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-    return () => mo.disconnect();
-  }, []);
+  useEffect(() => { setTick(1); }, []);
   return tick;
 }
 
