@@ -18,6 +18,15 @@ import type { PromoOverlay } from "@/lib/repo";
 
 export type WeekPoint = { week: string; actual: number | null; base: number | null; actualLY: number | null; promoAcv: number };
 
+/** A promo overlay plus its lift read: measured over the window's weeks on
+    file, and predicted from the matching weeks a year earlier. */
+export type OverlayRow = PromoOverlay & {
+  pred_lift: number | null;
+  pred_fallback: boolean;   // no year-ago data — predicted from avg promoted-week lift
+  actual_lift: number | null;
+  lift_partial: boolean;    // window ends past the latest NIQ week on file
+};
+
 export type BaseData = {
   markets: { code: string; name: string }[];
   brands: string[];
@@ -41,7 +50,7 @@ export type BaseData = {
     totProjected: number;
   };
   points: WeekPoint[];
-  overlays: PromoOverlay[];
+  overlays: OverlayRow[];
   season: {
     labels: string[];
     engine: (number | null)[];                       // full-history index
@@ -75,6 +84,7 @@ const utc = (isoDate: string) => Date.UTC(+isoDate.slice(0, 4), +isoDate.slice(5
 const durationDays = (o: PromoOverlay) => (utc(o.end_date) - utc(o.start_date)) / DAY + 1;
 
 const fmtNum = (v: number) => (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? Math.round(v / 1e3).toLocaleString() + "K" : String(Math.round(v)));
+const fmtLift = (v: number | null) => (v === null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(0)}%`);
 
 const YEAR_STYLES = [
   { color: "--ink-3", dash: [5, 4] as number[], width: 1.3 },
@@ -664,8 +674,14 @@ export default function BaseView({ data }: { data: BaseData }) {
                 </th>
                 <th>Window</th>
                 <th style={{ textAlign: "right" }}>Weeks</th>
-                <th style={{ textAlign: "right" }}>Planned</th>
-                <th style={{ textAlign: "right" }}>Actual</th>
+                <th style={{ textAlign: "right" }} title="Expected lift: actual vs NIQ base over the matching weeks a year earlier († = no year-ago data, so it uses this selection's average lift in NIQ-promoted weeks)">
+                  Pred. lift
+                </th>
+                <th style={{ textAlign: "right" }} title="Measured lift: actual vs NIQ base over this window's weeks on file (⏳ = window not fully actualized yet)">
+                  Actual lift
+                </th>
+                <th style={{ textAlign: "right" }}>Planned $</th>
+                <th style={{ textAlign: "right" }}>Actual $</th>
               </tr>
             </thead>
             <tbody>
@@ -691,13 +707,28 @@ export default function BaseView({ data }: { data: BaseData }) {
                     <td style={{ padding: "9px 14px" }}>{o.performance_type}</td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{o.start_date} → {o.end_date}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Math.round(days / 7)}</td>
+                    <td
+                      style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--ink-2)" }}
+                      title={o.pred_fallback && o.pred_lift !== null ? "No year-ago data for this window — predicted from this selection's average lift in NIQ-promoted weeks" : "Actual vs NIQ base over the matching weeks a year earlier"}
+                    >
+                      {fmtLift(o.pred_lift)}{o.pred_fallback && o.pred_lift !== null ? " †" : ""}
+                    </td>
+                    <td
+                      style={{
+                        padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700,
+                        color: o.actual_lift === null ? "var(--ink-3)" : o.actual_lift >= 0 ? "var(--good)" : "var(--bad)",
+                      }}
+                      title={o.lift_partial ? "Window not fully actualized — lift over its weeks with NIQ data so far" : "Actual vs NIQ base over this window"}
+                    >
+                      {fmtLift(o.actual_lift)}{o.lift_partial && o.actual_lift !== null ? " ⏳" : ""}
+                    </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(o.planned_amount)}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(o.actual_amount)}</td>
                   </tr>
                 );
               })}
               {tableRows.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
+                <tr><td colSpan={10} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
                   {data.overlays.length === 0
                     ? "No Telus promotions map to this division × brand in the window."
                     : "No promotions match the header filters — clear them above."}

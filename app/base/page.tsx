@@ -203,6 +203,45 @@ export default async function Page({
 
   const overlays = await getPromoOverlays({ market_code: mkt, brand, from, to });
 
+  /* Lift per promotion window, in the chosen metric.
+     Actual lift: (actual − NIQ base) / base summed over the window's weeks on
+     file. Predicted lift: the same measure over the matching weeks a year
+     earlier — what this window "should" do based on last year — falling back
+     to the selection's all-history promoted-week lift (weeks where NIQ saw
+     ≥ 10 %ACV promo support) when there is no year-ago data. */
+  const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
+  const weekBaseFull = new Map<string, number>(); // full-history base, chosen metric
+  for (const r of scoped) {
+    const v = (metric === "units" ? r.base_units : r.base_dollars) ?? 0;
+    weekBaseFull.set(r.week_ending, (weekBaseFull.get(r.week_ending) ?? 0) + v);
+  }
+  const promoWeeks = new Set<string>();
+  for (const r of scoped) if ((r.acv_any_promo ?? 0) >= 10) promoWeeks.add(r.week_ending);
+  let pA = 0, pB = 0;
+  for (const w of promoWeeks) { pA += weekActual.get(w) ?? 0; pB += weekBaseFull.get(w) ?? 0; }
+  const fallbackLift = pB > 0 ? (pA - pB) / pB : null;
+
+  const liftOver = (sISO: string, eISO: string) => {
+    const s = utcOf(sISO), e = utcOf(eISO);
+    let a = 0, b = 0, n = 0;
+    for (const w of allWeeks) {
+      const wt = utcOf(w); // a week-ending Saturday covers the 7 days ending that day
+      if (s <= wt && e >= wt - 6 * DAY) { a += weekActual.get(w) ?? 0; b += weekBaseFull.get(w) ?? 0; n++; }
+    }
+    return { lift: n > 0 && b > 0 ? (a - b) / b : null, weeks: n };
+  };
+  const overlayRows = overlays.map((o) => {
+    const act = liftOver(o.start_date, o.end_date);
+    const pred = liftOver(yearAgoWeek(o.start_date), yearAgoWeek(o.end_date));
+    return {
+      ...o,
+      pred_lift: pred.lift ?? fallbackLift,
+      pred_fallback: pred.lift === null,
+      actual_lift: act.lift,
+      lift_partial: utcOf(o.end_date) > utcOf(latestWeek),
+    };
+  });
+
   const totActual = points.reduce((a, p) => a + (p.actual ?? 0), 0);
   const totBase = points.reduce((a, p) => a + (p.base ?? 0), 0);
 
@@ -222,7 +261,7 @@ export default async function Page({
     planningYear,
     plan,
     points,
-    overlays,
+    overlays: overlayRows,
     season: { labels: MONTH_LABELS, engine, years: seasonYears },
     totals: {
       actual: totActual,
