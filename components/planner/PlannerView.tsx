@@ -4,12 +4,14 @@ import { useMemo, useState } from "react";
 import { Bar } from "react-chartjs-2";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
+import { LinesTable, STATUS_STYLE, usePromoLines } from "./lines";
+import PromoCalendar from "./PromoCalendar";
 import type { PromoLine, PromoMeta } from "@/lib/types/db";
 
 /* Promotion Planner, draft 1 on the real Telus FY2026 snapshot.
-   Read-only for now: KPIs, spend shape, and the full promotion book with
-   drill-down to component/item lines. Planning actions (new event wizard,
-   amendments, guardrails) layer on once the Base & Lift side exists. */
+   Two modes over the same filtered book: the table ("Book") and the Gantt
+   calendar ("Calendar"). Read-only for now — planning actions (new event
+   wizard, amendments, guardrails) layer on once the Base & Lift side exists. */
 
 export type PromoRow = {
   id: string; title: string; status: string; perf: string; template: string;
@@ -31,13 +33,6 @@ export type PlannerData = {
   rows: PromoRow[];
 };
 
-const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  Active: { bg: "var(--good-soft)", fg: "var(--good)" },
-  Expiring: { bg: "var(--warn-soft)", fg: "var(--warn)" },
-  "Pre-Active": { bg: "var(--accent-soft)", fg: "var(--accent)" },
-  Expired: { bg: "var(--surface-2)", fg: "var(--ink-3)" },
-};
-
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
   background: "var(--surface)", border: "1px solid var(--line)",
@@ -48,6 +43,7 @@ type SortKey = "start" | "end" | "planned" | "actual" | "customer" | "status" | 
 
 export default function PlannerView({ data }: { data: PlannerData }) {
   const tick = useThemeTick();
+  const [mode, setMode] = useState<"book" | "calendar">("book");
   const [status, setStatus] = useState("");
   const [perf, setPerf] = useState("");
   const [channel, setChannel] = useState("");
@@ -56,7 +52,7 @@ export default function PlannerView({ data }: { data: PlannerData }) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "planned", dir: -1 });
   const [limit, setLimit] = useState(100);
   const [open, setOpen] = useState<string | null>(null);
-  const [lines, setLines] = useState<Record<string, PromoLine[] | "loading">>({});
+  const { lines, load } = usePromoLines();
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -82,19 +78,10 @@ export default function PlannerView({ data }: { data: PlannerData }) {
   const fPlanned = filtered.reduce((a, r) => a + r.planned, 0);
   const fActual = filtered.reduce((a, r) => a + r.actual, 0);
 
-  const toggle = async (id: string) => {
-    if (open === id) { setOpen(null); return; }
-    setOpen(id);
-    if (!lines[id]) {
-      setLines((s) => ({ ...s, [id]: "loading" }));
-      try {
-        const res = await fetch(`/api/promos/${encodeURIComponent(id)}/lines`);
-        const body = (await res.json()) as { lines: PromoLine[] };
-        setLines((s) => ({ ...s, [id]: body.lines }));
-      } catch {
-        setLines((s) => ({ ...s, [id]: [] }));
-      }
-    }
+  const toggleRow = (id: string) => {
+    const next = open === id ? null : id;
+    setOpen(next);
+    if (next) void load(next);
   };
 
   const th = (label: string, key?: SortKey, right?: boolean) => (
@@ -192,11 +179,28 @@ export default function PlannerView({ data }: { data: PlannerData }) {
 
       <div className="card" style={{ padding: 0 }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 9, alignItems: "center", padding: "14px 16px", borderBottom: "1px solid var(--line)" }}>
+          <div style={{ display: "flex", gap: 0, border: "1px solid var(--line)", borderRadius: 9, overflow: "hidden" }}>
+            {(["book", "calendar"] as const).map((m) => (
+              <button
+                key={m}
+                className="btn"
+                onClick={() => setMode(m)}
+                style={{
+                  border: "none", borderRadius: 0, padding: "8px 14px",
+                  background: mode === m ? "var(--brand)" : "transparent",
+                  color: mode === m ? "var(--brand-ink)" : "var(--ink-2)",
+                }}
+                aria-pressed={mode === m}
+              >
+                {m === "book" ? "Book" : "Calendar"}
+              </button>
+            ))}
+          </div>
           <input
             value={q}
             onChange={(e) => { setQ(e.target.value); setLimit(100); }}
             placeholder="Search title, customer, promo ID…"
-            style={{ ...selStyle, minWidth: 240, fontWeight: 500 }}
+            style={{ ...selStyle, minWidth: 220, fontWeight: 500 }}
           />
           <select style={selStyle} value={status} onChange={(e) => { setStatus(e.target.value); setLimit(100); }}>
             <option value="">All statuses</option>
@@ -219,41 +223,48 @@ export default function PlannerView({ data }: { data: PlannerData }) {
           </span>
         </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <table>
-            <thead>
-              <tr>
-                {th("Promo")}
-                {th("Customer", "customer")}
-                {th("Status", "status")}
-                {th("Type")}
-                {th("Window", "start")}
-                {th("Lines", "lines", true)}
-                {th("Planned", "planned", true)}
-                {th("Actual", "actual", true)}
-                {th("Consumed", "consumed", true)}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.slice(0, limit).map((r) => {
-                const st = STATUS_STYLE[r.status] ?? STATUS_STYLE.Expired;
-                const consumed = r.planned > 0 ? (r.actual / r.planned) * 100 : null;
-                const isOpen = open === r.id;
-                const rowLines = lines[r.id];
-                return (
-                  <PromoTr key={r.id} r={r} st={st} consumed={consumed} isOpen={isOpen} rowLines={rowLines} onToggle={() => toggle(r.id)} />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {mode === "calendar" ? (
+          <PromoCalendar rows={filtered} snapshot={data.meta.snapshot_date} />
+        ) : (
+          <>
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    {th("Promo")}
+                    {th("Customer", "customer")}
+                    {th("Status", "status")}
+                    {th("Type")}
+                    {th("Window", "start")}
+                    {th("Lines", "lines", true)}
+                    {th("Planned", "planned", true)}
+                    {th("Actual", "actual", true)}
+                    {th("Consumed", "consumed", true)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.slice(0, limit).map((r) => (
+                    <PromoTr
+                      key={r.id}
+                      r={r}
+                      consumed={r.planned > 0 ? (r.actual / r.planned) * 100 : null}
+                      isOpen={open === r.id}
+                      rowLines={lines[r.id]}
+                      onToggle={() => toggleRow(r.id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-        {filtered.length > limit && (
-          <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}>
-            <button className="btn" onClick={() => setLimit((l) => l + 300)}>
-              Show more — {filtered.length - limit} remaining
-            </button>
-          </div>
+            {filtered.length > limit && (
+              <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}>
+                <button className="btn" onClick={() => setLimit((l) => l + 300)}>
+                  Show more — {filtered.length - limit} remaining
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -261,11 +272,12 @@ export default function PlannerView({ data }: { data: PlannerData }) {
 }
 
 function PromoTr({
-  r, st, consumed, isOpen, rowLines, onToggle,
+  r, consumed, isOpen, rowLines, onToggle,
 }: {
-  r: PromoRow; st: { bg: string; fg: string }; consumed: number | null;
+  r: PromoRow; consumed: number | null;
   isOpen: boolean; rowLines: PromoLine[] | "loading" | undefined; onToggle: () => void;
 }) {
+  const st = STATUS_STYLE[r.status] ?? STATUS_STYLE.Expired;
   const td: React.CSSProperties = { padding: "10px 14px", borderBottom: "1px solid var(--line)", verticalAlign: "top" };
   const right: React.CSSProperties = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
   return (
@@ -298,37 +310,7 @@ function PromoTr({
       {isOpen && (
         <tr>
           <td colSpan={9} style={{ padding: 0, borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
-            {rowLines === "loading" || rowLines === undefined ? (
-              <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--ink-3)" }}>Loading lines…</div>
-            ) : (
-              <table style={{ fontSize: 12.5 }}>
-                <thead>
-                  <tr>
-                    <th>Component</th><th>Brand</th><th>Item</th>
-                    <th style={{ textAlign: "right" }}>Rate</th>
-                    <th style={{ textAlign: "right" }}>Planned</th>
-                    <th style={{ textAlign: "right" }}>Actual</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rowLines.map((l) => (
-                    <tr key={l.line_id}>
-                      <td style={{ padding: "7px 14px" }}>{l.component_type}</td>
-                      <td style={{ padding: "7px 14px" }}>{l.brand}</td>
-                      <td style={{ padding: "7px 14px" }}>
-                        {l.item_description ?? "—"}
-                        <span style={{ color: "var(--ink-3)", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11 }}> {l.item_number}</span>
-                      </td>
-                      <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                        {l.rate_uom === "Lump Sum" && l.rate === 0 ? "lump sum" : `${l.rate} / ${l.rate_uom}`}
-                      </td>
-                      <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(l.planned_amount)}</td>
-                      <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(l.actual_amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <LinesTable rows={rowLines} />
           </td>
         </tr>
       )}

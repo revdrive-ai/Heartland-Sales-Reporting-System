@@ -1,0 +1,100 @@
+/* Rebuild-specific styles. app/globals.css is the reference mockup's
+   stylesheet verbatim and stays untouched; anything the rebuild adds on top
+   lives here, on the same design tokens so all three themes keep working. */
+
+/* ============ PROMO CALENDAR (Gantt lanes on the Telus book) ============ */
+
+.pcal { overflow-x: auto; }
+.pcal-inner { min-width: 980px; }
+
+.pcal-months {
+  display: grid;
+  margin-left: var(--pcal-label-w, 250px);
+  grid-template-columns: repeat(12, 1fr);
+  border-bottom: 1px solid var(--line);
+}
+.pcal-months span {
+  font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px;
+  color: var(--ink-3); padding: 8px 0 8px 8px; border-left: 1px solid var(--line);
+}
+
+.pcal-body { position: relative; }
+
+/* month gridlines + snapshot marker span every lane */
+.pcal-grid { position: absolute; inset: 0 0 0 var(--pcal-label-w, 250px); pointer-events: none; }
+.pcal-gridline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.pcal-snapshot { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); opacity: .85; }
+.pcal-snapshot::after {
+  content: attr(data-label);
+  position: sticky; top: 0;
+  display: inline-block; transform: translateX(3px);
+  font-size: 9.5px; font-weight: 800; color: var(--accent); white-space: nowrap;
+}
+
+.pcal-group {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 12px 14px 6px var(--pcal-label-w, 0px);
+  padding-left: 14px;
+  font-size: 12px; font-weight: 800;
+  border-top: 1px solid var(--line);
+  position: relative; z-index: 1;
+}
+.pcal-group .sub { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+
+.pcal-row {
+  display: grid; grid-template-columns: var(--pcal-label-w, 250px) 1fr;
+  align-items: center; min-height: 34px;
+  position: relative; z-index: 1;
+}
+.pcal-row:hover { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+
+.pcal-label { padding: 4px 12px 4px 14px; min-width: 0; }
+.pcal-label .t {
+  font-size: 12px; font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pcal-label .s { font-size: 10.5px; color: var(--ink-3); font-family: ui-monospace, Menlo, monospace; }
+
+.pcal-lane { position: relative; height: 20px; }
+.pcal-bar {
+  position: absolute; top: 1px; height: 18px;
+  border-radius: 6px; border: 1px solid transparent;
+  background: var(--surface-2); cursor: pointer;
+  min-width: 5px;
+}
+.pcal-bar:hover, .pcal-bar.open { filter: brightness(.96); box-shadow: 0 0 0 2px var(--accent-soft); }
+.pcal-bar .amt {
+  position: absolute; left: calc(100% + 6px); top: 1px;
+  font-size: 10.5px; font-weight: 800; color: var(--ink-2);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.pcal-bar.at-right .amt { left: auto; right: calc(100% + 6px); }
+
+.pcal-bar.st-active     { background: var(--good-soft);   border-color: var(--good); }
+.pcal-bar.st-expiring   { background: var(--warn-soft);   border-color: var(--warn); }
+.pcal-bar.st-pre-active { background: var(--accent-soft); border-color: var(--accent); }
+.pcal-bar.st-expired    { background: var(--surface-2);   border-color: var(--ink-3); opacity: .75; }
+
+/* actual-spend fill inside the bar (share of planned consumed) */
+.pcal-fill { position: absolute; inset: 3px auto 3px 3px; border-radius: 4px; opacity: .55; }
+.st-active     .pcal-fill { background: var(--good); }
+.st-expiring   .pcal-fill { background: var(--warn); }
+.st-pre-active .pcal-fill { background: var(--accent); }
+.st-expired    .pcal-fill { background: var(--ink-3); }
+
+.pcal-detail {
+  grid-column: 1 / -1;
+  margin: 2px 14px 10px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+  overflow: hidden;
+}
+.pcal-detail .head {
+  display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline;
+  padding: 10px 14px; font-size: 12px; border-bottom: 1px solid var(--line);
+}
+.pcal-detail .head b { font-size: 12.5px; }
+.pcal-detail .head .m { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+.pcal-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-2); }
+.pcal-key { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.pcal-key i { width: 14px; height: 10px; border-radius: 3px; border: 1px solid transparent; display: inline-block; }

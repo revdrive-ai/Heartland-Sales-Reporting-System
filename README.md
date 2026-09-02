@@ -29,7 +29,9 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
   competitive). Source workbook at `data/raw/`, per-market facts at
   `data/nielsen/<CODE>.json.gz`, rebuilt any time with `python3 scripts/ingest_albsco.py`.
 - ✅ **Promotion Planner rebuilt** (`/planner`): KPIs, monthly planned-vs-actual pacing, top
-  customers, and the full sortable/filterable promotion book with drill-down to component
+  customers, and two modes over the same filtered book: the sortable table and a Gantt
+  calendar (customer-grouped lanes, status colors, consumption fill, snapshot marker) —
+  both with drill-down to component
   lines (`/api/promos/[id]/lines`).
 - ⬜ The other 15 views render as stubs (`components/PageStub.tsx`) — rebuilt view-by-view as
   directed. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the full demo teardown and plan.
