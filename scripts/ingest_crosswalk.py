@@ -60,10 +60,16 @@ def main() -> None:
 
     rows, flags = [], []
     seen_ids = set()
+    seen_nat = set()  # exact-duplicate guard: (customer_name, sales_account, niq_match)
     for r in raw_rows:
         nm, cls, terr, parent, sales, tlead, alead, niq = (str(v).strip() if v is not None else None for v in r[:8])
         if not nm:
             continue
+        nat = (nm, sales, niq)
+        if nat in seen_nat:
+            flags.append(f"duplicate row dropped: {nm!r} -> {niq!r}")
+            continue
+        seen_nat.add(nat)
         if terr and "?" in terr:
             flags.append(f"data question left in sheet: {nm!r} territory={terr!r}")
         market = TA_TO_MARKET.get(niq) if niq else None
