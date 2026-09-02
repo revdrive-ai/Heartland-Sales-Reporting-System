@@ -131,13 +131,14 @@ export default function BaseView({ data }: { data: BaseData }) {
     };
   }, [data.points, data.overlays]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  /* promos active per week, for the tooltip */
+  /* event-window promos active per week, for the tooltip — always-on programs
+     have their own lanes, so hovering a shaded band lists only its deals */
   const activeByWeek = useMemo(() => {
     return data.points.map((p) => {
       const w = utc(p.week);
-      return data.overlays.filter((o) => utc(o.start_date) <= w && utc(o.end_date) >= w - 6 * DAY);
+      return events.filter((o) => utc(o.start_date) <= w && utc(o.end_date) >= w - 6 * DAY);
     });
-  }, [data.points, data.overlays]);
+  }, [data.points, data.overlays]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bandPlugin: Plugin<"line"> = useMemo(() => ({
     id: "promoBands",
@@ -224,7 +225,7 @@ export default function BaseView({ data }: { data: BaseData }) {
               if (!list.length) return "";
               const names = list.slice(0, 6).map((p) => `• ${p.promo_title} (${p.performance_type})`);
               if (list.length > 6) names.push(`… +${list.length - 6} more`);
-              return ["", "Promotions live this week:", ...names].join("\n");
+              return ["", "Event deals this week:", ...names].join("\n");
             },
           },
         },
