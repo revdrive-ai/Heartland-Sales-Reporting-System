@@ -185,3 +185,76 @@ export async function getPromoMeta(): Promise<PromoMeta> {
   const file = path.join(process.cwd(), "data", "promos", "meta.json");
   return JSON.parse(readFileSync(file, "utf-8")) as PromoMeta;
 }
+
+/* ------------------------------------------------------- PROMO ↔ NIELSEN JOIN
+   Overlay the Telus promotion windows onto a division's Nielsen weekly trend.
+   The division ←→ customer mapping lives in lib/data/albertsonsPromoMap.ts
+   (mirrored by supabase/migrations/00003). */
+
+import { ALBERTSONS_CORPORATE, normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
+
+export type PromoOverlay = {
+  promo_id: string;
+  promo_title: string;
+  promo_status: Promotion["promo_status"];
+  performance_type: string;
+  customer_name: string;
+  corporate: boolean;        // from the all-divisions corporate account
+  start_date: string;
+  end_date: string;
+  planned_amount: number;
+  actual_amount: number;
+  brands: string[];          // Telus line brands on the promo
+};
+
+let promoBrandsCache: Map<string, Set<string>> | null = null;
+/** promo_id → normalized brand set, derived from the component lines. */
+function promoBrands(): Map<string, Set<string>> {
+  if (!promoBrandsCache) {
+    promoBrandsCache = new Map();
+    for (const l of promoLines()) {
+      let s = promoBrandsCache.get(l.promo_id);
+      if (!s) promoBrandsCache.set(l.promo_id, (s = new Set()));
+      s.add(normBrand(l.brand));
+    }
+  }
+  return promoBrandsCache;
+}
+
+export type PromoOverlayFilter = {
+  market_code: string;
+  /** NIQ brand name (e.g. "SPLENDA"); omit for all brands. */
+  brand?: string;
+  /** ISO dates, inclusive — keep promos whose window overlaps [from, to]. */
+  from?: string;
+  to?: string;
+};
+
+export async function getPromoOverlays(f: PromoOverlayFilter): Promise<PromoOverlay[]> {
+  const customers = new Set(promoCustomersFor(f.market_code));
+  if (customers.size === 0) return [];
+  const wantBrand = f.brand ? normBrand(f.brand) : null;
+  const brands = promoBrands();
+  return promos()
+    .filter((p) => {
+      if (!customers.has(p.customer_id)) return false;
+      if (f.to && p.start_date > f.to) return false;
+      if (f.from && p.end_date < f.from) return false;
+      if (wantBrand && !(brands.get(p.promo_id)?.has(wantBrand) ?? false)) return false;
+      return true;
+    })
+    .map((p) => ({
+      promo_id: p.promo_id,
+      promo_title: p.promo_title,
+      promo_status: p.promo_status,
+      performance_type: p.performance_type,
+      customer_name: p.customer_name,
+      corporate: p.customer_id === ALBERTSONS_CORPORATE,
+      start_date: p.start_date,
+      end_date: p.end_date,
+      planned_amount: p.planned_amount,
+      actual_amount: p.actual_amount,
+      brands: [...(brands.get(p.promo_id) ?? [])],
+    }))
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+}
