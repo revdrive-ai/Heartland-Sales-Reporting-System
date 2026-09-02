@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Line } from "react-chartjs-2";
+import { Chart as MixedChart, Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
+import { getPlanRegistry, registerPlanYear } from "@/lib/repo/client";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
 
@@ -31,6 +32,14 @@ export type BaseData = {
   years: number[];           // total-year choices (2024 → future, in perpetuity)
   latestDataYear: number;
   planningYear: boolean;     // a future year with no NIQ weeks on file yet
+  plan: null | {             // the plan-year series (future years only)
+    sourceYear: number;                 // the year the actualized base carries from
+    actualized: (number | null)[];      // actual NIQ base, matching weeks a year back
+    projected: (number | null)[];       // seasonality-shaped projection for the rest
+    actualizedWeeks: number;
+    totActualized: number;
+    totProjected: number;
+  };
   points: WeekPoint[];
   overlays: PromoOverlay[];
   season: {
@@ -72,6 +81,10 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [seasHide, setSeasHide] = useState(false);
   const [showPY, setShowPY] = useState(false);
   const [showLanes, setShowLanes] = useState(true);
+  const [planReg, setPlanReg] = useState<Record<string, string>>({}); // market → registered_at, for the plan year
+
+  const nextPlanYear = data.latestDataYear + 1;
+  const planYear = data.plan ? +data.win : null;
 
   useEffect(() => {
     try {
@@ -80,6 +93,16 @@ export default function BaseView({ data }: { data: BaseData }) {
       setShowLanes(localStorage.getItem(LANES_KEY) !== "0");
     } catch {}
   }, []);
+
+  // Coming into a customer's plan-year view logs that customer as registered
+  // for that year (first visit stamps the date; later visits are no-ops).
+  useEffect(() => {
+    if (planYear) {
+      registerPlanYear(data.mkt, planYear).then((r) => setPlanReg(r[String(planYear)] ?? {}));
+    } else {
+      getPlanRegistry().then((r) => setPlanReg(r[String(nextPlanYear)] ?? {}));
+    }
+  }, [data.mkt, planYear, nextPlanYear]);
   const toggleLanes = () => {
     setShowLanes((v) => {
       try { localStorage.setItem(LANES_KEY, v ? "0" : "1"); } catch {}
@@ -248,6 +271,24 @@ export default function BaseView({ data }: { data: BaseData }) {
           </p>
         </div>
         <div className="actions">
+          {planYear ? (
+            <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
+              ✓ {planYear} registered for {marketName}
+              {planReg[data.mkt] ? ` · ${planReg[data.mkt].slice(0, 10)}` : ""}
+              {" · "}{Object.keys(planReg).length} of {data.markets.length} customers
+            </span>
+          ) : (
+            <button
+              className="btn"
+              style={{ ...selStyle, cursor: "pointer" }}
+              title={`Open the ${nextPlanYear} plan for ${marketName}: ${data.latestDataYear} actual base carried in as far as the year has actualized, the rest projected — and log this customer as registered for ${nextPlanYear}.`}
+              onClick={() => {
+                registerPlanYear(data.mkt, nextPlanYear).then(() => nav({ win: String(nextPlanYear) }));
+              }}
+            >
+              ▸ Plan {nextPlanYear}
+            </button>
+          )}
           <span className="pill">{data.winLabel} · {data.points[0]?.week} → {data.points.at(-1)?.week}</span>
         </div>
       </div>
@@ -300,23 +341,41 @@ export default function BaseView({ data }: { data: BaseData }) {
       </div>
 
       <div className="kpis">
-        <div className="kpi">
-          <div className="k-top"><span className="k-label">Actual — window total</span></div>
-          <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.actual)}</div>
-          <div className="k-sub flat">{scopeName} · {data.points.length} weeks{data.planningYear ? " · no NIQ data yet" : ""}</div>
-        </div>
-        <div className="kpi">
-          <div className="k-top"><span className="k-label">NIQ modelled base</span></div>
-          <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.base)}</div>
-          <div className="k-sub flat">non-promoted expectation</div>
-        </div>
-        <div className="kpi">
-          <div className="k-top"><span className="k-label">Incremental vs base</span></div>
-          <div className="k-val" style={{ color: data.totals.incremental >= 0 ? "var(--good)" : "var(--bad)" }}>
-            {data.planningYear ? "—" : (data.totals.incremental >= 0 ? "+" : "−") + fmtVal(Math.abs(data.totals.incremental))}
+        {data.plan ? (<>
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Actualized base — carried from {data.plan.sourceYear}</span></div>
+            <div className="k-val">{fmtVal(data.plan.totActualized)}</div>
+            <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks actualized</div>
           </div>
-          <div className="k-sub flat">{data.planningYear ? "planning view" : `${liftPct >= 0 ? "+" : "−"}${Math.abs(liftPct).toFixed(1)}% lift on base`}</div>
-        </div>
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Projected base — rest of year</span></div>
+            <div className="k-val" style={{ color: "var(--warn)" }}>{fmtVal(data.plan.totProjected)}</div>
+            <div className="k-sub flat">{data.points.length - data.plan.actualizedWeeks} weeks · seasonality-shaped</div>
+          </div>
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Full-year plan base</span></div>
+            <div className="k-val">{fmtVal(data.plan.totActualized + data.plan.totProjected)}</div>
+            <div className="k-sub flat">{Math.round((data.plan.totActualized / Math.max(data.plan.totActualized + data.plan.totProjected, 1)) * 100)}% actualized</div>
+          </div>
+        </>) : (<>
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Actual — window total</span></div>
+            <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.actual)}</div>
+            <div className="k-sub flat">{scopeName} · {data.points.length} weeks{data.planningYear ? " · no NIQ data yet" : ""}</div>
+          </div>
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">NIQ modelled base</span></div>
+            <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.base)}</div>
+            <div className="k-sub flat">non-promoted expectation</div>
+          </div>
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Incremental vs base</span></div>
+            <div className="k-val" style={{ color: data.totals.incremental >= 0 ? "var(--good)" : "var(--bad)" }}>
+              {data.planningYear ? "—" : (data.totals.incremental >= 0 ? "+" : "−") + fmtVal(Math.abs(data.totals.incremental))}
+            </div>
+            <div className="k-sub flat">{data.planningYear ? "planning view" : `${liftPct >= 0 ? "+" : "−"}${Math.abs(liftPct).toFixed(1)}% lift on base`}</div>
+          </div>
+        </>)}
         <div className="kpi">
           <div className="k-top"><span className="k-label">Promotion windows</span></div>
           <div className="k-val">{data.overlays.length}</div>
@@ -327,7 +386,11 @@ export default function BaseView({ data }: { data: BaseData }) {
       <div className={"grid2" + (seasHide ? " wide1" : "")}>
         <div className="card">
           <div className="c-head">
-            <h3>Weekly {data.metric} — actual vs NIQ base · event windows shaded</h3>
+            <h3>
+              {data.plan
+                ? <>Plan {data.win} — {data.plan.sourceYear} actualized base (bars) + projection (line)</>
+                : <>Weekly {data.metric} — actual vs NIQ base · event windows shaded</>}
+            </h3>
             <div className="chip-row">
               <span
                 className={"minichip" + (showPY ? " on" : "")}
@@ -353,6 +416,41 @@ export default function BaseView({ data }: { data: BaseData }) {
             </div>
           </div>
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
+            {data.plan ? (
+              <MixedChart
+                type="line"
+                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win}
+                plugins={[bandPlugin]}
+                data={{
+                  labels: data.points.map((p) => p.week.slice(5)),
+                  datasets: [
+                    {
+                      type: "bar" as const,
+                      label: `${data.plan.sourceYear} base — actualized`,
+                      data: data.plan.actualized,
+                      backgroundColor: cssToken("--accent"),
+                      borderRadius: 2,
+                      barPercentage: 0.9,
+                      categoryPercentage: 0.92,
+                    },
+                    {
+                      type: "line" as const,
+                      label: "Projected base — rest of year",
+                      data: data.plan.projected,
+                      borderColor: cssToken("--warn"),
+                      backgroundColor: cssToken("--warn"),
+                      borderDash: [6, 4],
+                      borderWidth: 2,
+                      tension: 0.3,
+                      spanGaps: false,
+                      pointRadius: 0,
+                      pointHoverRadius: 4,
+                    },
+                  ],
+                }}
+                options={opts}
+              />
+            ) : (
             <Line
               key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + (showLanes ? bands.lanes.length : 0)}
               plugins={[bandPlugin]}
@@ -396,9 +494,16 @@ export default function BaseView({ data }: { data: BaseData }) {
               }}
               options={opts}
             />
+            )}
           </div>
           <div className="note">
-            {data.planningYear
+            {data.plan
+              ? <>◇ <b>Plan {data.win}</b>: blue bars carry the <b>actual NIQ base</b> from the matching {data.plan.sourceYear} weeks
+                — as far as {data.plan.sourceYear} has actualized ({data.plan.actualizedWeeks} weeks, through {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}).
+                The amber dashed line <b>projects the rest of the year</b>: the latest-52-week average base shaped by this
+                selection&apos;s seasonality engine. Both firm up as {data.plan.sourceYear} weeks land. Opening this view logged{" "}
+                <b>{marketName}</b> as registered for {data.win} ({Object.keys(planReg).length} of {data.markets.length} customers so far).</>
+              : data.planningYear
               ? <>◇ <b>{data.winLabel}</b> is a planning view: its {data.points.length} NIQ weeks aren&apos;t on file yet, so the
                 axis shows the expected week-endings and the trend fills in as data (and next year&apos;s Telus book) lands.
                 The seasonality card still reads from full history.</>

@@ -164,6 +164,43 @@ export default async function Page({
       return { label: String(y), values: idx(v.tot, v.n, avg) };
     });
 
+  /* Plan-year series: for a future year, carry the actual NIQ base from the
+     matching weeks a year earlier (364 days — Saturdays stay aligned) as far
+     as that source year has actualized, and project the remaining weeks as
+     the latest-52-week average base shaped by the seasonality engine. */
+  let plan: BaseData["plan"] = null;
+  if (planningYear) {
+    const weekBaseM = new Map<string, number>(); // weekly base in the chosen metric
+    for (const r of scoped) {
+      const v = (metric === "units" ? r.base_units ?? r.units : r.base_dollars ?? r.dollars) ?? 0;
+      weekBaseM.set(r.week_ending, (weekBaseM.get(r.week_ending) ?? 0) + v);
+    }
+    const last52 = allWeeks.slice(-52);
+    const avgBase = last52.reduce((a, w) => a + (weekBaseM.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+    const actualized: (number | null)[] = [];
+    const projected: (number | null)[] = [];
+    let nAct = 0;
+    for (const w of weeks) {
+      const src = yearAgoWeek(w);
+      if (src <= latestWeek) {
+        actualized.push(Math.round(weekBaseM.get(src) ?? 0));
+        projected.push(null);
+        nAct++;
+      } else {
+        actualized.push(null);
+        projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1)));
+      }
+    }
+    plan = {
+      sourceYear: +win - 1,
+      actualized,
+      projected,
+      actualizedWeeks: nAct,
+      totActualized: actualized.reduce((a: number, v) => a + (v ?? 0), 0),
+      totProjected: projected.reduce((a: number, v) => a + (v ?? 0), 0),
+    };
+  }
+
   const overlays = await getPromoOverlays({ market_code: mkt, brand, from, to });
 
   const totActual = points.reduce((a, p) => a + (p.actual ?? 0), 0);
@@ -183,6 +220,7 @@ export default async function Page({
     years,
     latestDataYear,
     planningYear,
+    plan,
     points,
     overlays,
     season: { labels: MONTH_LABELS, engine, years: seasonYears },

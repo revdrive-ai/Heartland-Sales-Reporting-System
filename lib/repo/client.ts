@@ -23,3 +23,26 @@ export async function getAlignment(): Promise<{ rows: AlignRow[]; version: numbe
 export async function saveAlignment(rows: AlignRow[], version: number): Promise<void> {
   try { localStorage.setItem(ALIGN_KEY, JSON.stringify({ v: version, rows })); } catch {}
 }
+
+/* Plan-year registrations — which customers (divisions) have had their plan
+   year opened. Mirrors supabase/migrations/00005_plan_registrations.sql;
+   becomes a table upsert at swap-in time. Shape:
+   { "<year>": { "<market_code>": "<ISO registered_at>" } } */
+
+const PLAN_KEY = "hhPlanReg";
+
+export type PlanRegistry = Record<string, Record<string, string>>;
+
+export async function getPlanRegistry(): Promise<PlanRegistry> {
+  try { return JSON.parse(localStorage.getItem(PLAN_KEY) ?? "{}") as PlanRegistry; } catch { return {}; }
+}
+
+/** Log a customer into a plan year (idempotent — first visit sets the date). */
+export async function registerPlanYear(market_code: string, year: number): Promise<PlanRegistry> {
+  const reg = await getPlanRegistry();
+  const y = String(year);
+  reg[y] = reg[y] ?? {};
+  if (!reg[y][market_code]) reg[y][market_code] = new Date().toISOString();
+  try { localStorage.setItem(PLAN_KEY, JSON.stringify(reg)); } catch {}
+  return reg;
+}

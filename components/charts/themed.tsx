@@ -9,14 +9,18 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
+  BarController,
   BarElement,
+  LineController,
   PointElement,
   LineElement,
   Tooltip,
   Legend,
 } from "chart.js";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineElement, Tooltip, Legend);
+// Controllers registered explicitly so mixed bar+line charts (the plan-year
+// view) work through the generic <Chart> component.
+ChartJS.register(CategoryScale, LinearScale, BarController, BarElement, LineController, PointElement, LineElement, Tooltip, Legend);
 
 export function cssToken(name: string): string {
   if (typeof window === "undefined") return "#888";
