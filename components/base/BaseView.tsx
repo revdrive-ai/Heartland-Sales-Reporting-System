@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
@@ -9,28 +9,37 @@ import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/char
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
 
-/* Base & Lift Lab, draft 1: the division's weekly trend (actual vs NIQ base)
-   with the Telus promotion windows overlaid. Event windows (≤ 12 weeks) are
-   shaded on the plot; always-on programs (EDLP and other long runners) are
-   listed below and can be shaded on demand — a year-long band over every
-   week is noise, not signal. */
+/* Base & Lift Lab: the division's weekly trend (actual vs NIQ base) with the
+   Telus promotion windows overlaid, and — as in the reference mockup — the
+   seasonality-index card beside the chart, hideable via the chip in the
+   chart's header (hiding it widens the trend to the full row). Event windows
+   (≤ 12 weeks) are shaded; always-on programs are listed below. */
 
 export type WeekPoint = { week: string; actual: number; base: number; promoAcv: number };
 
 export type BaseData = {
   markets: { code: string; name: string }[];
   brands: string[];
+  items: { upc: string; name: string }[];
   mkt: string;
   brand: string;
+  item: string;              // "ALL" or a upc
+  itemName: string | null;
   metric: "units" | "dollars";
   win: "52w" | "all";
   points: WeekPoint[];
   overlays: PromoOverlay[];
+  season: {
+    labels: string[];
+    engine: (number | null)[];                       // full-history index
+    years: { label: string; values: (number | null)[] }[];
+  };
   totals: { actual: number; base: number; incremental: number; niqPromoWeeks: number };
 };
 
 const DAY = 86400000;
 const EVENT_MAX_DAYS = 84; // ≤ 12 weeks = an event window; longer = always-on
+const SEAS_KEY = "hhSeasHide";
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -38,19 +47,36 @@ const selStyle: React.CSSProperties = {
   borderRadius: 9, padding: "7px 10px",
 };
 
-const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 const utc = (isoDate: string) => Date.UTC(+isoDate.slice(0, 4), +isoDate.slice(5, 7) - 1, +isoDate.slice(8, 10));
 const durationDays = (o: PromoOverlay) => (utc(o.end_date) - utc(o.start_date)) / DAY + 1;
 
 const fmtNum = (v: number) => (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? Math.round(v / 1e3).toLocaleString() + "K" : String(Math.round(v)));
 
+const YEAR_STYLES = [
+  { color: "--ink-3", dash: [5, 4] as number[], width: 1.3 },
+  { color: "--warn", dash: [5, 4] as number[], width: 1.3 },
+  { color: "--good", dash: [] as number[], width: 1.5 },
+  { color: "--bad", dash: [] as number[], width: 1.3 },
+];
+
 export default function BaseView({ data }: { data: BaseData }) {
   const tick = useThemeTick();
   const router = useRouter();
   const [shadeAlwaysOn, setShadeAlwaysOn] = useState(false);
+  const [seasHide, setSeasHide] = useState(false);
 
-  const nav = (patch: Partial<Record<"mkt" | "brand" | "metric" | "win", string>>) => {
-    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, metric: data.metric, win: data.win, ...patch });
+  useEffect(() => {
+    try { setSeasHide(localStorage.getItem(SEAS_KEY) === "1"); } catch {}
+  }, []);
+  const toggleSeas = () => {
+    setSeasHide((h) => {
+      try { localStorage.setItem(SEAS_KEY, h ? "0" : "1"); } catch {}
+      return !h;
+    });
+  };
+
+  const nav = (patch: Partial<Record<"mkt" | "brand" | "item" | "metric" | "win", string>>) => {
+    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric, win: data.win, ...patch });
     router.push(`/base?${p.toString()}`);
   };
 
@@ -111,6 +137,7 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   const liftPct = data.totals.base > 0 ? (data.totals.incremental / data.totals.base) * 100 : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
+  const scopeName = data.itemName ?? data.brand;
   const fmtVal = data.metric === "dollars" ? fmtMoney : (v: number) => fmtNum(v);
 
   const opts = useMemo(() => {
@@ -145,7 +172,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="crumb">Trade Workflow · Step 1</div>
           <h1>Base &amp; Lift Lab</h1>
           <p>
-            NIQ weekly {data.metric} for {data.brand} at {marketName} — actual against NIQ&apos;s modelled base,
+            NIQ weekly {data.metric} for {scopeName} at {marketName} — actual against NIQ&apos;s modelled base,
             with the Telus promotion windows for this division overlaid. Event windows are shaded;
             always-on programs are listed below.
           </p>
@@ -159,8 +186,14 @@ export default function BaseView({ data }: { data: BaseData }) {
         <select style={selStyle} value={data.mkt} onChange={(e) => nav({ mkt: e.target.value })}>
           {data.markets.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
         </select>
-        <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value })}>
+        <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value, item: "ALL" })}>
           {data.brands.map((b) => <option key={b}>{b}</option>)}
+        </select>
+        <select style={{ ...selStyle, maxWidth: 340 }} value={data.item} onChange={(e) => nav({ item: e.target.value })}>
+          <option value="ALL">All {data.brand} items ({data.items.length})</option>
+          {data.items.map((i) => (
+            <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
+          ))}
         </select>
         <select style={selStyle} value={data.metric} onChange={(e) => nav({ metric: e.target.value })}>
           <option value="units">Units</option>
@@ -180,7 +213,7 @@ export default function BaseView({ data }: { data: BaseData }) {
         <div className="kpi">
           <div className="k-top"><span className="k-label">Actual — window total</span></div>
           <div className="k-val">{fmtVal(data.totals.actual)}</div>
-          <div className="k-sub flat">{data.brand} · {data.points.length} weeks</div>
+          <div className="k-sub flat">{scopeName} · {data.points.length} weeks</div>
         </div>
         <div className="kpi">
           <div className="k-top"><span className="k-label">NIQ modelled base</span></div>
@@ -201,47 +234,107 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       </div>
 
-      <div className="card">
-        <b>Weekly {data.metric} — actual vs NIQ base · Telus event windows shaded</b>
-        <div className="chartbox" style={{ height: 320, marginTop: 12 }}>
-          <Line
-            key={"b" + tick + data.mkt + data.brand + data.metric + data.win + (shadeAlwaysOn ? 1 : 0)}
-            plugins={[bandPlugin]}
-            data={{
-              labels: data.points.map((p) => p.week.slice(5)),
-              datasets: [
-                {
-                  label: "Actual",
-                  data: data.points.map((p) => p.actual),
-                  borderColor: cssToken("--accent"),
-                  backgroundColor: cssToken("--accent"),
-                  borderWidth: 2,
-                  tension: 0.25,
-                  pointRadius: data.points.map((p) => (p.promoAcv >= 10 ? 3 : 0)),
-                  pointHoverRadius: 5,
-                },
-                {
-                  label: "NIQ base",
-                  data: data.points.map((p) => p.base),
-                  borderColor: cssToken("--ink-3"),
-                  backgroundColor: cssToken("--ink-3"),
-                  borderDash: [6, 4],
-                  borderWidth: 1.6,
-                  tension: 0.25,
-                  pointRadius: 0,
-                  pointHoverRadius: 4,
-                },
-              ],
-            }}
-            options={opts}
-          />
+      <div className={"grid2" + (seasHide ? " wide1" : "")}>
+        <div className="card">
+          <div className="c-head">
+            <h3>Weekly {data.metric} — actual vs NIQ base · event windows shaded</h3>
+            <div className="chip-row">
+              <span
+                className={"minichip" + (seasHide ? " on" : "")}
+                onClick={toggleSeas}
+                title={seasHide ? "Bring the seasonality card back beside the chart" : "Hide the seasonality card and widen this chart to the full row"}
+              >
+                {seasHide ? "⤡ Show seasonality" : "⤢ Hide seasonality"}
+              </span>
+            </div>
+          </div>
+          <div className="chartbox" style={{ height: 320 }}>
+            <Line
+              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (shadeAlwaysOn ? 1 : 0) + (seasHide ? "w" : "")}
+              plugins={[bandPlugin]}
+              data={{
+                labels: data.points.map((p) => p.week.slice(5)),
+                datasets: [
+                  {
+                    label: "Actual",
+                    data: data.points.map((p) => p.actual),
+                    borderColor: cssToken("--accent"),
+                    backgroundColor: cssToken("--accent"),
+                    borderWidth: 2,
+                    tension: 0.25,
+                    pointRadius: data.points.map((p) => (p.promoAcv >= 10 ? 3 : 0)),
+                    pointHoverRadius: 5,
+                  },
+                  {
+                    label: "NIQ base",
+                    data: data.points.map((p) => p.base),
+                    borderColor: cssToken("--ink-3"),
+                    backgroundColor: cssToken("--ink-3"),
+                    borderDash: [6, 4],
+                    borderWidth: 1.6,
+                    tension: 0.25,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                  },
+                ],
+              }}
+              options={opts}
+            />
+          </div>
+          <div className="note">
+            ◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks) mapped to this division&apos;s customers, corporate
+            programs included{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
+            line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).
+          </div>
         </div>
-        <div className="note">
-          ◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks: TPR, features, shopper programs) mapped to this
-          division&apos;s customers, corporate programs included. Dots on the actual line mark weeks where NIQ measured
-          promo support on shelf (≥ 10 %ACV) — where a band has no dot, a planned event may not have executed;
-          a dot with no band is support Telus doesn&apos;t know about.
-        </div>
+
+        {!seasHide && (
+          <div className="card">
+            <div className="c-head">
+              <h3>Seasonality index</h3>
+              <span className="sub">{marketName} · {data.itemName ? "this item" : data.brand}</span>
+            </div>
+            <div className="chartbox" style={{ height: 320 }}>
+              <Line
+                key={"s" + tick + data.mkt + data.brand + data.item}
+                data={{
+                  labels: data.season.labels,
+                  datasets: [
+                    {
+                      label: "Index — engine (full history)",
+                      data: data.season.engine,
+                      borderColor: cssToken("--accent"),
+                      backgroundColor: "rgba(37,99,235,.10)",
+                      borderWidth: 3,
+                      pointRadius: 2,
+                      tension: 0.4,
+                      fill: true,
+                    },
+                    ...data.season.years.map((y, i) => {
+                      const st = YEAR_STYLES[i % YEAR_STYLES.length];
+                      return {
+                        label: y.label,
+                        data: y.values,
+                        borderColor: cssToken(st.color),
+                        backgroundColor: cssToken(st.color),
+                        borderWidth: st.width,
+                        borderDash: st.dash,
+                        pointRadius: 2,
+                        tension: 0.3,
+                        spanGaps: false,
+                      };
+                    }),
+                  ],
+                }}
+                options={gridOptions()}
+              />
+            </div>
+            <div className="note">
+              ◇ Average weekly <b>base</b> (promo-stripped) units per month ÷ the overall weekly average — 1.00 is an
+              average month. The bold line is the full-history engine curve; thin lines are each year&apos;s own read.
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0, marginTop: 16 }}>
