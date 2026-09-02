@@ -28,7 +28,10 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
   157 weeks (Jul 2023 → Jul 2026), 100 items across 7 brands (82 HFPG own / 18
   competitive). Source workbook at `data/raw/`, per-market facts at
   `data/nielsen/<CODE>.json.gz`, rebuilt any time with `python3 scripts/ingest_albsco.py`.
-- ⬜ The 16 views render as stubs (`components/PageStub.tsx`) — rebuilt view-by-view as
+- ✅ **Promotion Planner rebuilt** (`/planner`): KPIs, monthly planned-vs-actual pacing, top
+  customers, and the full sortable/filterable promotion book with drill-down to component
+  lines (`/api/promos/[id]/lines`).
+- ⬜ The other 15 views render as stubs (`components/PageStub.tsx`) — rebuilt view-by-view as
   directed. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the full demo teardown and plan.
 
 ## Develop

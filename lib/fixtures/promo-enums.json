@@ -1,0 +1,78 @@
+{
+ "promo_status": [
+  "Active",
+  "Expired",
+  "Expiring",
+  "Pre-Active"
+ ],
+ "template_type": [
+  "Off Invoice",
+  "Retail Non-Working",
+  "Retail Slotting",
+  "Retail Trade",
+  "Wholesale Indirect",
+  "Wholesale Non-Working",
+  "Wholesale Trade"
+ ],
+ "performance_type": [
+  "Display",
+  "EDLP",
+  "Feature",
+  "Feature & Display",
+  "Other",
+  "Shopper Marketing",
+  "Slotting",
+  "TPR"
+ ],
+ "channel": [
+  "Direct",
+  "Wholesaler"
+ ],
+ "market": [
+  "US",
+  "Canada"
+ ],
+ "component_type": [
+  "Ad Fee",
+  "Administrative Fee",
+  "Billback Shipment",
+  "Demos",
+  "Display Fee",
+  "Indirect BB",
+  "Markdowns",
+  "Off Invoice - Delivered",
+  "Off Invoice - FOB",
+  "Post Audit",
+  "Pricing",
+  "Scan",
+  "Shopper Marketing",
+  "Slotting",
+  "TPR Tag Fee",
+  "Write Off"
+ ],
+ "rate_uom": [
+  "Case",
+  "Each",
+  "Percent",
+  "Lump Sum"
+ ],
+ "brand": [
+  "Chocky's",
+  "Complements",
+  "Equal",
+  "Healthy Natural Systems",
+  "Heartland",
+  "ICEE",
+  "Java House",
+  "Liquid Science",
+  "Lone Tree",
+  "Private Label",
+  "Pure Via",
+  "SlimFast",
+  "Splenda",
+  "Swerve",
+  "Ted's Tea",
+  "Whole Earth",
+  "Wrangler"
+ ]
+}

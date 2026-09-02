@@ -1,0 +1,10 @@
+{
+ "source_file": "Heartland_Promo_Import_Template.xlsx",
+ "snapshot_date": "2026-08-21",
+ "fiscal_year": 2026,
+ "promotions": 1187,
+ "promo_lines": 5117,
+ "planned_total": 52785588.99,
+ "actual_total": 15011706.43,
+ "promos_without_lines": 0
+}

@@ -50,3 +50,59 @@ export type NielsenWeeklyRow = {
   brand: string;
   category: string;
 };
+
+/* ------------------------------------------------------------- PROMOTIONS
+   From the Telus retail promotions export, via the import template's two
+   linked tables (join on promo_id). See scripts/ingest_promos.py. */
+
+export type PromoStatus = "Active" | "Expired" | "Expiring" | "Pre-Active";
+
+/** One promotion header — who, what, when, status. Rollups are recomputed
+    from the lines at ingest (the money lives on the lines). */
+export type Promotion = {
+  promo_id: string;          // Telus 'Promo ID Base', e.g. PRG-1004160
+  promo_title: string;
+  fiscal_year: number;
+  promo_status: PromoStatus;
+  template_type: string;
+  performance_type: string;  // TPR | EDLP | Feature | Feature & Display | ...
+  customer_id: string;       // Telus 'planner' = customer/account
+  customer_name: string;
+  customer_code: string | null;
+  channel: "Direct" | "Wholesaler";
+  market: "US" | "Canada";
+  planner_template: string;  // traceability back to Telus
+  start_date: string;        // ISO date
+  end_date: string;          // ISO date, >= start_date
+  line_count: number;
+  planned_amount: number;
+  actual_amount: number;
+};
+
+/** One component + item under a promotion. line_id = promo_id | component | item. */
+export type PromoLine = {
+  line_id: string;
+  promo_id: string;
+  component_type: string;    // Scan | Ad Fee | Off Invoice - Delivered | ...
+  brand: string;
+  item_number: string;       // text — some codes carry leading letters/zeros
+  item_description: string | null;
+  rate: number;              // 0 is valid for lump-sum fee components
+  rate_uom: "Case" | "Each" | "Percent" | "Lump Sum";
+  planned_amount: number;
+  actual_amount: number;
+};
+
+/** The Valid Values tab — controlled vocabulary for every enum field. */
+export type PromoEnums = Record<string, string[]>;
+
+export type PromoMeta = {
+  source_file: string;
+  snapshot_date: string;     // the Telus export's snapshot date
+  fiscal_year: number;
+  promotions: number;
+  promo_lines: number;
+  planned_total: number;
+  actual_total: number;
+  promos_without_lines: number;
+};
