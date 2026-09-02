@@ -43,6 +43,7 @@ export type BaseData = {
 
 const DAY = 86400000;
 const EVENT_MAX_DAYS = 84; // ≤ 12 weeks = an event window; longer = always-on
+const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";
 
@@ -67,7 +68,6 @@ const YEAR_STYLES = [
 export default function BaseView({ data }: { data: BaseData }) {
   const tick = useThemeTick();
   const router = useRouter();
-  const [shadeAlwaysOn, setShadeAlwaysOn] = useState(false);
   const [seasHide, setSeasHide] = useState(false);
   const [showPY, setShowPY] = useState(false);
 
@@ -113,7 +113,12 @@ export default function BaseView({ data }: { data: BaseData }) {
     };
     return {
       events: events.map(toBand).filter((b): b is { i0: number; i1: number } => !!b),
-      alwaysOn: alwaysOn.map(toBand).filter((b): b is { i0: number; i1: number } => !!b),
+      // one lane per always-on program (EDLP etc.), label + where it runs
+      lanes: alwaysOn.slice(0, 12).map((o) => ({
+        title: o.promo_title.length > 46 ? o.promo_title.slice(0, 45) + "…" : o.promo_title,
+        band: toBand(o),
+      })),
+      laneOverflow: Math.max(alwaysOn.length - 12, 0),
     };
   }, [data.points, data.overlays]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -145,10 +150,48 @@ export default function BaseView({ data }: { data: BaseData }) {
         }
         ctx.restore();
       };
-      if (shadeAlwaysOn) draw(bands.alwaysOn, cssToken("--accent"), 0.05);
       draw(bands.events, cssToken("--warn"), 0.16);
     },
-  }), [bands, shadeAlwaysOn, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
+    afterDraw(chart) {
+      // Dedicated always-on lanes: one strip per EDLP-style program, pinned
+      // under the x-axis on the same week scale — strip = the program is
+      // live that week, gap = it is not.
+      if (!bands.lanes.length) return;
+      const { ctx, chartArea, scales } = chart;
+      const x = scales.x;
+      if (!x || !chartArea) return;
+      const half = data.points.length > 1
+        ? (x.getPixelForValue(1) - x.getPixelForValue(0)) / 2
+        : (chartArea.right - chartArea.left) / 2;
+      const y0 = (scales.x.bottom ?? chartArea.bottom) + 6;
+      ctx.save();
+      ctx.font = "700 9px " + getComputedStyle(document.body).fontFamily;
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = cssToken("--ink-3");
+      ctx.fillText("ALWAYS-ON", chartArea.left, y0 + 4);
+      bands.lanes.forEach((lane, i) => {
+        const y = y0 + 12 + i * LANE_H;
+        if (lane.band) {
+          const x0 = Math.max(x.getPixelForValue(lane.band.i0) - half, chartArea.left);
+          const x1 = Math.min(x.getPixelForValue(lane.band.i1) + half, chartArea.right);
+          ctx.fillStyle = cssToken("--accent");
+          ctx.globalAlpha = 0.28;
+          ctx.beginPath();
+          ctx.roundRect(x0, y, Math.max(x1 - x0, 4), LANE_H - 4, 3);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+        ctx.fillStyle = lane.band ? cssToken("--ink-2") : cssToken("--ink-3");
+        ctx.font = "600 9.5px " + getComputedStyle(document.body).fontFamily;
+        ctx.fillText(lane.title + (lane.band ? "" : " — not in this window"), chartArea.left + 5, y + (LANE_H - 4) / 2 + 1);
+      });
+      if (bands.laneOverflow > 0) {
+        ctx.fillStyle = cssToken("--ink-3");
+        ctx.fillText(`+${bands.laneOverflow} more always-on — see the table below`, chartArea.left + 5, y0 + 12 + bands.lanes.length * LANE_H + 5);
+      }
+      ctx.restore();
+    },
+  }), [bands, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liftPct = data.totals.base > 0 ? (data.totals.incremental / data.totals.base) * 100 : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
@@ -157,8 +200,10 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   const opts = useMemo(() => {
     const o = gridOptions();
+    const laneSpace = bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0;
     return {
       ...o,
+      layout: { padding: { bottom: laneSpace } },
       interaction: { mode: "index" as const, intersect: false },
       plugins: {
         ...o.plugins,
@@ -176,7 +221,7 @@ export default function BaseView({ data }: { data: BaseData }) {
         },
       },
     };
-  }, [activeByWeek, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeByWeek, bands, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="view active">
@@ -237,10 +282,6 @@ export default function BaseView({ data }: { data: BaseData }) {
             <option key={y} value={String(y)}>Total year {y}{y > data.latestDataYear ? " (plan)" : ""}</option>
           ))}
         </select>
-        <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", marginLeft: 6 }}>
-          <input type="checkbox" checked={shadeAlwaysOn} onChange={(e) => setShadeAlwaysOn(e.target.checked)} />
-          Shade always-on programs
-        </label>
       </div>
 
       <div className="kpis">
@@ -289,9 +330,9 @@ export default function BaseView({ data }: { data: BaseData }) {
               </span>
             </div>
           </div>
-          <div className="chartbox" style={{ height: 320 }}>
+          <div className="chartbox" style={{ height: 320 + (bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
             <Line
-              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (shadeAlwaysOn ? 1 : 0) + (seasHide ? "w" : "") + (showPY ? "p" : "")}
+              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + bands.lanes.length}
               plugins={[bandPlugin]}
               data={{
                 labels: data.points.map((p) => p.week.slice(5)),
@@ -339,8 +380,9 @@ export default function BaseView({ data }: { data: BaseData }) {
               ? <>◇ <b>{data.winLabel}</b> is a planning view: its {data.points.length} NIQ weeks aren&apos;t on file yet, so the
                 axis shows the expected week-endings and the trend fills in as data (and next year&apos;s Telus book) lands.
                 The seasonality card still reads from full history.</>
-              : <>◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks) mapped to this division&apos;s customers, corporate
-                programs included{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
+              : <>◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks); the blue lanes underneath are the
+                <b> always-on programs</b> (EDLP etc.), one per program, showing exactly when each runs and when it
+                doesn&apos;t{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
                 line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).</>}
           </div>
         </div>
