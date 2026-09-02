@@ -15,7 +15,7 @@ import type { PromoOverlay } from "@/lib/repo";
    chart's header (hiding it widens the trend to the full row). Event windows
    (≤ 12 weeks) are shaded; always-on programs are listed below. */
 
-export type WeekPoint = { week: string; actual: number; base: number; promoAcv: number };
+export type WeekPoint = { week: string; actual: number | null; base: number | null; promoAcv: number };
 
 export type BaseData = {
   markets: { code: string; name: string }[];
@@ -26,7 +26,11 @@ export type BaseData = {
   item: string;              // "ALL" or a upc
   itemName: string | null;
   metric: "units" | "dollars";
-  win: "52w" | "all";
+  win: string;               // 4w | 13w | 26w | 52w | ytd | a calendar year
+  winLabel: string;
+  years: number[];           // total-year choices (2024 → future, in perpetuity)
+  latestDataYear: number;
+  planningYear: boolean;     // a future year with no NIQ weeks on file yet
   points: WeekPoint[];
   overlays: PromoOverlay[];
   season: {
@@ -178,7 +182,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           </p>
         </div>
         <div className="actions">
-          <span className="pill">{data.points[0]?.week} → {data.points.at(-1)?.week}</span>
+          <span className="pill">{data.winLabel} · {data.points[0]?.week} → {data.points.at(-1)?.week}</span>
         </div>
       </div>
 
@@ -199,9 +203,28 @@ export default function BaseView({ data }: { data: BaseData }) {
           <option value="units">Units</option>
           <option value="dollars">Dollars</option>
         </select>
-        <select style={selStyle} value={data.win} onChange={(e) => nav({ win: e.target.value })}>
+        <select
+          style={selStyle}
+          value={["4w", "13w", "26w", "52w", "ytd"].includes(data.win) ? data.win : ""}
+          onChange={(e) => e.target.value && nav({ win: e.target.value })}
+        >
+          {!["4w", "13w", "26w", "52w", "ytd"].includes(data.win) && <option value="" disabled>— rolling window —</option>}
+          <option value="4w">Latest 4 weeks</option>
+          <option value="13w">Latest 13 weeks</option>
+          <option value="26w">Latest 26 weeks</option>
           <option value="52w">Latest 52 weeks</option>
-          <option value="all">All weeks on file</option>
+          <option value="ytd">Year to date ({data.latestDataYear})</option>
+        </select>
+        <select
+          style={selStyle}
+          value={/^\d{4}$/.test(data.win) ? data.win : ""}
+          onChange={(e) => nav({ win: e.target.value || "52w" })}
+          title="Total calendar year — future years open as planning views"
+        >
+          <option value="">Rolling window</option>
+          {data.years.map((y) => (
+            <option key={y} value={String(y)}>Total year {y}{y > data.latestDataYear ? " (plan)" : ""}</option>
+          ))}
         </select>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: "var(--ink-2)", marginLeft: 6 }}>
           <input type="checkbox" checked={shadeAlwaysOn} onChange={(e) => setShadeAlwaysOn(e.target.checked)} />
@@ -212,20 +235,20 @@ export default function BaseView({ data }: { data: BaseData }) {
       <div className="kpis">
         <div className="kpi">
           <div className="k-top"><span className="k-label">Actual — window total</span></div>
-          <div className="k-val">{fmtVal(data.totals.actual)}</div>
-          <div className="k-sub flat">{scopeName} · {data.points.length} weeks</div>
+          <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.actual)}</div>
+          <div className="k-sub flat">{scopeName} · {data.points.length} weeks{data.planningYear ? " · no NIQ data yet" : ""}</div>
         </div>
         <div className="kpi">
           <div className="k-top"><span className="k-label">NIQ modelled base</span></div>
-          <div className="k-val">{fmtVal(data.totals.base)}</div>
+          <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.base)}</div>
           <div className="k-sub flat">non-promoted expectation</div>
         </div>
         <div className="kpi">
           <div className="k-top"><span className="k-label">Incremental vs base</span></div>
           <div className="k-val" style={{ color: data.totals.incremental >= 0 ? "var(--good)" : "var(--bad)" }}>
-            {data.totals.incremental >= 0 ? "+" : "−"}{fmtVal(Math.abs(data.totals.incremental))}
+            {data.planningYear ? "—" : (data.totals.incremental >= 0 ? "+" : "−") + fmtVal(Math.abs(data.totals.incremental))}
           </div>
-          <div className="k-sub flat">{liftPct >= 0 ? "+" : "−"}{Math.abs(liftPct).toFixed(1)}% lift on base</div>
+          <div className="k-sub flat">{data.planningYear ? "planning view" : `${liftPct >= 0 ? "+" : "−"}${Math.abs(liftPct).toFixed(1)}% lift on base`}</div>
         </div>
         <div className="kpi">
           <div className="k-top"><span className="k-label">Promotion windows</span></div>
@@ -262,6 +285,7 @@ export default function BaseView({ data }: { data: BaseData }) {
                     backgroundColor: cssToken("--accent"),
                     borderWidth: 2,
                     tension: 0.25,
+                    spanGaps: false,
                     pointRadius: data.points.map((p) => (p.promoAcv >= 10 ? 3 : 0)),
                     pointHoverRadius: 5,
                   },
@@ -282,9 +306,13 @@ export default function BaseView({ data }: { data: BaseData }) {
             />
           </div>
           <div className="note">
-            ◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks) mapped to this division&apos;s customers, corporate
-            programs included{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
-            line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).
+            {data.planningYear
+              ? <>◇ <b>{data.winLabel}</b> is a planning view: its {data.points.length} NIQ weeks aren&apos;t on file yet, so the
+                axis shows the expected week-endings and the trend fills in as data (and next year&apos;s Telus book) lands.
+                The seasonality card still reads from full history.</>
+              : <>◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks) mapped to this division&apos;s customers, corporate
+                programs included{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
+                line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).</>}
           </div>
         </div>
 

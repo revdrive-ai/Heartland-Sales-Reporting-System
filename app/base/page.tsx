@@ -5,11 +5,27 @@ import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseV
 
 /* Base & Lift Lab — the Nielsen weekly trend (actual vs NIQ base) for one
    division × brand (or a single item), with the Telus promotion windows
-   overlaid and the seasonality-index card beside the chart (hideable, as in
-   the reference mockup). Controls travel in the URL. */
+   overlaid and the seasonality-index card beside the chart. Timeframes:
+   rolling windows (4/13/26/52 weeks, year-to-date) or a total calendar year —
+   including future years, which render as a planning view until their NIQ
+   weeks land. Controls travel in the URL. */
 
 const OWN_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"]; // NIQ brands with own-side data
 const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
+const FIRST_PLAN_YEAR = 2024;
+const DAY = 86400000;
+
+/** Every NIQ week-ending (Saturday) of a calendar year. */
+function saturdaysOfYear(year: number): string[] {
+  const out: string[] = [];
+  let t = Date.UTC(year, 0, 1);
+  while (new Date(t).getUTCDay() !== 6) t += DAY;
+  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
 
 export default async function Page({
   searchParams,
@@ -30,7 +46,41 @@ export default async function Page({
     : markets.some((m) => m.code === "ALB-JEWEL") ? "ALB-JEWEL" : markets[0].code;
   const brand = OWN_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
   const metric = sp.metric === "dollars" ? "dollars" : "units";
-  const win = sp.win === "all" ? "all" : "52w";
+
+  const allWeeks = await listWeekEndings(mkt);
+  const latestWeek = allWeeks[allWeeks.length - 1];
+  const latestDataYear = +latestWeek.slice(0, 4);
+  const currentYear = new Date().getUTCFullYear();
+
+  // Total-year choices run 2024 → two years past today, in perpetuity.
+  const years: number[] = [];
+  for (let y = FIRST_PLAN_YEAR; y <= Math.max(latestDataYear, currentYear) + 2; y++) years.push(y);
+
+  // Timeframe: rolling (4w/13w/26w/52w), year-to-date, or a total year.
+  const rawWin = sp.win ?? "52w";
+  const win = ROLLING[rawWin] || rawWin === "ytd" || (/^\d{4}$/.test(rawWin) && years.includes(+rawWin))
+    ? rawWin : "52w";
+
+  let weeks: string[];
+  let winLabel: string;
+  let planningYear = false;
+  if (ROLLING[win]) {
+    weeks = allWeeks.slice(-ROLLING[win]);
+    winLabel = `Latest ${ROLLING[win]} weeks`;
+  } else if (win === "ytd") {
+    weeks = allWeeks.filter((w) => w.startsWith(String(latestDataYear)));
+    winLabel = `Year to date (${latestDataYear})`;
+  } else {
+    const y = +win;
+    weeks = allWeeks.filter((w) => w.startsWith(win));
+    winLabel = `Total year ${y}`;
+    if (weeks.length === 0) {
+      weeks = saturdaysOfYear(y); // future year — the expected NIQ week axis
+      planningYear = true;
+    }
+  }
+  const from = weeks[0];
+  const to = weeks[weeks.length - 1];
 
   // Every week on file for this division × brand — drives the item list and
   // the seasonality card (which always uses full history, not the window).
@@ -43,27 +93,27 @@ export default async function Page({
   const item = items.some((i) => i.upc === sp.item) ? sp.item! : "ALL";
   const itemName = item === "ALL" ? null : items.find((i) => i.upc === item)!.name;
 
-  const allWeeks = await listWeekEndings(mkt);
-  const weeks = win === "all" ? allWeeks : allWeeks.slice(-52);
-  const from = weeks[0];
-  const to = weeks[weeks.length - 1];
-
   const scoped = factsAll.filter((r) => item === "ALL" || r.upc === item);
-  const facts = scoped.filter((r) => r.week_ending >= from && r.week_ending <= to);
+  const facts = planningYear ? [] : scoped.filter((r) => r.week_ending >= from && r.week_ending <= to);
 
   // aggregate the selection per week (trend chart)
   const byWeek = new Map<string, WeekPoint>();
-  for (const w of weeks) byWeek.set(w, { week: w, actual: 0, base: 0, promoAcv: 0 });
+  for (const w of weeks) byWeek.set(w, { week: w, actual: planningYear ? null : 0, base: planningYear ? null : 0, promoAcv: 0 });
   for (const r of facts) {
     const p = byWeek.get(r.week_ending);
     if (!p) continue;
-    p.actual += (metric === "units" ? r.units : r.dollars) ?? 0;
-    p.base += (metric === "units" ? r.base_units : r.base_dollars) ?? 0;
+    p.actual = (p.actual ?? 0) + ((metric === "units" ? r.units : r.dollars) ?? 0);
+    p.base = (p.base ?? 0) + ((metric === "units" ? r.base_units : r.base_dollars) ?? 0);
     p.promoAcv = Math.max(p.promoAcv, r.acv_any_promo ?? 0);
   }
   const points = weeks.map((w) => {
     const p = byWeek.get(w)!;
-    return { ...p, actual: Math.round(p.actual), base: Math.round(p.base), promoAcv: Math.round(p.promoAcv * 10) / 10 };
+    return {
+      ...p,
+      actual: p.actual === null ? null : Math.round(p.actual),
+      base: p.base === null ? null : Math.round(p.base),
+      promoAcv: Math.round(p.promoAcv * 10) / 10,
+    };
   });
 
   /* Seasonality index over the full history: monthly average weekly base
@@ -88,7 +138,7 @@ export default async function Page({
   const idx = (tot: number[], n: number[], avg: number) =>
     tot.map((t, m) => (n[m] > 0 && avg > 0 ? +(t / n[m] / avg).toFixed(3) : null));
   const engine = idx(monthTot, monthN, grandAvg);
-  const years = [...yearly.entries()]
+  const seasonYears = [...yearly.entries()]
     .filter(([, v]) => v.n.filter((x) => x > 0).length >= 6) // skip heavily partial years
     .sort(([a], [b]) => a - b)
     .map(([y, v]) => {
@@ -99,8 +149,8 @@ export default async function Page({
 
   const overlays = await getPromoOverlays({ market_code: mkt, brand, from, to });
 
-  const totActual = points.reduce((a, p) => a + p.actual, 0);
-  const totBase = points.reduce((a, p) => a + p.base, 0);
+  const totActual = points.reduce((a, p) => a + (p.actual ?? 0), 0);
+  const totBase = points.reduce((a, p) => a + (p.base ?? 0), 0);
 
   const data: BaseData = {
     markets: markets.map((m) => ({ code: m.code, name: m.name })),
@@ -112,9 +162,13 @@ export default async function Page({
     itemName,
     metric,
     win,
+    winLabel,
+    years,
+    latestDataYear,
+    planningYear,
     points,
     overlays,
-    season: { labels: MONTH_LABELS, engine, years },
+    season: { labels: MONTH_LABELS, engine, years: seasonYears },
     totals: {
       actual: totActual,
       base: totBase,
