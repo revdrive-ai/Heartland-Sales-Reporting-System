@@ -467,7 +467,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
             {data.plan ? (
               <Line
-                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win}
+                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "")}
                 plugins={[bandPlugin]}
                 data={{
                   labels: data.points.map((p) => p.week.slice(5)),
@@ -483,6 +483,19 @@ export default function BaseView({ data }: { data: BaseData }) {
                       pointRadius: 0,
                       pointHoverRadius: 4,
                     },
+                    // prior-year actual sales (promos included), same aligned weeks —
+                    // the toggle chip drives this here just as on the trend view
+                    ...(showPY ? [{
+                      label: `${data.plan.sourceYear} actuals`,
+                      data: data.points.map((p) => p.actualLY),
+                      borderColor: cssToken("--good"),
+                      backgroundColor: cssToken("--good"),
+                      borderWidth: 1.6,
+                      tension: 0.25,
+                      spanGaps: false,
+                      pointRadius: 0,
+                      pointHoverRadius: 4,
+                    }] : []),
                     {
                       label: "Projected base — rest of year",
                       // repeats the last actualized week so the two lines connect
