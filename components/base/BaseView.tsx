@@ -259,7 +259,12 @@ export default function BaseView({ data }: { data: BaseData }) {
         <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value, item: "ALL" })}>
           {data.brands.map((b) => <option key={b}>{b}</option>)}
         </select>
-        <select style={{ ...selStyle, maxWidth: 340 }} value={data.item} onChange={(e) => nav({ item: e.target.value })}>
+        <select
+          style={{ ...selStyle, maxWidth: 340 }}
+          value={data.item}
+          onChange={(e) => nav({ item: e.target.value })}
+          title="Items with volume at this division in the latest 52 NIQ weeks"
+        >
           <option value="ALL">All {data.brand} items ({data.items.length})</option>
           {data.items.map((i) => (
             <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>

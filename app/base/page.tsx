@@ -85,9 +85,14 @@ export default async function Page({
   // Every week on file for this division × brand — drives the item list and
   // the seasonality card (which always uses full history, not the window).
   const factsAll = await getWeeklyFacts({ market_code: mkt, brand });
-  const upcsWithData = new Set(factsAll.map((r) => r.upc));
+  // Item picker: only items that actually moved volume in the latest 52 weeks
+  // at this division × brand — dead/delisted items drop out of the list.
+  const recentFrom = allWeeks[Math.max(allWeeks.length - 52, 0)];
+  const upcsWithVolume = new Set(
+    factsAll.filter((r) => r.week_ending >= recentFrom && (r.units ?? 0) > 0).map((r) => r.upc)
+  );
   const items = allItems
-    .filter((i) => i.brand === brand && upcsWithData.has(i.upc))
+    .filter((i) => i.brand === brand && upcsWithVolume.has(i.upc))
     .map((i) => ({ upc: i.upc, name: i.name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const item = items.some((i) => i.upc === sp.item) ? sp.item! : "ALL";
