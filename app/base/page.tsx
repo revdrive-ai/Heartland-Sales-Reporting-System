@@ -191,6 +191,20 @@ export default async function Page({
         projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1)));
       }
     }
+    // Each item's share of the brand base over the latest 52 weeks — the
+    // weight an item-level planner adjustment carries in the all-items view.
+    const last52Set = new Set(last52);
+    const shareTot = new Map<string, number>();
+    let shareSum = 0;
+    for (const r of factsAll) {
+      if (!last52Set.has(r.week_ending)) continue;
+      const v = (metric === "units" ? r.base_units ?? r.units : r.base_dollars ?? r.dollars) ?? 0;
+      shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
+      shareSum += v;
+    }
+    const itemShare: Record<string, number> = {};
+    for (const [u, v] of shareTot) itemShare[u] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
+
     plan = {
       sourceYear: +win - 1,
       actualized,
@@ -198,6 +212,7 @@ export default async function Page({
       actualizedWeeks: nAct,
       totActualized: actualized.reduce((a: number, v) => a + (v ?? 0), 0),
       totProjected: projected.reduce((a: number, v) => a + (v ?? 0), 0),
+      itemShare,
     };
   }
 

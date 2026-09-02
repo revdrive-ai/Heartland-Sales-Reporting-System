@@ -46,3 +46,47 @@ export async function registerPlanYear(market_code: string, year: number): Promi
   try { localStorage.setItem(PLAN_KEY, JSON.stringify(reg)); } catch {}
   return reg;
 }
+
+/* Planner adjustments — per item x customer x plan year, the levers a planner
+   pulls on the projected base: distribution gained/lost, a base price change,
+   or a recent-trend override. pct is the expected % impact on base volume in
+   the effective window. Mirrors supabase/migrations/00006_plan_adjustments.sql. */
+
+const ADJ_KEY = "hhPlanAdj";
+
+export type PlanAdjustment = {
+  id: string;
+  market_code: string;
+  plan_year: number;
+  brand: string;
+  upc: string;             // "ALL" = every item of the brand
+  kind: "distribution" | "price" | "trend";
+  pct: number;             // signed % impact on base volume
+  from: string;            // ISO date the adjustment takes effect
+  to: string;              // ISO date it ends
+  note: string;
+  created_at: string;
+};
+
+async function readAdjs(): Promise<PlanAdjustment[]> {
+  try { return JSON.parse(localStorage.getItem(ADJ_KEY) ?? "[]") as PlanAdjustment[]; } catch { return []; }
+}
+const forScope = (all: PlanAdjustment[], market_code: string, plan_year: number) =>
+  all.filter((a) => a.market_code === market_code && a.plan_year === plan_year);
+
+export async function getPlanAdjustments(market_code: string, plan_year: number): Promise<PlanAdjustment[]> {
+  return forScope(await readAdjs(), market_code, plan_year);
+}
+
+export async function savePlanAdjustment(adj: PlanAdjustment): Promise<PlanAdjustment[]> {
+  const all = await readAdjs();
+  all.push(adj);
+  try { localStorage.setItem(ADJ_KEY, JSON.stringify(all)); } catch {}
+  return forScope(all, adj.market_code, adj.plan_year);
+}
+
+export async function deletePlanAdjustment(id: string, market_code: string, plan_year: number): Promise<PlanAdjustment[]> {
+  const all = (await readAdjs()).filter((a) => a.id !== id);
+  try { localStorage.setItem(ADJ_KEY, JSON.stringify(all)); } catch {}
+  return forScope(all, market_code, plan_year);
+}

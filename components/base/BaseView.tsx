@@ -6,7 +6,10 @@ import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
-import { getPlanRegistry, registerPlanYear } from "@/lib/repo/client";
+import {
+  deletePlanAdjustment, getPlanAdjustments, getPlanRegistry, registerPlanYear,
+  savePlanAdjustment, type PlanAdjustment,
+} from "@/lib/repo/client";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
 
@@ -48,6 +51,7 @@ export type BaseData = {
     actualizedWeeks: number;
     totActualized: number;
     totProjected: number;
+    itemShare: Record<string, number>;  // upc → share of brand base (latest 52w)
   };
   points: WeekPoint[];
   overlays: OverlayRow[];
@@ -121,6 +125,61 @@ export default function BaseView({ data }: { data: BaseData }) {
       getPlanRegistry().then((r) => setPlanReg(r[String(nextPlanYear)] ?? {}));
     }
   }, [data.mkt, planYear, nextPlanYear]);
+
+  /* planner adjustments for this customer x plan year */
+  const [adjs, setAdjs] = useState<PlanAdjustment[]>([]);
+  const [aUpc, setAUpc] = useState("ALL");
+  const [aKind, setAKind] = useState<PlanAdjustment["kind"]>("distribution");
+  const [aPct, setAPct] = useState("");
+  const [aFrom, setAFrom] = useState("");
+  const [aTo, setATo] = useState("");
+  const [aNote, setANote] = useState("");
+  useEffect(() => {
+    if (planYear) {
+      getPlanAdjustments(data.mkt, planYear).then(setAdjs);
+      setAUpc("ALL"); setAKind("distribution"); setAPct(""); setANote("");
+      setAFrom(`${planYear}-01-01`); setATo(`${planYear}-12-31`);
+    } else setAdjs([]);
+  }, [data.mkt, planYear]);
+  const addAdj = async () => {
+    const pct = parseFloat(aPct);
+    if (!planYear || !pct || !aFrom || !aTo || aTo < aFrom) return;
+    setAdjs(await savePlanAdjustment({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      market_code: data.mkt, plan_year: planYear, brand: data.brand,
+      upc: aUpc, kind: aKind, pct, from: aFrom, to: aTo,
+      note: aNote.trim(), created_at: new Date().toISOString(),
+    }));
+    setAPct(""); setANote("");
+  };
+  const brandAdjs = adjs.filter((a) => a.brand === data.brand);
+
+  /* per-week multiplier the adjustments put on the plan; item-level rows are
+     weighted by the item's share of the brand base in the all-items view */
+  const adjFactors = useMemo(() => {
+    if (!data.plan) return [];
+    return data.points.map((p) => {
+      const w = utc(p.week);
+      let f = 1;
+      for (const a of brandAdjs) {
+        if (utc(a.from) > w || utc(a.to) < w - 6 * DAY) continue;
+        const weight = a.upc === "ALL" ? 1
+          : data.item === "ALL" ? (data.plan!.itemShare[a.upc] ?? 0)
+          : a.upc === data.item ? 1 : 0;
+        f *= 1 + (a.pct / 100) * weight;
+      }
+      return f;
+    });
+  }, [data.plan, data.points, data.item, brandAdjs]);
+  const hasAdj = adjFactors.some((f) => f !== 1);
+  const adjustedPlan = useMemo(() => {
+    if (!data.plan) return [];
+    return data.points.map((_, i) => {
+      const b = data.plan!.actualized[i] ?? data.plan!.projected[i];
+      return b === null ? null : Math.round(b * adjFactors[i]);
+    });
+  }, [data.plan, data.points, adjFactors]);
+  const adjTotal = adjustedPlan.reduce((a: number, v) => a + (v ?? 0), 0);
   const toggleLanes = () => {
     setShowLanes((v) => {
       try { localStorage.setItem(LANES_KEY, v ? "0" : "1"); } catch {}
@@ -402,9 +461,13 @@ export default function BaseView({ data }: { data: BaseData }) {
             <div className="k-sub flat">{data.points.length - data.plan.actualizedWeeks} weeks · seasonality-shaped</div>
           </div>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">Full-year plan base</span></div>
-            <div className="k-val">{fmtVal(data.plan.totActualized + data.plan.totProjected)}</div>
-            <div className="k-sub flat">{Math.round((data.plan.totActualized / Math.max(data.plan.totActualized + data.plan.totProjected, 1)) * 100)}% actualized</div>
+            <div className="k-top"><span className="k-label">Full-year plan base{hasAdj ? " — adjusted" : ""}</span></div>
+            <div className="k-val">{fmtVal(hasAdj ? adjTotal : data.plan.totActualized + data.plan.totProjected)}</div>
+            <div className="k-sub flat">
+              {hasAdj
+                ? `unadjusted ${fmtVal(data.plan.totActualized + data.plan.totProjected)} · ${brandAdjs.length} adjustment${brandAdjs.length === 1 ? "" : "s"}`
+                : `${Math.round((data.plan.totActualized / Math.max(data.plan.totActualized + data.plan.totProjected, 1)) * 100)}% actualized`}
+            </div>
           </div>
         </>) : (<>
           <div className="kpi">
@@ -467,7 +530,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
             {data.plan ? (
               <Line
-                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "")}
+                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "") + brandAdjs.map((a) => a.id).join(".")}
                 plugins={[bandPlugin]}
                 data={{
                   labels: data.points.map((p) => p.week.slice(5)),
@@ -509,6 +572,18 @@ export default function BaseView({ data }: { data: BaseData }) {
                       pointRadius: 0,
                       pointHoverRadius: 4,
                     },
+                    // the plan after the planner's adjustments below
+                    ...(hasAdj ? [{
+                      label: "Adjusted plan",
+                      data: adjustedPlan,
+                      borderColor: cssToken("--ink"),
+                      backgroundColor: cssToken("--ink"),
+                      borderWidth: 2.2,
+                      tension: 0.25,
+                      spanGaps: false,
+                      pointRadius: 0,
+                      pointHoverRadius: 4,
+                    }] : []),
                   ],
                 }}
                 options={opts}
@@ -626,6 +701,112 @@ export default function BaseView({ data }: { data: BaseData }) {
         )}
       </div>
 
+      {data.plan ? (
+      <div className="card" style={{ padding: 0, marginTop: 16 }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <b>Planner adjustments — {data.win}</b>
+          <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
+            {marketName} · {data.brand} · distribution, base price and trend levers on the plan base
+          </span>
+        </div>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <select style={selStyle} value={aUpc} onChange={(e) => setAUpc(e.target.value)} title="Which item the adjustment applies to">
+            <option value="ALL">All {data.brand} items</option>
+            {data.items.map((i) => (
+              <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
+            ))}
+          </select>
+          <select style={selStyle} value={aKind} onChange={(e) => setAKind(e.target.value as PlanAdjustment["kind"])}>
+            <option value="distribution">Distribution change</option>
+            <option value="price">Base price change</option>
+            <option value="trend">Trend override</option>
+          </select>
+          <input
+            style={{ ...selStyle, width: 110 }}
+            type="number"
+            step="0.5"
+            placeholder="Impact %"
+            title="Expected % impact on base volume — negative for a loss (e.g. -12 for lost distribution in the largest stores)"
+            value={aPct}
+            onChange={(e) => setAPct(e.target.value)}
+          />
+          <input style={{ ...selStyle, width: 140 }} type="date" value={aFrom} onChange={(e) => setAFrom(e.target.value)} title="Takes effect" />
+          <span style={{ color: "var(--ink-3)", fontSize: 12 }}>→</span>
+          <input style={{ ...selStyle, width: 140 }} type="date" value={aTo} onChange={(e) => setATo(e.target.value)} title="Ends" />
+          <input
+            style={{ ...selStyle, flex: "1 1 200px", minWidth: 160 }}
+            placeholder="Why — e.g. lost distribution in largest stores, price increase in April…"
+            value={aNote}
+            onChange={(e) => setANote(e.target.value)}
+          />
+          <button
+            className="btn"
+            style={{ ...selStyle, cursor: "pointer", opacity: parseFloat(aPct) ? 1 : 0.5 }}
+            onClick={addAdj}
+            disabled={!parseFloat(aPct)}
+          >
+            + Add adjustment
+          </button>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th><th>Kind</th><th style={{ textAlign: "right" }}>Impact</th>
+                <th>Effective</th><th>Note</th><th>Added</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {brandAdjs.map((a) => {
+                const itemName = a.upc === "ALL" ? `All ${a.brand} items`
+                  : data.items.find((i) => i.upc === a.upc)?.name ?? a.upc;
+                const kindLabel = a.kind === "distribution" ? "Distribution" : a.kind === "price" ? "Base price" : "Trend";
+                const share = a.upc !== "ALL" && data.item === "ALL" ? data.plan!.itemShare[a.upc] ?? 0 : null;
+                return (
+                  <tr key={a.id}>
+                    <td style={{ padding: "9px 14px" }}>
+                      <b>{itemName.length > 44 ? itemName.slice(0, 43) + "…" : itemName}</b>
+                      {share !== null && (
+                        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{(share * 100).toFixed(1)}% of brand base</div>
+                      )}
+                    </td>
+                    <td style={{ padding: "9px 14px" }}>{kindLabel}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: a.pct >= 0 ? "var(--good)" : "var(--bad)" }}>
+                      {a.pct >= 0 ? "+" : "−"}{Math.abs(a.pct)}%
+                    </td>
+                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.from} → {a.to}</td>
+                    <td style={{ padding: "9px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>{a.note || "—"}</td>
+                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontSize: 12 }}>{a.created_at.slice(0, 10)}</td>
+                    <td style={{ padding: "9px 14px" }}>
+                      <span
+                        className="minichip"
+                        style={{ cursor: "pointer" }}
+                        title="Remove this adjustment"
+                        onClick={() => deletePlanAdjustment(a.id, data.mkt, planYear!).then(setAdjs)}
+                      >
+                        ✕
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {brandAdjs.length === 0 && (
+                <tr><td colSpan={7} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
+                  No adjustments yet for {marketName} · {data.brand} in {data.win}. Add one above — e.g. lost
+                  distribution on an item, a coming price increase, or a trend running hotter or colder than the
+                  projection — and the dark <b>Adjusted plan</b> line appears on the chart.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="note" style={{ margin: "0", padding: "10px 16px" }}>
+          ◇ Impact is the expected % change to <b>base volume</b> over the effective window. Item-level adjustments
+          are weighted by that item&apos;s share of the brand base when viewing all items; pick the item in the selector
+          above to see its plan adjusted in full. Adjustments are saved per customer × plan year.
+        </div>
+      </div>
+      ) : (
       <div className="card" style={{ padding: 0, marginTop: 16 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>Promotion windows on this trend</b>
@@ -751,6 +932,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }
