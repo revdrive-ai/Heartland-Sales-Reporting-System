@@ -19,6 +19,13 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
   ported 1:1 from the demo (`app/globals.css` is the demo stylesheet verbatim).
 - ✅ Data modules: `lib/data/nielsenPull.ts` (13 Albertsons division TAs + the 25-column NIQ
   contract), `lib/data/alignmentKey.ts` (customer alignment hierarchy + mock stats).
+- ✅ **The data seam**: views read/write only through `lib/repo/` (async functions returning
+  snake_case row shapes from `lib/types/db.ts`). Today it's backed by generated fixtures
+  (`lib/fixtures/`, from `scripts/generate-fixtures.mjs`) and localStorage; when Supabase
+  arrives only the repo bodies change. `supabase/migrations/` holds the schema as files,
+  written ahead of the project — see [`supabase/README.md`](supabase/README.md).
+- ✅ First division dataset: **ALBSCO Jewel** — 8 items (6 Splenda + 2 competitive) × 52 NIQ
+  weeks, deterministic, pinned to the demo's documented ALB-JEWEL sample rows.
 - ⬜ The 16 views render as stubs (`components/PageStub.tsx`) — rebuilt view-by-view as
   directed. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the full demo teardown and plan.
 

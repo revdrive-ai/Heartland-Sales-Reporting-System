@@ -1,0 +1,98 @@
+[
+ {
+  "upc": "0007410000123",
+  "nielsen_item_code": "1234567",
+  "brand": "Splenda",
+  "name": "Splenda Original Sweetener Packets 400ct",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Sucralose Packets",
+  "base_units": 47800,
+  "base_price": 7.32,
+  "is_own": true
+ },
+ {
+  "upc": "0007410000456",
+  "nielsen_item_code": "1234570",
+  "brand": "Splenda",
+  "name": "Splenda Original Sweetener Packets 200ct",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Sucralose Packets",
+  "base_units": 26400,
+  "base_price": 4.86,
+  "is_own": true
+ },
+ {
+  "upc": "0007410000789",
+  "nielsen_item_code": "1234581",
+  "brand": "Splenda",
+  "name": "Splenda Original Granulated Canister 9.7oz",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Granulated",
+  "base_units": 18900,
+  "base_price": 5.48,
+  "is_own": true
+ },
+ {
+  "upc": "0007410001012",
+  "nielsen_item_code": "1234592",
+  "brand": "Splenda",
+  "name": "Splenda Original Granulated Pouch 19.4oz",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Granulated",
+  "base_units": 11200,
+  "base_price": 8.94,
+  "is_own": true
+ },
+ {
+  "upc": "0007410001345",
+  "nielsen_item_code": "1234603",
+  "brand": "Splenda",
+  "name": "Splenda Brown Sugar Blend 16oz",
+  "category": "Sweeteners",
+  "super_category": "Baking Sweeteners / Blends",
+  "sub_category": "Brown Sugar Blend",
+  "base_units": 6800,
+  "base_price": 6.12,
+  "is_own": true
+ },
+ {
+  "upc": "0007410001678",
+  "nielsen_item_code": "1234614",
+  "brand": "Splenda",
+  "name": "Splenda Stevia Jar 5.6oz",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Stevia",
+  "base_units": 7900,
+  "base_price": 7.44,
+  "is_own": true
+ },
+ {
+  "upc": "0009920000456",
+  "nielsen_item_code": "9876543",
+  "brand": "Equal",
+  "name": "Equal Classic Packets 230ct",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Aspartame Packets",
+  "base_units": 29800,
+  "base_price": 7.18,
+  "is_own": false
+ },
+ {
+  "upc": "0009930000789",
+  "nielsen_item_code": "9876551",
+  "brand": "Whole Earth",
+  "name": "Whole Earth Sweetener Blend 40ct",
+  "category": "Sweeteners",
+  "super_category": "No/Low-Calorie Tabletop",
+  "sub_category": "Stevia",
+  "base_units": 9600,
+  "base_price": 5.2,
+  "is_own": false
+ }
+]

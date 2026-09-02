@@ -1,0 +1,80 @@
+[
+ {
+  "code": "ALB-ACME",
+  "name": "Albertsons Acme",
+  "ta_name": "ALBSCO Acme TA",
+  "active": false
+ },
+ {
+  "code": "ALB-DENVER",
+  "name": "Albertsons Denver",
+  "ta_name": "ALBSCO Denver Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-EASTERN",
+  "name": "Albertsons Eastern",
+  "ta_name": "ALBSCO Eastern TA",
+  "active": false
+ },
+ {
+  "code": "ALB-INTMTN",
+  "name": "Albertsons Intermountain",
+  "ta_name": "ALBSCO Intermountain Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-JEWEL",
+  "name": "Albertsons Jewel-Osco",
+  "ta_name": "ALBSCO Jewel Div TA",
+  "active": true
+ },
+ {
+  "code": "ALB-NORCAL",
+  "name": "Albertsons Nor Cal",
+  "ta_name": "ALBSCO Nor Cal Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-PORTLAND",
+  "name": "Albertsons Portland",
+  "ta_name": "ALBSCO Portland Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-SEATTLE",
+  "name": "Albertsons Seattle",
+  "ta_name": "ALBSCO Seattle Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-SHAWS",
+  "name": "Albertsons Shaws",
+  "ta_name": "ALBSCO Shaws Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-VONS",
+  "name": "Albertsons Vons SoCal",
+  "ta_name": "ALBSCO So Cal Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-SOUTHERN",
+  "name": "Albertsons Southern",
+  "ta_name": "ALBSCO Southern Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-SOUTHWEST",
+  "name": "Albertsons Southwest",
+  "ta_name": "ALBSCO Southwest Div TA",
+  "active": false
+ },
+ {
+  "code": "ALB-UNITED",
+  "name": "Albertsons United",
+  "ta_name": "ALBSCO United Div TA",
+  "active": false
+ }
+]
