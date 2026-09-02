@@ -63,6 +63,14 @@ const selStyle: React.CSSProperties = {
   borderRadius: 9, padding: "7px 10px",
 };
 
+// compact filter controls that sit inside the promo table's header cells
+const thSel: React.CSSProperties = {
+  font: "inherit", fontSize: 11, fontWeight: 600, color: "var(--ink-2)",
+  background: "var(--surface)", border: "1px solid var(--line)",
+  borderRadius: 7, padding: "3px 6px", marginTop: 5, display: "block",
+  maxWidth: 160, textTransform: "none", letterSpacing: 0,
+};
+
 const utc = (isoDate: string) => Date.UTC(+isoDate.slice(0, 4), +isoDate.slice(5, 7) - 1, +isoDate.slice(8, 10));
 const durationDays = (o: PromoOverlay) => (utc(o.end_date) - utc(o.start_date)) / DAY + 1;
 
@@ -139,6 +147,27 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   const events = data.overlays.filter((o) => durationDays(o) <= EVENT_MAX_DAYS);
   const alwaysOn = data.overlays.filter((o) => durationDays(o) > EVENT_MAX_DAYS);
+
+  /* header filters on the promotion-windows table (table only — the chart
+     overlays are untouched) */
+  const [fKind, setFKind] = useState("all");     // all | event | always
+  const [fText, setFText] = useState("");
+  const [fCust, setFCust] = useState("all");
+  const [fStatus, setFStatus] = useState("all");
+  const [fType, setFType] = useState("all");
+  useEffect(() => { setFKind("all"); setFText(""); setFCust("all"); setFStatus("all"); setFType("all"); },
+    [data.mkt, data.brand, data.win]);
+  const custOpts = useMemo(() => [...new Set(data.overlays.map((o) => o.customer_name))].sort(), [data.overlays]);
+  const statusOpts = useMemo(() => [...new Set(data.overlays.map((o) => o.promo_status))].sort(), [data.overlays]);
+  const typeOpts = useMemo(() => [...new Set(data.overlays.map((o) => o.performance_type))].sort(), [data.overlays]);
+  const filtersOn = fKind !== "all" || fText !== "" || fCust !== "all" || fStatus !== "all" || fType !== "all";
+  const tableRows = data.overlays.filter((o) =>
+    (fKind === "all" || (durationDays(o) <= EVENT_MAX_DAYS ? "event" : "always") === fKind) &&
+    (fCust === "all" || o.customer_name === fCust) &&
+    (fStatus === "all" || o.promo_status === fStatus) &&
+    (fType === "all" || o.performance_type === fType) &&
+    (!fText || o.promo_title.toLowerCase().includes(fText.toLowerCase()))
+  );
 
   /* week index ranges each shaded promo covers (a week_ending Saturday covers
      the 7 days ending that day) */
@@ -578,21 +607,69 @@ export default function BaseView({ data }: { data: BaseData }) {
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>Promotion windows on this trend</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {marketName} · {data.brand} · {fmtMoney(data.overlays.reduce((a, o) => a + o.planned_amount, 0))} planned in scope
+            {marketName} · {data.brand}
+            {filtersOn ? <> · showing {tableRows.length} of {data.overlays.length}</> : null}
+            {" · "}{fmtMoney(tableRows.reduce((a, o) => a + o.planned_amount, 0))} planned{filtersOn ? " in view" : " in scope"}
           </span>
+          {filtersOn && (
+            <span
+              className="minichip"
+              style={{ cursor: "pointer" }}
+              onClick={() => { setFKind("all"); setFText(""); setFCust("all"); setFStatus("all"); setFType("all"); }}
+            >
+              ✕ Clear filters
+            </span>
+          )}
         </div>
         <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
-                <th>Promotion</th><th>Customer</th><th>Status</th><th>Type</th><th>Window</th>
+                <th>
+                  Promotion
+                  <span style={{ display: "flex", gap: 5 }}>
+                    <select style={thSel} value={fKind} onChange={(e) => setFKind(e.target.value)}>
+                      <option value="all">All kinds</option>
+                      <option value="event">Events</option>
+                      <option value="always">Always-on</option>
+                    </select>
+                    <input
+                      style={{ ...thSel, width: 120 }}
+                      placeholder="Search title…"
+                      value={fText}
+                      onChange={(e) => setFText(e.target.value)}
+                    />
+                  </span>
+                </th>
+                <th>
+                  Customer
+                  <select style={thSel} value={fCust} onChange={(e) => setFCust(e.target.value)}>
+                    <option value="all">All ({custOpts.length})</option>
+                    {custOpts.map((c) => <option key={c} value={c}>{c.length > 26 ? c.slice(0, 25) + "…" : c}</option>)}
+                  </select>
+                </th>
+                <th>
+                  Status
+                  <select style={thSel} value={fStatus} onChange={(e) => setFStatus(e.target.value)}>
+                    <option value="all">All</option>
+                    {statusOpts.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </th>
+                <th>
+                  Type
+                  <select style={thSel} value={fType} onChange={(e) => setFType(e.target.value)}>
+                    <option value="all">All</option>
+                    {typeOpts.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </th>
+                <th>Window</th>
                 <th style={{ textAlign: "right" }}>Weeks</th>
                 <th style={{ textAlign: "right" }}>Planned</th>
                 <th style={{ textAlign: "right" }}>Actual</th>
               </tr>
             </thead>
             <tbody>
-              {data.overlays.map((o) => {
+              {tableRows.map((o) => {
                 const st = STATUS_STYLE[o.promo_status] ?? STATUS_STYLE.Expired;
                 const days = durationDays(o);
                 const isEvent = days <= EVENT_MAX_DAYS;
@@ -619,9 +696,11 @@ export default function BaseView({ data }: { data: BaseData }) {
                   </tr>
                 );
               })}
-              {data.overlays.length === 0 && (
+              {tableRows.length === 0 && (
                 <tr><td colSpan={8} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
-                  No Telus promotions map to this division × brand in the window.
+                  {data.overlays.length === 0
+                    ? "No Telus promotions map to this division × brand in the window."
+                    : "No promotions match the header filters — clear them above."}
                 </td></tr>
               )}
             </tbody>
