@@ -96,9 +96,21 @@ export default async function Page({
   const scoped = factsAll.filter((r) => item === "ALL" || r.upc === item);
   const facts = planningYear ? [] : scoped.filter((r) => r.week_ending >= from && r.week_ending <= to);
 
+  // full-history weekly actuals for the selection — feeds the year-ago overlay
+  const weekActual = new Map<string, number>();
+  for (const r of scoped) {
+    const v = (metric === "units" ? r.units : r.dollars) ?? 0;
+    weekActual.set(r.week_ending, (weekActual.get(r.week_ending) ?? 0) + v);
+  }
+  const yearAgoWeek = (w: string) =>
+    new Date(Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10)) - 364 * DAY).toISOString().slice(0, 10);
+
   // aggregate the selection per week (trend chart)
   const byWeek = new Map<string, WeekPoint>();
-  for (const w of weeks) byWeek.set(w, { week: w, actual: planningYear ? null : 0, base: planningYear ? null : 0, promoAcv: 0 });
+  for (const w of weeks) {
+    const ly = weekActual.get(yearAgoWeek(w));
+    byWeek.set(w, { week: w, actual: planningYear ? null : 0, base: planningYear ? null : 0, actualLY: ly === undefined ? null : Math.round(ly), promoAcv: 0 });
+  }
   for (const r of facts) {
     const p = byWeek.get(r.week_ending);
     if (!p) continue;

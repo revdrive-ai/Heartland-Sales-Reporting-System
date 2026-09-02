@@ -15,7 +15,7 @@ import type { PromoOverlay } from "@/lib/repo";
    chart's header (hiding it widens the trend to the full row). Event windows
    (≤ 12 weeks) are shaded; always-on programs are listed below. */
 
-export type WeekPoint = { week: string; actual: number | null; base: number | null; promoAcv: number };
+export type WeekPoint = { week: string; actual: number | null; base: number | null; actualLY: number | null; promoAcv: number };
 
 export type BaseData = {
   markets: { code: string; name: string }[];
@@ -44,6 +44,7 @@ export type BaseData = {
 const DAY = 86400000;
 const EVENT_MAX_DAYS = 84; // ≤ 12 weeks = an event window; longer = always-on
 const SEAS_KEY = "hhSeasHide";
+const PY_KEY = "hhShowPY";
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -68,10 +69,20 @@ export default function BaseView({ data }: { data: BaseData }) {
   const router = useRouter();
   const [shadeAlwaysOn, setShadeAlwaysOn] = useState(false);
   const [seasHide, setSeasHide] = useState(false);
+  const [showPY, setShowPY] = useState(false);
 
   useEffect(() => {
-    try { setSeasHide(localStorage.getItem(SEAS_KEY) === "1"); } catch {}
+    try {
+      setSeasHide(localStorage.getItem(SEAS_KEY) === "1");
+      setShowPY(localStorage.getItem(PY_KEY) === "1");
+    } catch {}
   }, []);
+  const togglePY = () => {
+    setShowPY((v) => {
+      try { localStorage.setItem(PY_KEY, v ? "0" : "1"); } catch {}
+      return !v;
+    });
+  };
   const toggleSeas = () => {
     setSeasHide((h) => {
       try { localStorage.setItem(SEAS_KEY, h ? "0" : "1"); } catch {}
@@ -263,6 +274,13 @@ export default function BaseView({ data }: { data: BaseData }) {
             <h3>Weekly {data.metric} — actual vs NIQ base · event windows shaded</h3>
             <div className="chip-row">
               <span
+                className={"minichip" + (showPY ? " on" : "")}
+                onClick={togglePY}
+                title="Overlay the same weeks a year earlier (actual sales, 52 weeks back)"
+              >
+                {showPY ? "✓ Year-ago actuals" : "Year-ago actuals"}
+              </span>
+              <span
                 className={"minichip" + (seasHide ? " on" : "")}
                 onClick={toggleSeas}
                 title={seasHide ? "Bring the seasonality card back beside the chart" : "Hide the seasonality card and widen this chart to the full row"}
@@ -273,7 +291,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           </div>
           <div className="chartbox" style={{ height: 320 }}>
             <Line
-              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (shadeAlwaysOn ? 1 : 0) + (seasHide ? "w" : "")}
+              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (shadeAlwaysOn ? 1 : 0) + (seasHide ? "w" : "") + (showPY ? "p" : "")}
               plugins={[bandPlugin]}
               data={{
                 labels: data.points.map((p) => p.week.slice(5)),
@@ -289,6 +307,17 @@ export default function BaseView({ data }: { data: BaseData }) {
                     pointRadius: data.points.map((p) => (p.promoAcv >= 10 ? 3 : 0)),
                     pointHoverRadius: 5,
                   },
+                  ...(showPY ? [{
+                    label: "Year ago",
+                    data: data.points.map((p) => p.actualLY),
+                    borderColor: cssToken("--good"),
+                    backgroundColor: cssToken("--good"),
+                    borderWidth: 1.6,
+                    tension: 0.25,
+                    spanGaps: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                  }] : []),
                   {
                     label: "NIQ base",
                     data: data.points.map((p) => p.base),
