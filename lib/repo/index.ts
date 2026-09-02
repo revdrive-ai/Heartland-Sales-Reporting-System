@@ -1,30 +1,23 @@
-// The data seam. Views import ONLY from this module — never from
-// lib/fixtures or a database client directly. Today every function is backed
-// by generated fixtures (reads) and localStorage (writes), exactly mirroring
-// the reference mockup's behavior. When Supabase lands, each body becomes a
-// typed query and no view changes.
+// The data seam — SERVER SIDE. Views never touch data files or a database
+// client directly; server components (and route handlers) call these
+// functions and pass results down as props. Weekly facts are the real ALBSCO
+// NIQ data pull (data/nielsen/*.json.gz, produced by scripts/ingest_albsco.py
+// from data/raw/). When Supabase lands, each body becomes a typed query and
+// nothing outside lib/repo/ changes.
 //
-// Conventions:
-// - Every function is async and returns the snake_case row shapes from
-//   lib/types/db.ts, so swapping in Supabase changes signatures nowhere.
-// - Reads are safe on server and client. localStorage-backed writes/reads
-//   are client-only and fall back to defaults on the server.
+// This module reads the filesystem, so it must only be imported from server
+// code — a client-component import fails the build by design. Client-side
+// stores (alignment key etc.) live in lib/repo/client.ts.
 
+import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
+import path from "node:path";
 import type { Market, Item, NielsenWeeklyRow } from "@/lib/types/db";
-import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
 import marketsJson from "@/lib/fixtures/markets.json";
 import itemsJson from "@/lib/fixtures/items.json";
-import jewelJson from "@/lib/fixtures/nielsen-weekly.alb-jewel.json";
 
 const MARKETS = marketsJson as Market[];
 const ITEMS = itemsJson as Item[];
-
-/* Weekly facts, keyed by market. Divisions come online one at a time —
-   loading another division = generating its fixture and adding it here
-   (later: loading its CSV into Supabase and deleting this map). */
-const FACTS: Record<string, NielsenWeeklyRow[]> = {
-  "ALB-JEWEL": jewelJson as NielsenWeeklyRow[],
-};
 
 /* ------------------------------------------------------------------ MARKETS */
 
@@ -44,27 +37,53 @@ export async function listItems(opts?: { brand?: string; ownOnly?: boolean }): P
   );
 }
 
-export async function listBrands(): Promise<string[]> {
-  return [...new Set(ITEMS.map((i) => i.brand))];
+export async function getItem(upc: string): Promise<Item | undefined> {
+  return ITEMS.find((i) => i.upc === upc);
+}
+
+export async function listBrands(opts?: { ownOnly?: boolean }): Promise<string[]> {
+  const src = opts?.ownOnly ? ITEMS.filter((i) => i.is_own) : ITEMS;
+  return [...new Set(src.map((i) => i.brand))].sort();
 }
 
 /* ------------------------------------------------------------- WEEKLY FACTS */
+
+const factsCache = new Map<string, NielsenWeeklyRow[]>();
+
+function loadFacts(market_code: string): NielsenWeeklyRow[] {
+  const hit = factsCache.get(market_code);
+  if (hit) return hit;
+  if (!MARKETS.some((m) => m.code === market_code)) return [];
+  const file = path.join(process.cwd(), "data", "nielsen", `${market_code}.json.gz`);
+  let rows: NielsenWeeklyRow[];
+  try {
+    rows = JSON.parse(gunzipSync(readFileSync(file)).toString("utf-8"));
+  } catch {
+    rows = []; // market exists but its division data isn't loaded yet
+  }
+  factsCache.set(market_code, rows);
+  return rows;
+}
 
 export type WeeklyFactsFilter = {
   market_code: string;
   upc?: string;
   brand?: string;
-  /** ISO dates, inclusive. Omit for all 52 weeks on file. */
+  category?: string;
+  ownOnly?: boolean;
+  /** ISO dates, inclusive. Omit for all weeks on file. */
   from?: string;
   to?: string;
 };
 
 export async function getWeeklyFacts(f: WeeklyFactsFilter): Promise<NielsenWeeklyRow[]> {
-  const rows = FACTS[f.market_code] ?? [];
-  return rows.filter(
+  const own = f.ownOnly ? new Set(ITEMS.filter((i) => i.is_own).map((i) => i.upc)) : null;
+  return loadFacts(f.market_code).filter(
     (r) =>
       (!f.upc || r.upc === f.upc) &&
       (!f.brand || r.brand === f.brand) &&
+      (!f.category || r.category === f.category) &&
+      (!own || own.has(r.upc)) &&
       (!f.from || r.week_ending >= f.from) &&
       (!f.to || r.week_ending <= f.to)
   );
@@ -72,34 +91,5 @@ export async function getWeeklyFacts(f: WeeklyFactsFilter): Promise<NielsenWeekl
 
 /** Distinct week-endings on file for a market, ascending. */
 export async function listWeekEndings(market_code: string): Promise<string[]> {
-  return [...new Set((FACTS[market_code] ?? []).map((r) => r.week_ending))].sort();
-}
-
-/** Which markets actually have facts loaded (drives "division live" states). */
-export async function listLoadedMarkets(): Promise<string[]> {
-  return Object.keys(FACTS);
-}
-
-/* ---------------------------------------------------------- ALIGNMENT KEY
-   Same store the mockup uses (localStorage `hhAlign`), behind the seam.
-   Server-side reads return the defaults. */
-
-const ALIGN_KEY = "hhAlign";
-
-export async function getAlignment(): Promise<{ rows: AlignRow[]; version: number }> {
-  if (typeof window !== "undefined") {
-    try {
-      const raw = localStorage.getItem(ALIGN_KEY);
-      if (raw) {
-        const stored = JSON.parse(raw) as { v: number; rows: AlignRow[] };
-        return { rows: stored.rows, version: stored.v };
-      }
-    } catch {}
-  }
-  return { rows: structuredClone(ALIGN_DEFAULT), version: 1 };
-}
-
-export async function saveAlignment(rows: AlignRow[], version: number): Promise<void> {
-  if (typeof window === "undefined") return;
-  try { localStorage.setItem(ALIGN_KEY, JSON.stringify({ v: version, rows })); } catch {}
+  return [...new Set(loadFacts(market_code).map((r) => r.week_ending))].sort();
 }

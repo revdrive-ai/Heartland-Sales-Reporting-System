@@ -18,15 +18,14 @@ comment on table public.markets is
 
 create table public.items (
   upc               text primary key,     -- full UPC as text so leading zeros survive
-  nielsen_item_code text not null,
-  brand             text not null,
-  name              text not null,
-  category          text not null,
+  nielsen_item_code text,                 -- not present in the ALBSCO pull; contract allows it
+  name              text not null,        -- NIQ item description
+  brand             text not null,        -- BRAND SHORT
+  manufacturer      text not null,
   super_category    text not null,
+  category          text not null,
   sub_category      text not null,
-  base_units        numeric,              -- everyday weekly baseline (reference market)
-  base_price        numeric,
-  is_own            boolean not null default true,  -- ours vs the competitive set
+  is_own            boolean not null default true,  -- HFPG vs the competitive set
   active            boolean not null default true,
   created_at        timestamptz not null default now()
 );
@@ -94,11 +93,11 @@ create table public.intake_rejects (
 create table public.nielsen_weekly (
   id                  bigint generated always as identity primary key,
   week_ending         date not null,                                   -- always a Saturday
-  nielsen_item_code   text not null,
+  nielsen_item_code   text,
   upc                 text not null references public.items (upc),
   market_code         text not null references public.markets (code),
-  units               numeric not null,
-  dollars             numeric not null,
+  units               numeric,                    -- NIQ leaves some measures blank
+  dollars             numeric,
   base_units          numeric,
   base_dollars        numeric,
   price_per_unit      numeric,

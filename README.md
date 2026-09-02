@@ -20,12 +20,14 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
 - ✅ Data modules: `lib/data/nielsenPull.ts` (13 Albertsons division TAs + the 25-column NIQ
   contract), `lib/data/alignmentKey.ts` (customer alignment hierarchy + mock stats).
 - ✅ **The data seam**: views read/write only through `lib/repo/` (async functions returning
-  snake_case row shapes from `lib/types/db.ts`). Today it's backed by generated fixtures
-  (`lib/fixtures/`, from `scripts/generate-fixtures.mjs`) and localStorage; when Supabase
-  arrives only the repo bodies change. `supabase/migrations/` holds the schema as files,
-  written ahead of the project — see [`supabase/README.md`](supabase/README.md).
-- ✅ First division dataset: **ALBSCO Jewel** — 8 items (6 Splenda + 2 competitive) × 52 NIQ
-  weeks, deterministic, pinned to the demo's documented ALB-JEWEL sample rows.
+  snake_case row shapes from `lib/types/db.ts`). Server reads in `lib/repo/index.ts`,
+  browser stores in `lib/repo/client.ts`; when Supabase arrives only the repo bodies
+  change. `supabase/migrations/` holds the schema as files, written ahead of the project —
+  see [`supabase/README.md`](supabase/README.md).
+- ✅ **Real data loaded: the full ALBSCO NIQ pull** — 52,524 rows, all 13 division TAs,
+  157 weeks (Jul 2023 → Jul 2026), 100 items across 7 brands (82 HFPG own / 18
+  competitive). Source workbook at `data/raw/`, per-market facts at
+  `data/nielsen/<CODE>.json.gz`, rebuilt any time with `python3 scripts/ingest_albsco.py`.
 - ⬜ The 16 views render as stubs (`components/PageStub.tsx`) — rebuilt view-by-view as
   directed. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the full demo teardown and plan.
 
