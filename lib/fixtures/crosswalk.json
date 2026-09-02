@@ -1,0 +1,1332 @@
+[
+ {
+  "id": "walmart-stores-inc",
+  "customer_name": "Walmart Stores, Inc.",
+  "customer_class": "RT",
+  "territory": "Walmart/Sams/Costco",
+  "parent_account": "Walmart",
+  "sales_account": "Walmart Stores, Inc.",
+  "team_lead": "Carla Kolb",
+  "account_lead": "Jon Gathright",
+  "niq_match": "Walmart Total US TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000175"
+  ],
+  "telus_customer_names": [
+   "Walmart Stores, Inc. (WAL100)"
+  ]
+ },
+ {
+  "id": "sams-distribution-center",
+  "customer_name": "Sams Distribution Center",
+  "customer_class": "CL",
+  "territory": "Walmart/Sams/Costco",
+  "parent_account": "Sam's Club",
+  "sales_account": "Sams Distribution Center",
+  "team_lead": "Carla Kolb",
+  "account_lead": "Jon Gathright",
+  "niq_match": "Sam's Total TA",
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "kroger-company",
+  "customer_name": "Kroger Company",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "Kroger",
+  "sales_account": "Kroger Company",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000249"
+  ],
+  "telus_customer_names": [
+   "Kroger Company KRO100 (Group)"
+  ]
+ },
+ {
+  "id": "costco-us",
+  "customer_name": "COSTCO US",
+  "customer_class": "CL",
+  "territory": "Walmart/Sams/Costco",
+  "parent_account": "Costco",
+  "sales_account": "COSTCO US",
+  "team_lead": "Carla Kolb",
+  "account_lead": "Sharon Parrillo",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000294"
+  ],
+  "telus_customer_names": [
+   "COSTCO US COS101 (Group)"
+  ]
+ },
+ {
+  "id": "publix",
+  "customer_name": "Publix",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Publix",
+  "sales_account": "Publix",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Michelle Barrineau",
+  "niq_match": "Publix Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000205"
+  ],
+  "telus_customer_names": [
+   "Publix PUB100 (Group)"
+  ]
+ },
+ {
+  "id": "walmart-canada-corp",
+  "customer_name": "Walmart Canada Corp",
+  "customer_class": "RT",
+  "territory": "Canada",
+  "parent_account": "Walmart Cananda",
+  "sales_account": "Walmart Canada Corp",
+  "team_lead": "Carly Pesek",
+  "account_lead": "Carly Pesek",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000105"
+  ],
+  "telus_customer_names": [
+   "Walmart Canada Corp WAL10D (Group)"
+  ]
+ },
+ {
+  "id": "loblaws-inc",
+  "customer_name": "Loblaws, Inc",
+  "customer_class": "RT",
+  "territory": "Canada",
+  "parent_account": "Loblaws",
+  "sales_account": "Loblaws, Inc",
+  "team_lead": "Carly Pesek",
+  "account_lead": "Carly Pesek",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000147"
+  ],
+  "telus_customer_names": [
+   "Loblaws, Inc LOB100 (Group)"
+  ]
+ },
+ {
+  "id": "food-lion-llc",
+  "customer_name": "Food Lion, LLC",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Delhaize",
+  "sales_account": "Food Lion, LLC",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Mallory Potter",
+  "niq_match": "Food Lion Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000148"
+  ],
+  "telus_customer_names": [
+   "Food Lion, LLC (FOO100)"
+  ]
+ },
+ {
+  "id": "meijer-wholesale-inc",
+  "customer_name": "Meijer Wholesale, Inc.",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "Meijer",
+  "sales_account": "Meijer Wholesale, Inc.",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": "Meijer Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000289"
+  ],
+  "telus_customer_names": [
+   "Meijer Wholesale, Inc. (et.al)"
+  ]
+ },
+ {
+  "id": "hebutt-grocery-co",
+  "customer_name": "HEButt Grocery Co",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "H.E.B",
+  "sales_account": "HEButt Grocery Co",
+  "team_lead": "Lori Brown",
+  "account_lead": "Chase Conrad",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000220"
+  ],
+  "telus_customer_names": [
+   "HEButt Grocery Co HEB100 (Group)"
+  ]
+ },
+ {
+  "id": "ahold",
+  "customer_name": "Ahold",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Ahold",
+  "sales_account": "Ahold",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Ashley Decker-Joress",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000142"
+  ],
+  "telus_customer_names": [
+   "Ahold AHL100 (Group)"
+  ]
+ },
+ {
+  "id": "western-impact-retail",
+  "customer_name": "Western Impact Retail",
+  "customer_class": "RT",
+  "territory": "Canada",
+  "parent_account": "Western Impact Retail",
+  "sales_account": "Western Impact Retail",
+  "team_lead": "Carly Pesek",
+  "account_lead": "Caitlyn McIlveen",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000145"
+  ],
+  "telus_customer_names": [
+   "Western Impact Retail WID101 (Group)"
+  ]
+ },
+ {
+  "id": "costco-canada",
+  "customer_name": "Costco Canada",
+  "customer_class": "CL",
+  "territory": "Canada",
+  "parent_account": "Costco Canada",
+  "sales_account": "Costco Canada",
+  "team_lead": "Carly Pesek",
+  "account_lead": "Carly Pesek",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000161"
+  ],
+  "telus_customer_names": [
+   "Costco Canada COS103 (Group)"
+  ]
+ },
+ {
+  "id": "dollar-general",
+  "customer_name": "Dollar General",
+  "customer_class": "RT",
+  "territory": "Dollar",
+  "parent_account": "Dollar General",
+  "sales_account": "Dollar General",
+  "team_lead": "J W Cassell",
+  "account_lead": "J W Cassell",
+  "niq_match": "Dol Gen Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000247"
+  ],
+  "telus_customer_names": [
+   "Dollar General DOL100 (Group)"
+  ]
+ },
+ {
+  "id": "bjs-wholesale-club",
+  "customer_name": "BJs Wholesale Club",
+  "customer_class": "CL",
+  "territory": "Club",
+  "parent_account": "BJ's Wholesale",
+  "sales_account": "BJs Wholesale Club",
+  "team_lead": "CLUB/OPEN",
+  "account_lead": "CLUB/OPEN",
+  "niq_match": "BJs Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000293"
+  ],
+  "telus_customer_names": [
+   "BJs Wholesale Club BJS100 (Group)"
+  ]
+ },
+ {
+  "id": "dot-foods-retail",
+  "customer_name": "DOT FOODS - RETAIL",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "DOT Foods - Retail",
+  "sales_account": "DOT FOODS - RETAIL",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Ashley Decker-Joress",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000226"
+  ],
+  "telus_customer_names": [
+   "DOT FOODS - RETAIL (DOT101)"
+  ]
+ },
+ {
+  "id": "wakefern",
+  "customer_name": "Wakefern",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "ShopRite",
+  "sales_account": "Wakefern",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "OFFER PENDINGG",
+  "niq_match": "ShopRite Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000202"
+  ],
+  "telus_customer_names": [
+   "Wakefern WAK100 (Group)"
+  ]
+ },
+ {
+  "id": "target-corporation",
+  "customer_name": "Target Corporation",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "Target",
+  "sales_account": "Target Corporation",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": "Target Total BM/FF TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000290"
+  ],
+  "telus_customer_names": [
+   "Target Corporation (TAR100)"
+  ]
+ },
+ {
+  "id": "associated-wholesale-grocers",
+  "customer_name": "Associated Wholesale Grocers",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "Associated Wholesales Grocers",
+  "sales_account": "Associated Wholesale Grocers",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000216"
+  ],
+  "telus_customer_names": [
+   "Associated Wholesale Grocers AWG110 (Group)"
+  ]
+ },
+ {
+  "id": "dollar-tree-merchandising",
+  "customer_name": "Dollar Tree Merchandising",
+  "customer_class": "RT",
+  "territory": "Dollar",
+  "parent_account": "Dollar Tree",
+  "sales_account": "Dollar Tree",
+  "team_lead": "J W Cassell",
+  "account_lead": "J W Cassell",
+  "niq_match": "Dollar Tree Total Omni TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000198"
+  ],
+  "telus_customer_names": [
+   "Dollar Tree Merchandising DOL110 (Group)"
+  ]
+ },
+ {
+  "id": "hannaford-retail-services",
+  "customer_name": "Hannaford Retail Services",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Delhaize",
+  "sales_account": "Hannaford Retail Services",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Mallory Potter",
+  "niq_match": "Hannaford Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000201"
+  ],
+  "telus_customer_names": [
+   "Hannaford Retail Services (HAN100)"
+  ]
+ },
+ {
+  "id": "shoppers-drug-mart",
+  "customer_name": "Shoppers Drug Mart",
+  "customer_class": "RT",
+  "territory": "Canada",
+  "parent_account": "Loblaws",
+  "sales_account": "SHOPPERS DRUG MART",
+  "team_lead": "Carly Pesek",
+  "account_lead": "Caitlyn McIlveen",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000144"
+  ],
+  "telus_customer_names": [
+   "Shoppers Drug Mart SHO100 (Group)"
+  ]
+ },
+ {
+  "id": "southeastern-grocers",
+  "customer_name": "Southeastern Grocers",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Southeastern Grocers",
+  "sales_account": "Southeastern Grocers",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Michelle Barrineau",
+  "niq_match": "SEG Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000273"
+  ],
+  "telus_customer_names": [
+   "Southeastern Grocers (CSW104)"
+  ]
+ },
+ {
+  "id": "safeway-norcal-alb-norcal",
+  "customer_name": "Safeway NorCal",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway NorCal",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Nor Cal Div TA",
+  "market_code": "ALB-NORCAL",
+  "telus_customer_ids": [
+   "000-1000208"
+  ],
+  "telus_customer_names": [
+   "Safeway NorCal (SAF103)"
+  ]
+ },
+ {
+  "id": "s-k-sales-inc",
+  "customer_name": "S & K SALES INC",
+  "customer_class": "RT",
+  "territory": "Dollar",
+  "parent_account": "S&K Sales Inc",
+  "sales_account": "S & K SALES INC",
+  "team_lead": "J W Cassell",
+  "account_lead": "J W Cassell",
+  "niq_match": "DeCA FRESH CONUS Total + PR In AK&HI TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000250"
+  ],
+  "telus_customer_names": [
+   "S & K SALES INC SKS100 (Group)"
+  ]
+ },
+ {
+  "id": "safeway-socal-alb-vons",
+  "customer_name": "Safeway SoCal",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway SoCal",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO So Cal Div TA",
+  "market_code": "ALB-VONS",
+  "telus_customer_ids": [
+   "000-1000211"
+  ],
+  "telus_customer_names": [
+   "Safeway SoCal (SAF106)"
+  ]
+ },
+ {
+  "id": "c-s-east",
+  "customer_name": "C & S East",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "C&S East",
+  "sales_account": "C&S East",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "OFFER PENDINGG",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000151"
+  ],
+  "telus_customer_names": [
+   "C & S East (CSW103)"
+  ]
+ },
+ {
+  "id": "safeway-mid-atlantic-alb-eastern",
+  "customer_name": "Safeway Mid-Atlantic",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Mid-Atlantic",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Eastern TA",
+  "market_code": "ALB-EASTERN",
+  "telus_customer_ids": [
+   "000-1000252"
+  ],
+  "telus_customer_names": [
+   "Safeway Mid-Atlantic (ACM100)"
+  ]
+ },
+ {
+  "id": "safeway-mid-atlantic-alb-acme",
+  "customer_name": "Safeway Mid-Atlantic",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Mid-Atlantic",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Acme TA",
+  "market_code": "ALB-ACME",
+  "telus_customer_ids": [
+   "000-1000252"
+  ],
+  "telus_customer_names": [
+   "Safeway Mid-Atlantic (ACM100)"
+  ]
+ },
+ {
+  "id": "family-dollar-inc",
+  "customer_name": "Family Dollar Inc",
+  "customer_class": "RT",
+  "territory": "Dollar",
+  "parent_account": "Family Dollar",
+  "sales_account": "Family Dollar Inc",
+  "team_lead": "J W Cassell",
+  "account_lead": "J W Cassell",
+  "niq_match": "Family Dollar Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000199"
+  ],
+  "telus_customer_names": [
+   "Family Dollar Inc FAM100 (Group)"
+  ]
+ },
+ {
+  "id": "giant-eagle",
+  "customer_name": "Giant Eagle",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Giant Eagle",
+  "sales_account": "Giant Eagle",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": "Giant Eagle Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000200"
+  ],
+  "telus_customer_names": [
+   "Giant Eagle GIA100 (Group)"
+  ]
+ },
+ {
+  "id": "harris-teeter-inc",
+  "customer_name": "Harris Teeter, Inc",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Harris Teeter",
+  "sales_account": "Harris Teeter, Inc",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Mallory Potter",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000310"
+  ],
+  "telus_customer_names": [
+   "Harris Teeter, Inc HAR100 (Group)"
+  ]
+ },
+ {
+  "id": "wegmans-food-market",
+  "customer_name": "Wegmans Food Market",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Wegmans",
+  "sales_account": "WEGMAN'S FOOD MARKET",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": "Wegmans Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000193"
+  ],
+  "telus_customer_names": [
+   "Wegmans Food Market WEG100 (Group)"
+  ]
+ },
+ {
+  "id": "demoulas-market-basket",
+  "customer_name": "Demoulas Market Basket",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Demoulas Market Basket",
+  "sales_account": "Demoulas Market Basket",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Ashley Decker-Joress",
+  "niq_match": "DeMoulas Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000224"
+  ],
+  "telus_customer_names": [
+   "Demoulas Market Basket DMB100 (Group)"
+  ]
+ },
+ {
+  "id": "ingles-markets-inc",
+  "customer_name": "Ingles Markets, Inc",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Ingles",
+  "sales_account": "Ingles Markets, Inc",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Mallory Potter",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000204"
+  ],
+  "telus_customer_names": [
+   "Ingles Markets, Inc ING100 (Group)"
+  ]
+ },
+ {
+  "id": "jewel-alb-jewel",
+  "customer_name": "Jewel",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Jewel",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Jewel Div TA",
+  "market_code": "ALB-JEWEL",
+  "telus_customer_ids": [
+   "000-1000223"
+  ],
+  "telus_customer_names": [
+   "Jewel (JWL100)"
+  ]
+ },
+ {
+  "id": "safeway-seattle-alb-seattle",
+  "customer_name": "Safeway Seattle",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Seattle",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Seattle Div TA",
+  "market_code": "ALB-SEATTLE",
+  "telus_customer_ids": [
+   "000-1000210"
+  ],
+  "telus_customer_names": [
+   "Safeway Seattle (SAF105)"
+  ]
+ },
+ {
+  "id": "weis-markets-inc",
+  "customer_name": "Weis Markets, INC",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Weis",
+  "sales_account": "Weis Markets, INC",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Ashley Decker-Joress",
+  "niq_match": "Weis Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000141"
+  ],
+  "telus_customer_names": [
+   "Weis Markets, INC WEI100 (Group)"
+  ]
+ },
+ {
+  "id": "hy-vee",
+  "customer_name": "Hy-Vee",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "Hy-Vee",
+  "sales_account": "Hy-Vee",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": "Hy-Vee Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000282"
+  ],
+  "telus_customer_names": [
+   "Hy-Vee (HYV100)"
+  ]
+ },
+ {
+  "id": "c-s-west",
+  "customer_name": "C & S West",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "C&S West",
+  "sales_account": "C&S West",
+  "team_lead": "Lori Brown",
+  "account_lead": "Lori Brown",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000158"
+  ],
+  "telus_customer_names": [
+   "C & S West (CSW100)"
+  ]
+ },
+ {
+  "id": "safeway-southwest-alb-southwest",
+  "customer_name": "Safeway Southwest",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Southwest",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Southwest Div TA",
+  "market_code": "ALB-SOUTHWEST",
+  "telus_customer_ids": [
+   "000-1000213"
+  ],
+  "telus_customer_names": [
+   "Safeway Southwest (SAF108)"
+  ]
+ },
+ {
+  "id": "unified-grocers",
+  "customer_name": "UNIFIED GROCERS",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "UNFI",
+  "sales_account": "UNIFIED GROCERS",
+  "team_lead": "Lori Brown",
+  "account_lead": "Sarah Trilles",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000306"
+  ],
+  "telus_customer_names": [
+   "UNIFIED GROCERS (UNI110)"
+  ]
+ },
+ {
+  "id": "shaws-wells-grocery-shaws-alb-shaws",
+  "customer_name": "Shaws Wells Grocery-Shaws",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Shaws Wells Grocery-Shaws",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Shaws Div TA",
+  "market_code": "ALB-SHAWS",
+  "telus_customer_ids": [
+   "000-1000221"
+  ],
+  "telus_customer_names": [
+   "Shaws Wells Grocery-Shaws (SHA100)"
+  ]
+ },
+ {
+  "id": "safeway-southern-alb-southern",
+  "customer_name": "Safeway Southern",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Southern",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Southern Div TA",
+  "market_code": "ALB-SOUTHERN",
+  "telus_customer_ids": [
+   "000-1000212"
+  ],
+  "telus_customer_names": [
+   "Safeway Southern (SAF107)"
+  ]
+ },
+ {
+  "id": "supervalu-hopkins",
+  "customer_name": "SuperValu Hopkins",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "UNFI",
+  "sales_account": "SuperValu Hopkins",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000278"
+  ],
+  "telus_customer_names": [
+   "SuperValu Hopkins"
+  ]
+ },
+ {
+  "id": "brookshire-grocery-co",
+  "customer_name": "Brookshire Grocery Co.",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Brookshire",
+  "sales_account": "Brookshire Grocery Co.",
+  "team_lead": "Lori Brown",
+  "account_lead": "Chase Conrad",
+  "niq_match": "Brookshire Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000219"
+  ],
+  "telus_customer_names": [
+   "Brookshire Grocery Co. BRO100 (Group)"
+  ]
+ },
+ {
+  "id": "smart-final-inc",
+  "customer_name": "SMART & FINAL INC",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Smart & Final",
+  "sales_account": "SMART & FINAL INC",
+  "team_lead": "Lori Brown",
+  "account_lead": "Lori Brown",
+  "niq_match": "Smart & Final Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000286"
+  ],
+  "telus_customer_names": [
+   "SMART & FINAL INC (SMA100)"
+  ]
+ },
+ {
+  "id": "safeway-portland-alb-portland",
+  "customer_name": "Safeway Portland",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Portland",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Portland Div TA",
+  "market_code": "ALB-PORTLAND",
+  "telus_customer_ids": [
+   "000-1000209"
+  ],
+  "telus_customer_names": [
+   "Safeway Portland (SAF104)"
+  ]
+ },
+ {
+  "id": "kvat",
+  "customer_name": "KVAT",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "KVAT",
+  "sales_account": "KVAT",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Mallory Potter",
+  "niq_match": "KVAT Food City TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000254"
+  ],
+  "telus_customer_names": [
+   "KVAT KVA100 (Group)"
+  ]
+ },
+ {
+  "id": "winco-foods-inc",
+  "customer_name": "Winco Foods INC",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Winco",
+  "sales_account": "Winco Foods INC",
+  "team_lead": "Lori Brown",
+  "account_lead": "Jacqueline Carrier 8/31",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000281"
+  ],
+  "telus_customer_names": [
+   "Winco Foods INC (WCO100)"
+  ]
+ },
+ {
+  "id": "merchants-distributors-inc",
+  "customer_name": "Merchants Distributors, INC",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Merchants Distributors, INC",
+  "sales_account": "Merchants Distributors, INC",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Mallory Potter",
+  "niq_match": "Lowes Food Banner Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000311"
+  ],
+  "telus_customer_names": [
+   "Merchants Distributors, INC MDI100 (Group)"
+  ]
+ },
+ {
+  "id": "safeway-denver-alb-denver",
+  "customer_name": "Safeway Denver",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway Denver",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Denver Div TA",
+  "market_code": "ALB-DENVER",
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "stater-brothers-markets",
+  "customer_name": "Stater Brothers Markets",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Stater Bros",
+  "sales_account": "Stater Brothers Markets",
+  "team_lead": "Lori Brown",
+  "account_lead": "Lori Brown",
+  "niq_match": "Stater Bros Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000285"
+  ],
+  "telus_customer_names": [
+   "Stater Brothers Markets (STA101)"
+  ]
+ },
+ {
+  "id": "supervalu",
+  "customer_name": "SuperValu",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "SuperValu",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000276",
+   "000-1000277"
+  ],
+  "telus_customer_names": [
+   "SuperValu",
+   "SuperValu (SUP100)"
+  ]
+ },
+ {
+  "id": "certco-inc",
+  "customer_name": "Certco Inc",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "Certco",
+  "sales_account": "Certco Inc",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000287"
+  ],
+  "telus_customer_names": [
+   "Certco Inc (CER100)"
+  ]
+ },
+ {
+  "id": "united-supermarkets-alb-united",
+  "customer_name": "United Supermarkets",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "United Supermarkets",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO United Div TA",
+  "market_code": "ALB-UNITED",
+  "telus_customer_ids": [
+   "000-1000291"
+  ],
+  "telus_customer_names": [
+   "United Supermarkets (UNI100)"
+  ]
+ },
+ {
+  "id": "c-s-lathrop",
+  "customer_name": "C & S Lathrop",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "C&S West",
+  "sales_account": "C & S Lathrop",
+  "team_lead": "Lori Brown",
+  "account_lead": "Lori Brown",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000156"
+  ],
+  "telus_customer_names": [
+   "C & S Lathrop (CSW110)"
+  ]
+ },
+ {
+  "id": "spartan-nash",
+  "customer_name": "Spartan Nash",
+  "customer_class": "RT",
+  "territory": "Central",
+  "parent_account": "SpartanNash",
+  "sales_account": "Spartan Nash",
+  "team_lead": "CENTRAL/OPEN",
+  "account_lead": "CENTRAL/OPEN",
+  "niq_match": "SpartanNash Total Wholesale & Retail TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000330"
+  ],
+  "telus_customer_names": [
+   "Spartan Nash NAS100 (Group)"
+  ]
+ },
+ {
+  "id": "supervalu-harrisburg",
+  "customer_name": "SuperValu Harrisburg",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "SuperValu Harrisburg",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000267"
+  ],
+  "telus_customer_names": [
+   "SuperValu Harrisburg"
+  ]
+ },
+ {
+  "id": "safeway-imw-alb-intmtn",
+  "customer_name": "Safeway IMW",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway IMW",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": "ALBSCO Intermountain Div TA",
+  "market_code": "ALB-INTMTN",
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "schnucks-market-inc",
+  "customer_name": "Schnucks Market, Inc",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Schnucks",
+  "sales_account": "Schnucks Market, Inc",
+  "team_lead": "Lori Brown",
+  "account_lead": "Lori Brown",
+  "niq_match": "Schnucks Total TA",
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000315"
+  ],
+  "telus_customer_names": [
+   "Schnucks Market, Inc SCK100 (Group)"
+  ]
+ },
+ {
+  "id": "unfi-supervalu-pompano",
+  "customer_name": "UNFI SUPERVALU - POMPANO",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "UNFI SUPERVALU - POMPANO",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000322"
+  ],
+  "telus_customer_names": [
+   "UNFI SUPERVALU - POMPANO (SUP131)"
+  ]
+ },
+ {
+  "id": "marc-glassman-inc",
+  "customer_name": "Marc Glassman, Inc",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Marc Glassman",
+  "sales_account": "Marc Glassman, Inc",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000206"
+  ],
+  "telus_customer_names": [
+   "Marc Glassman, Inc MAR110 (Group)"
+  ]
+ },
+ {
+  "id": "supervalu-pittsburgh",
+  "customer_name": "SuperValu Pittsburgh",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "SuperValu Pittsburgh",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000269"
+  ],
+  "telus_customer_names": [
+   "SuperValu Pittsburgh"
+  ]
+ },
+ {
+  "id": "menards-rt",
+  "customer_name": "Menards RT",
+  "customer_class": "RT",
+  "territory": "Dollar",
+  "parent_account": "Menards",
+  "sales_account": "Menards",
+  "team_lead": "J W Cassell",
+  "account_lead": "J W Cassell",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "supervalu-mechanicsville",
+  "customer_name": "SUPERVALU - MECHANICSVILLE",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "SUPERVALU - MECHANICSVILLE",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000270"
+  ],
+  "telus_customer_names": [
+   "SuperValu - Mechanicsville"
+  ]
+ },
+ {
+  "id": "imperial-distributors-inc",
+  "customer_name": "Imperial Distributors, Inc",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Imperial Distributors",
+  "sales_account": "Imperial Distributors, Inc",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Ashley Decker-Joress",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "associated-food-stores",
+  "customer_name": "Associated Food Stores",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Associated Foods Stores",
+  "sales_account": "Associated Food Stores",
+  "team_lead": "Lori Brown",
+  "account_lead": "Jacqueline Carrier 8/31",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000215"
+  ],
+  "telus_customer_names": [
+   "Associated Food Stores AFS100 (Group)"
+  ]
+ },
+ {
+  "id": "bi-mart",
+  "customer_name": "BI-MART",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "Bi-Mart",
+  "sales_account": "BI-MART",
+  "team_lead": "Lori Brown",
+  "account_lead": "Jacqueline Carrier 8/31",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000217"
+  ],
+  "telus_customer_names": [
+   "BI-MART BIM100 (Group)"
+  ]
+ },
+ {
+  "id": "discount-drug-mart",
+  "customer_name": "DISCOUNT DRUG MART",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Discount Drug Mart",
+  "sales_account": "DISCOUNT DRUG MART",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000256"
+  ],
+  "telus_customer_names": [
+   "DISCOUNT DRUG MART DIS110 (Group)"
+  ]
+ },
+ {
+  "id": "safeway-hbc",
+  "customer_name": "Safeway HBC",
+  "customer_class": "RT",
+  "territory": "West",
+  "parent_account": "ALBSCO",
+  "sales_account": "Safeway HBC",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "supervalu-eastern-region",
+  "customer_name": "SuperValu-Eastern Region",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "SuperValu-Eastern Region",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [
+   "000-1000268"
+  ],
+  "telus_customer_names": [
+   "SUPERVALU-EASTERN REGION"
+  ]
+ },
+ {
+  "id": "rc-taylor-distributing",
+  "customer_name": "RC TAYLOR DISTRIBUTING",
+  "customer_class": "RT",
+  "territory": "Which ABSCO does this fall to?",
+  "parent_account": "ALBSCO",
+  "sales_account": "RC TAYLOR DISTRIBUTING",
+  "team_lead": "Lori Brown",
+  "account_lead": "Peter Bidas",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "supervalu-bws-div",
+  "customer_name": "SUPERVALU - BWS DIV",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "UNFI",
+  "sales_account": "SUPERVALU - BWS DIV",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "heinens-inc",
+  "customer_name": "Heinens Inc",
+  "customer_class": "RT",
+  "territory": "East",
+  "parent_account": "Heinens",
+  "sales_account": "Heinens Inc",
+  "team_lead": "Stephanie Littleton",
+  "account_lead": "Clay Hess",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ },
+ {
+  "id": "lewisco-holdings",
+  "customer_name": "Lewisco Holdings",
+  "customer_class": "RT",
+  "territory": "House",
+  "parent_account": "Lewisco Holdings",
+  "sales_account": "Lewisco Holdings",
+  "team_lead": "House",
+  "account_lead": "House",
+  "niq_match": null,
+  "market_code": null,
+  "telus_customer_ids": [],
+  "telus_customer_names": []
+ }
+]

@@ -106,3 +106,24 @@ export type PromoMeta = {
   actual_total: number;
   promos_without_lines: number;
 };
+
+/* ---------------------------------------------------------- CUSTOMER CROSSWALK
+   One customer tied together across systems (data/raw/Nielsen_crosswalk.xlsx,
+   via scripts/ingest_crosswalk.py): the internal hierarchy, the NIQ trading
+   area, and the name-matched Telus customer ids. One row per sales account ×
+   NIQ match (a sales account covering two TAs appears twice). */
+
+export type CrosswalkRow = {
+  id: string;
+  customer_name: string;
+  customer_class: "RT" | "CL";        // retail | club
+  territory: string;
+  parent_account: string;
+  sales_account: string;
+  team_lead: string;
+  account_lead: string;
+  niq_match: string | null;           // NIQ TA name
+  market_code: string | null;         // app market code when we hold that TA's data
+  telus_customer_ids: string[];
+  telus_customer_names: string[];
+};

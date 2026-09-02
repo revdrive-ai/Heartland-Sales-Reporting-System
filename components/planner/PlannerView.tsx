@@ -21,6 +21,7 @@ export type PromoRow = {
 
 export type PlannerData = {
   meta: PromoMeta;
+  scopeLabel?: string;
   byStatus: Record<string, number>;
   months: string[];
   plannedByMonth: number[];
@@ -110,6 +111,7 @@ export default function PlannerView({ data }: { data: PlannerData }) {
           </p>
         </div>
         <div className="actions">
+          {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
           <span className="pill">Source: Telus export · {data.meta.snapshot_date}</span>
         </div>
       </div>

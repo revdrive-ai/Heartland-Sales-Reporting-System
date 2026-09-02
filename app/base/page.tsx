@@ -1,4 +1,6 @@
 import { getPromoOverlays, getWeeklyFacts, listMarkets, listWeekEndings } from "@/lib/repo";
+import { getScope } from "@/lib/server/scope";
+import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
 
 /* Base & Lift Lab, draft 1 — the Nielsen weekly trend (actual vs NIQ base)
@@ -13,8 +15,17 @@ export default async function Page({
   searchParams: Promise<{ mkt?: string; brand?: string; metric?: string; win?: string }>;
 }) {
   const sp = await searchParams;
-  const markets = await listMarkets();
-  const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt! : "ALB-JEWEL";
+  const [allMarkets, gscope] = await Promise.all([listMarkets(), getScope()]);
+  const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
+  if (gscope.active && markets.length === 0) {
+    return (
+      <ScopeEmpty current="base" crumb="Trade Workflow · Step 1" title="Base & Lift Lab"
+        label={gscope.label}
+        message="No Nielsen trading areas in this scope have data on file — only the 13 ALBSCO divisions are loaded so far." />
+    );
+  }
+  const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt!
+    : markets.some((m) => m.code === "ALB-JEWEL") ? "ALB-JEWEL" : markets[0].code;
   const brand = OWN_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
   const metric = sp.metric === "dollars" ? "dollars" : "units";
   const win = sp.win === "all" ? "all" : "52w";

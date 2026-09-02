@@ -1,4 +1,5 @@
 import { listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
+import { getScope } from "@/lib/server/scope";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
 
 /* Promotion Planner — the first rebuilt view, running on the real Telus
@@ -28,9 +29,22 @@ function allocateByMonth(totalByMonth: number[], amount: number, startISO: strin
 }
 
 export default async function Page() {
-  const [promos, customers, meta, enums] = await Promise.all([
-    listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(),
+  const [allPromos, allCustomers, meta, enums, gscope] = await Promise.all([
+    listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(), getScope(),
   ]);
+  const inScope = new Set(gscope.telusCustomerIds);
+  const promos = gscope.active ? allPromos.filter((p) => inScope.has(p.customer_id)) : allPromos;
+  const customers = gscope.active ? allCustomers.filter((c) => inScope.has(c.customer_id)) : allCustomers;
+  // scoped headline totals — the snapshot meta keeps only its identity fields
+  const scopedMeta = gscope.active
+    ? {
+        ...meta,
+        promotions: promos.length,
+        promo_lines: promos.reduce((a, p) => a + p.line_count, 0),
+        planned_total: promos.reduce((a, p) => a + p.planned_amount, 0),
+        actual_total: promos.reduce((a, p) => a + p.actual_amount, 0),
+      }
+    : meta;
 
   const plannedByMonth = Array(12).fill(0);
   const actualByMonth = Array(12).fill(0);
@@ -60,7 +74,8 @@ export default async function Page() {
   }));
 
   const data: PlannerData = {
-    meta,
+    meta: scopedMeta,
+    scopeLabel: gscope.active ? gscope.label : undefined,
     byStatus,
     months: MONTHS,
     plannedByMonth: plannedByMonth.map((v) => Math.round(v)),

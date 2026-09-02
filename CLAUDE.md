@@ -21,5 +21,10 @@
   157 weeks, 100 items) lives in `data/raw/` and is transformed by
   `scripts/ingest_albsco.py` (python3 + pandas) into `data/nielsen/` and
   `lib/fixtures/{markets,items}.json`. Never hand-edit the outputs; re-run the script.
+- **Global scope**: the topbar's five cascading selectors (lib/scope.ts + components/ScopeBar)
+  persist in the `hh-scope` cookie; server pages call `getScope()` (lib/server/scope.ts) and
+  intersect their reads with `marketCodes` / `telusCustomerIds`. New views must do the same.
+  The crosswalk fixture is the source of truth for cross-system customer identity
+  (re-run scripts/ingest_crosswalk.py after replacing the raw workbook).
 - Build-out order is Albertsons division by division; Randy directs which piece comes
   next. `docs/HANDOFF.md` holds the full teardown.

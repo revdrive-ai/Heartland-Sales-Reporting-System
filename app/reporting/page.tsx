@@ -1,4 +1,6 @@
 import { getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
+import { getScope } from "@/lib/server/scope";
+import ScopeEmpty from "@/components/ScopeEmpty";
 import ReportingView, { type ReportingData } from "@/components/reporting/ReportingView";
 import type { NielsenWeeklyRow } from "@/lib/types/db";
 
@@ -17,7 +19,15 @@ export default async function Page({
 }: {
   searchParams: Promise<{ mkt?: string; brand?: string; win?: string }>;
 }) {
-  const [markets, items] = await Promise.all([listMarkets(), listItems()]);
+  const [allMarkets, items, gscope] = await Promise.all([listMarkets(), listItems(), getScope()]);
+  const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
+  if (gscope.active && markets.length === 0) {
+    return (
+      <ScopeEmpty current="reporting" crumb="Trade Workflow · Step 3" title="Sales Dashboard"
+        label={gscope.label}
+        message="No Nielsen trading areas in this scope have data on file — only the 13 ALBSCO divisions are loaded so far." />
+    );
+  }
   const ownBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
   const itemMeta = new Map(items.map((i) => [i.upc, i]));
 
@@ -127,7 +137,7 @@ export default async function Page({
   const topMovers = [...movers.slice(0, 8), ...movers.slice(-8).filter((m) => m.delta < 0)];
 
   const data: ReportingData = {
-    markets: [{ code: "ALL", name: "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
+    markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
     ownBrands,
     mkt, brand, win,
     windowLabel: `${curWeeks[0]} → ${to}`,

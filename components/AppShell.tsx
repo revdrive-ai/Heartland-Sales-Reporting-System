@@ -6,14 +6,15 @@ import Sidebar from "./Sidebar";
 import AskPanel from "./AskPanel";
 import WelcomeModal from "./WelcomeModal";
 import { Toast } from "./toast";
+import type { Scope } from "@/lib/scope";
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({ children, initialScope }: { children: React.ReactNode; initialScope: Scope }) {
   const [askOpen, setAskOpen] = useState(false);
 
   return (
     <>
       <div className="app">
-        <Topbar onAsk={() => setAskOpen(true)} />
+        <Topbar onAsk={() => setAskOpen(true)} initialScope={initialScope} />
         <Sidebar />
         <main className="main" id="main">{children}</main>
       </div>

@@ -41,6 +41,12 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
   units / price / share-of-measured-set with true YoY (last 13/26/52 weeks vs the same NIQ
   weeks a year earlier), weekly TY-vs-LY trend, brand and division/category cuts, and
   item-level movers. All divisions or one; URL-driven controls.
+- ✅ **Global customer scope** — the crosswalk (`data/raw/Nielsen_crosswalk.xlsx` →
+  `lib/fixtures/crosswalk.json`) ties customers across systems, and five cascading
+  selectors in the topbar (Territory → Parent → Sales account, Team lead, Account lead)
+  scope every screen. Options facet on each other (pick Albertsons and only Albertsons
+  choices remain); the selection persists in the `hh-scope` cookie and resolves
+  server-side to Nielsen markets + Telus customers per view.
 - ⬜ The other 13 views render as stubs (`components/PageStub.tsx`) — rebuilt view-by-view as
   directed. See [`docs/HANDOFF.md`](docs/HANDOFF.md) for the full demo teardown and plan.
 
