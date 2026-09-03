@@ -108,7 +108,9 @@ export default function EventWizard({
   );
 
   return (
-    <div className="modal open" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    // no backdrop-close: drag-selecting a field and releasing outside the box
+    // must not throw the planner's half-entered event away — ✕ / Cancel close
+    <div className="modal open">
       <div className="box wizard" style={{ width: 840 }}>
         <div className="m-head">
           <div>
