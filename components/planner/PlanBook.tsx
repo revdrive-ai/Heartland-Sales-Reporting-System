@@ -450,7 +450,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                         onChange={(ev) => void setLift(e, ev.target.value)}
                       />
                     </td>
-                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.incr === null ? "—" : fmtK(c.incr)}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.incr === null ? "—" : Math.round(c.incr).toLocaleString()}</td>
                     <td
                       style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                       title={e.funding && (e.funding.oi > 0 || e.funding.scan > 0)

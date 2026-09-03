@@ -322,7 +322,7 @@ export default function EventWizard({
               {railRow("Tactic", tactic || "—", !tactic)}
               {railRow("Predicted lift", lift !== null ? `+${lift}%${overridden ? " ✎" : ""}` : "—", lift === null)}
               {railRow("Base volume", calc.base ? `${fmtK(calc.base)} units` : "—", !calc.base)}
-              {railRow("Incremental", calc.incr ? `+${fmtK(calc.incr)} units` : "—", !calc.incr)}
+              {railRow("Incremental", calc.incr ? `+${Math.round(calc.incr).toLocaleString()} units` : "—", !calc.incr)}
               {calc.spend > 0 && railRow("Spend split", `OI ${fmt$(calc.oi$)} · Scan ${fmt$(calc.scan$)} · Fixed ${fmt$(calc.fx)}`, false)}
               {railRow("Total spend", calc.spend ? "$" + Math.round(calc.spend).toLocaleString() : "—", !calc.spend)}
               {railRow("Base source", `NIQ latest 52 wks${data.scopeLabel ? ` · ${data.scopeLabel}` : ""}`, false)}
