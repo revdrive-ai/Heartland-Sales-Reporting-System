@@ -90,3 +90,77 @@ export async function deletePlanAdjustment(id: string, market_code: string, plan
   try { localStorage.setItem(ADJ_KEY, JSON.stringify(all)); } catch {}
   return forScope(all, market_code, plan_year);
 }
+
+/* Plan-year promotion events — the forward book the Promotion Planner builds
+   for 2027+ before Telus has it: entered by hand, imported from the CSV
+   template, or carried forward from the prior year's Telus book. Mirrors
+   supabase/migrations/00007_plan_events.sql. */
+
+const EVT_KEY = "hhPlanEvents";
+
+export type PlanEvent = {
+  id: string;
+  plan_year: number;
+  customer_id: string;      // Telus customer id ("" when imported name didn't match)
+  customer: string;
+  brand: string;            // own brand, or "MIXED" when unknown (carried events)
+  title: string;
+  perf: string;             // performance type
+  start: string;            // ISO dates
+  end: string;
+  spend: number;            // planned trade $, whole dollars
+  lift_pct: number | null;  // expected % lift over base; null = not set yet
+  note: string;
+  origin: "manual" | "import" | "carry";
+  created_at: string;
+};
+
+async function readEvents(): Promise<PlanEvent[]> {
+  try { return JSON.parse(localStorage.getItem(EVT_KEY) ?? "[]") as PlanEvent[]; } catch { return []; }
+}
+const yearEvents = (all: PlanEvent[], plan_year: number) => all.filter((e) => e.plan_year === plan_year);
+
+export async function getPlanEvents(plan_year: number): Promise<PlanEvent[]> {
+  return yearEvents(await readEvents(), plan_year);
+}
+
+export async function addPlanEvents(evts: PlanEvent[]): Promise<PlanEvent[]> {
+  const all = await readEvents();
+  all.push(...evts);
+  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
+  return yearEvents(all, evts[0]?.plan_year ?? 0);
+}
+
+export async function updatePlanEvent(id: string, plan_year: number, patch: Partial<PlanEvent>): Promise<PlanEvent[]> {
+  const all = await readEvents();
+  const i = all.findIndex((e) => e.id === id);
+  if (i >= 0) all[i] = { ...all[i], ...patch };
+  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
+  return yearEvents(all, plan_year);
+}
+
+export async function deletePlanEvent(id: string, plan_year: number): Promise<PlanEvent[]> {
+  const all = (await readEvents()).filter((e) => e.id !== id);
+  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
+  return yearEvents(all, plan_year);
+}
+
+/* Plan-year trade budget — one number per plan year + scope, editable on the
+   planner's spend bar; defaults to the prior year's booked total. */
+
+const BUDGET_KEY = "hhPlanBudget";
+
+export async function getPlanBudget(key: string): Promise<number | null> {
+  try {
+    const map = JSON.parse(localStorage.getItem(BUDGET_KEY) ?? "{}") as Record<string, number>;
+    return map[key] ?? null;
+  } catch { return null; }
+}
+
+export async function setPlanBudget(key: string, value: number): Promise<void> {
+  try {
+    const map = JSON.parse(localStorage.getItem(BUDGET_KEY) ?? "{}") as Record<string, number>;
+    map[key] = value;
+    localStorage.setItem(BUDGET_KEY, JSON.stringify(map));
+  } catch {}
+}

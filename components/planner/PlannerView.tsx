@@ -6,6 +6,7 @@ import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import { LinesTable, STATUS_STYLE, usePromoLines } from "./lines";
 import PromoCalendar from "./PromoCalendar";
+import PlanBook from "./PlanBook";
 import type { PromoLine, PromoMeta } from "@/lib/types/db";
 
 /* Promotion Planner, draft 1 on the real Telus FY2026 snapshot.
@@ -22,6 +23,18 @@ export type PromoRow = {
 export type PlannerData = {
   meta: PromoMeta;
   scopeLabel?: string;
+  years: number[];           // Telus book year + future plan years, in perpetuity
+  year: number;              // the selected year
+  plan?: {                   // present when a future year is selected — the plan builder
+    year: number;
+    priorYear: number;
+    priorPlannedByMonth: number[];
+    priorPlannedTotal: number;
+    brandStats: Record<string, { weeklyBaseUnits: number; price: number; avgLift: number }>;
+    customers: { id: string; name: string }[];
+    copySource: { title: string; customer_id: string; customer: string; perf: string; start: string; end: string; planned: number }[];
+    scopeActive: boolean;
+  };
   byStatus: Record<string, number>;
   months: string[];
   plannedByMonth: number[];
@@ -96,6 +109,9 @@ export default function PlannerView({ data }: { data: PlannerData }) {
 
   const consumedPct = data.meta.planned_total ? (data.meta.actual_total / data.meta.planned_total) * 100 : 0;
 
+  // A future year selected → the forward plan builder takes over the page.
+  if (data.plan) return <PlanBook data={data} />;
+
   return (
     <div className="view active">
       <WorkflowStrip current="planner" />
@@ -112,6 +128,16 @@ export default function PlannerView({ data }: { data: PlannerData }) {
         </div>
         <div className="actions">
           {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
+          <select
+            style={selStyle}
+            value={String(data.year)}
+            onChange={(e) => { window.location.href = `/planner?yr=${e.target.value}`; }}
+            title="FY2026 monitors the booked Telus plan; a future year opens the plan builder"
+          >
+            {data.years.map((y) => (
+              <option key={y} value={String(y)}>{y === data.meta.fiscal_year ? `FY${y} (Telus book)` : `Plan ${y}`}</option>
+            ))}
+          </select>
           <span className="pill">Source: Telus export · {data.meta.snapshot_date}</span>
         </div>
       </div>

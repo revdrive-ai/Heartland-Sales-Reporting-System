@@ -1,4 +1,4 @@
-import { listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
+import { getWeeklyFacts, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
 
@@ -28,10 +28,19 @@ function allocateByMonth(totalByMonth: number[], amount: number, startISO: strin
   }
 }
 
-export default async function Page() {
+const OWN_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
+
+export default async function Page({ searchParams }: { searchParams: Promise<{ yr?: string }> }) {
+  const sp = await searchParams;
   const [allPromos, allCustomers, meta, enums, gscope] = await Promise.all([
     listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(), getScope(),
   ]);
+
+  // Year: the Telus book year monitors actuals; future years open the plan builder.
+  const bookYear = meta.fiscal_year;
+  const years: number[] = [];
+  for (let y = bookYear; y <= Math.max(bookYear, new Date().getUTCFullYear()) + 2; y++) years.push(y);
+  const year = /^\d{4}$/.test(sp.yr ?? "") && years.includes(+sp.yr!) ? +sp.yr! : bookYear;
   const inScope = new Set(gscope.telusCustomerIds);
   const promos = gscope.active ? allPromos.filter((p) => inScope.has(p.customer_id)) : allPromos;
   const customers = gscope.active ? allCustomers.filter((c) => inScope.has(c.customer_id)) : allCustomers;
@@ -73,9 +82,64 @@ export default async function Page() {
     actual: p.actual_amount,
   }));
 
+  /* Plan-builder payload for a future year: per-brand base stats from the
+     NIQ history across the scoped divisions (weekly base run-rate, average
+     price, average promoted-week lift), the prior-year book for reference,
+     and that book's rows to carry forward. */
+  let plan: PlannerData["plan"];
+  if (year > bookYear) {
+    const allMarkets = await listMarkets();
+    const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
+    const brandStats: Record<string, { weeklyBaseUnits: number; price: number; avgLift: number }> = {};
+    for (const brand of OWN_BRANDS) {
+      // week → sums across the scoped divisions
+      const wk = new Map<string, { bu: number; bd: number; au: number; promo: boolean }>();
+      for (const m of markets) {
+        const facts = await getWeeklyFacts({ market_code: m.code, brand });
+        for (const r of facts) {
+          const w = wk.get(r.week_ending) ?? { bu: 0, bd: 0, au: 0, promo: false };
+          w.bu += r.base_units ?? r.units ?? 0;
+          w.bd += r.base_dollars ?? r.dollars ?? 0;
+          w.au += r.units ?? 0;
+          if ((r.acv_any_promo ?? 0) >= 10) w.promo = true;
+          wk.set(r.week_ending, w);
+        }
+      }
+      const weeks = [...wk.keys()].sort().slice(-52);
+      let bu = 0, bd = 0, pAu = 0, pBu = 0;
+      for (const w of weeks) {
+        const v = wk.get(w)!;
+        bu += v.bu; bd += v.bd;
+        if (v.promo) { pAu += v.au; pBu += v.bu; }
+      }
+      brandStats[brand] = {
+        weeklyBaseUnits: weeks.length ? bu / weeks.length : 0,
+        price: bu > 0 ? bd / bu : 0,
+        avgLift: pBu > 0 ? +(((pAu - pBu) / pBu) * 100).toFixed(1) : 0,
+      };
+    }
+    plan = {
+      year,
+      priorYear: bookYear,
+      priorPlannedByMonth: plannedByMonth.map((v) => Math.round(v)),
+      priorPlannedTotal: Math.round(scopedMeta.planned_total),
+      brandStats,
+      customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
+      copySource: promos.map((p) => ({
+        title: p.promo_title, customer_id: p.customer_id, customer: p.customer_name,
+        perf: p.performance_type, start: p.start_date, end: p.end_date,
+        planned: Math.round(p.planned_amount),
+      })),
+      scopeActive: gscope.active,
+    };
+  }
+
   const data: PlannerData = {
     meta: scopedMeta,
     scopeLabel: gscope.active ? gscope.label : undefined,
+    years,
+    year,
+    plan,
     byStatus,
     months: MONTHS,
     plannedByMonth: plannedByMonth.map((v) => Math.round(v)),
