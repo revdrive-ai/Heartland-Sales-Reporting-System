@@ -32,6 +32,7 @@ const utc = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +i
 const weeksOf = (e: PlanEvent) => Math.max(1, Math.round((utc(e.end) - utc(e.start)) / DAY / 7));
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const fmtK = (v: number) => (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.round(v / 1e3).toLocaleString() + "K");
+const fmtExact = (v: number) => "$" + Math.round(v).toLocaleString(); // spend reads in real dollars, not $1K roundings
 
 /** Spread an amount evenly across a window's days inside the plan year, per month. */
 function byMonth(total: number[], amount: number, start: string, end: string, year: number) {
@@ -406,7 +407,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>{year} events</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {visible.length} events · {fmtMoney(committed)} committed · click a lift cell to override
+            {visible.length} events · {fmtExact(committed)} committed · click a lift cell to override
           </span>
         </div>
         <div style={{ overflowX: "auto" }}>
@@ -456,7 +457,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                         ? "Rate-funded — spend recomputes when the lift changes (per-unit funding pays on units moved)"
                         : "Fixed commitment — lift changes don't move this spend"}
                     >
-                      {fmtMoney(e.spend)}
+                      {fmtExact(e.spend)}
                       {e.funding && (e.funding.oi > 0 || e.funding.scan > 0) && (
                         <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
                       )}
