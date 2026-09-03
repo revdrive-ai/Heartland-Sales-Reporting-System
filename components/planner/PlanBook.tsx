@@ -5,8 +5,8 @@ import { Chart } from "react-chartjs-2";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import {
-  addPlanEvents, deletePlanEvent, getPlanBudget, getPlanEvents, setPlanBudget,
-  updatePlanEvent, type PlanEvent,
+  addPlanEvents, clearPlanEvents, deletePlanEvent, getPlanBudget, getPlanEvents,
+  setPlanBudget, updatePlanEvent, type PlanEvent,
 } from "@/lib/repo/client";
 import type { PlannerData } from "./PlannerView";
 
@@ -111,6 +111,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     return { weeks, base, incr, roi };
   };
 
+  const carriedCount = events.filter((e) => e.origin === "carry").length;
   const committed = visible.reduce((a, e) => a + e.spend, 0);
   const over = budget > 0 && committed > budget;
   const overBy = Math.max(0, committed - budget);
@@ -274,6 +275,33 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={carryForward} title={`Copy the ${plan.copySource.length} FY${plan.priorYear} promotions in scope into ${year}, windows shifted to keep weekdays aligned`}>
             ⇄ Carry FY{plan.priorYear} forward
           </button>
+          {carriedCount > 0 && (
+            <button
+              className="btn"
+              style={{ ...selStyle, cursor: "pointer" }}
+              title={`Remove the ${carriedCount} carried-forward events and keep everything entered by hand or imported`}
+              onClick={async () => {
+                setEvents(await clearPlanEvents(year, "carry"));
+                setImpMsg(`↺ Removed ${carriedCount} carried events — manual and imported events kept.`);
+              }}
+            >
+              ↺ Undo carry ({carriedCount})
+            </button>
+          )}
+          {events.length > 0 && (
+            <button
+              className="btn"
+              style={{ ...selStyle, cursor: "pointer", color: "var(--bad)" }}
+              title={`Clear every ${year} event — carried, imported and manual`}
+              onClick={async () => {
+                if (!window.confirm(`Clear all ${events.length} events from the ${year} plan? This removes carried, imported and manual events.`)) return;
+                setEvents(await clearPlanEvents(year));
+                setImpMsg(`✕ Cleared the ${year} plan.`);
+              }}
+            >
+              ✕ Clear plan
+            </button>
+          )}
           <button className="btn primary" style={{ ...selStyle, cursor: "pointer", background: "var(--brand)", color: "var(--brand-ink)", borderColor: "var(--brand)" }} onClick={() => setShowForm((v) => !v)}>
             + New event
           </button>

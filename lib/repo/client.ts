@@ -145,6 +145,16 @@ export async function deletePlanEvent(id: string, plan_year: number): Promise<Pl
   return yearEvents(all, plan_year);
 }
 
+/** Reset a plan year — all of it, or only the events of one origin
+    (e.g. origin "carry" undoes a carry-forward and keeps manual work). */
+export async function clearPlanEvents(plan_year: number, origin?: PlanEvent["origin"]): Promise<PlanEvent[]> {
+  const all = (await readEvents()).filter(
+    (e) => e.plan_year !== plan_year || (origin !== undefined && e.origin !== origin)
+  );
+  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
+  return yearEvents(all, plan_year);
+}
+
 /* Plan-year trade budget — one number per plan year + scope, editable on the
    planner's spend bar; defaults to the prior year's booked total. */
 
