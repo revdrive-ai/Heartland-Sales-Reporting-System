@@ -72,6 +72,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const budgetKey = `${year}|${data.scopeLabel ?? "all"}`;
 
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [wizardEdit, setWizardEdit] = useState<PlanEvent | null>(null);
 
   // CSV import
   const fileRef = useRef<HTMLInputElement>(null);
@@ -140,8 +141,13 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   };
 
   const addFromWizard = async (e: Omit<PlanEvent, "id" | "created_at">) => {
-    setEvents(await addPlanEvents([{ ...e, id: newId(), created_at: new Date().toISOString() }]));
+    if (wizardEdit) {
+      setEvents(await updatePlanEvent(wizardEdit.id, year, e));
+    } else {
+      setEvents(await addPlanEvents([{ ...e, id: newId(), created_at: new Date().toISOString() }]));
+    }
     setWizardOpen(false);
+    setWizardEdit(null);
   };
 
   const carryForward = async () => {
@@ -220,9 +226,22 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     rd.readAsText(file);
   };
 
+  /* Lift edits move rate-funded spend with them: per-unit funding pays on the
+     units moved, so more lift = more units = more trade dollars. Events whose
+     spend is a fixed commitment (carried/imported, no rates) keep it. */
   const setLift = async (e: PlanEvent, raw: string) => {
     const v = parseFloat(raw);
-    setEvents(await updatePlanEvent(e.id, year, { lift_pct: isNaN(v) ? null : v }));
+    const lift = isNaN(v) ? null : v;
+    const patch: Partial<PlanEvent> = { lift_pct: lift };
+    if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
+      const st = plan.brandStats[e.brand];
+      const wkBase = e.upcs?.length
+        ? e.upcs.reduce((a, u) => a + (st?.items.find((i) => i.upc === u)?.wk ?? 0), 0)
+        : st?.weeklyBaseUnits ?? 0;
+      const units = wkBase * weeksOf(e) * (1 + (lift ?? 0) / 100);
+      patch.spend = Math.round(units * (e.funding.oi + e.funding.scan) + e.funding.fixed);
+    }
+    setEvents(await updatePlanEvent(e.id, year, patch));
   };
 
   const roiCell = (roi: number | null) =>
@@ -431,9 +450,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                       />
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.incr === null ? "—" : fmtK(c.incr)}</td>
-                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(e.spend)}</td>
+                    <td
+                      style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                      title={e.funding && (e.funding.oi > 0 || e.funding.scan > 0)
+                        ? "Rate-funded — spend recomputes when the lift changes (per-unit funding pays on units moved)"
+                        : "Fixed commitment — lift changes don't move this spend"}
+                    >
+                      {fmtMoney(e.spend)}
+                      {e.funding && (e.funding.oi > 0 || e.funding.scan > 0) && (
+                        <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
+                      )}
+                    </td>
                     <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi)}</td>
-                    <td style={{ padding: "9px 14px" }}>
+                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }}>
+                      <span className="minichip" style={{ cursor: "pointer", marginRight: 4 }} title="Edit this event in the wizard"
+                        onClick={() => { setWizardEdit(e); setWizardOpen(true); }}>✎</span>
                       <span className="minichip" style={{ cursor: "pointer" }} title="Remove this event from the plan"
                         onClick={() => deletePlanEvent(e.id, year).then(setEvents)}>✕</span>
                     </td>
@@ -503,7 +534,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       </div>
 
       {wizardOpen && (
-        <EventWizard data={data} year={year} onClose={() => setWizardOpen(false)} onSubmit={addFromWizard} />
+        <EventWizard
+          key={wizardEdit?.id ?? "new"}
+          data={data}
+          year={year}
+          initial={wizardEdit}
+          onClose={() => { setWizardOpen(false); setWizardEdit(null); }}
+          onSubmit={addFromWizard}
+        />
       )}
     </div>
   );

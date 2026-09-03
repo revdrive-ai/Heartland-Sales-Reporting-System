@@ -24,30 +24,36 @@ const fmt$ = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ?
 const fmtD = (iso: string) => new Date(utc(iso)).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
 
 export default function EventWizard({
-  data, year, onClose, onSubmit,
+  data, year, initial, onClose, onSubmit,
 }: {
   data: PlannerData;
   year: number;
+  /** editing an existing event — the wizard opens pre-filled and saves back */
+  initial?: PlanEvent | null;
   onClose: () => void;
   onSubmit: (e: Omit<PlanEvent, "id" | "created_at">) => void;
 }) {
   const plan = data.plan!;
-  const brands = Object.keys(plan.brandStats);
+  const brands = [...Object.keys(plan.brandStats), "MIXED"]; // MIXED = carried/whole-book events, scored at spend level
+
+  // a carried/imported event has no funding split — treat its whole spend as
+  // fixed fees so editing preserves the committed dollars until rates are set
+  const initFunding = initial ? (initial.funding ?? { oi: 0, scan: 0, fixed: initial.spend }) : null;
 
   const [step, setStep] = useState(1);
-  const [cust, setCust] = useState("");
-  const [brand, setBrand] = useState("");
-  const [upcs, setUpcs] = useState<string[]>([]);
-  const [name, setName] = useState("");
-  const [tactic, setTactic] = useState("");
-  const [start, setStart] = useState(`${year}-08-01`);
-  const [end, setEnd] = useState(`${year}-08-28`);
-  const [lift, setLift] = useState<number | null>(null);
+  const [cust, setCust] = useState(initial?.customer_id ?? "");
+  const [brand, setBrand] = useState(initial?.brand ?? "");
+  const [upcs, setUpcs] = useState<string[]>(initial?.upcs ?? []);
+  const [name, setName] = useState(initial?.title ?? "");
+  const [tactic, setTactic] = useState(initial?.perf ?? "");
+  const [start, setStart] = useState(initial?.start ?? `${year}-08-01`);
+  const [end, setEnd] = useState(initial?.end ?? `${year}-08-28`);
+  const [lift, setLift] = useState<number | null>(initial?.lift_pct ?? null);
   const [reason, setReason] = useState("");
-  const [oi, setOi] = useState("0");
-  const [scan, setScan] = useState("0");
-  const [fixed, setFixed] = useState("0");
-  const [notes, setNotes] = useState("");
+  const [oi, setOi] = useState(String(initFunding?.oi ?? 0));
+  const [scan, setScan] = useState(String(initFunding?.scan ?? 0));
+  const [fixed, setFixed] = useState(String(initFunding?.fixed ?? 0));
+  const [notes, setNotes] = useState(initial?.note ?? "");
 
   const st = brand ? plan.brandStats[brand] : undefined;
   // per-tactic measured lift (FY windows joined to NIQ); brand average when a
@@ -85,22 +91,23 @@ export default function EventWizard({
     return { weeks, base, incr, units, oi$, scan$, fx, spend, roi };
   }, [st, upcs, start, end, lift, oi, scan, fixed]);
 
+  const mixed = brand === "MIXED";
   const valid = (s: number) =>
-    s === 1 ? !!cust && !!brand && upcs.length > 0 && !!name.trim()
-    : s === 2 ? !!tactic && calc.weeks > 0 && (lift ?? 0) > 0 && (!overridden || !!reason)
+    s === 1 ? !!cust && !!brand && (mixed || upcs.length > 0) && !!name.trim()
+    : s === 2 ? !!tactic && calc.weeks > 0 && (mixed || (lift ?? 0) > 0) && (!overridden || !!reason)
     : calc.spend > 0;
 
   const submit = () => {
     onSubmit({
       plan_year: year,
       customer_id: cust,
-      customer: plan.customers.find((c) => c.id === cust)?.name ?? cust,
+      customer: plan.customers.find((c) => c.id === cust)?.name ?? initial?.customer ?? cust,
       brand, title: name.trim(), perf: tactic,
       start, end, spend: Math.round(calc.spend),
       lift_pct: lift, upcs,
       funding: { oi: parseFloat(oi) || 0, scan: parseFloat(scan) || 0, fixed: parseFloat(fixed) || 0 },
       note: [notes.trim(), overridden ? `lift override: ${reason}` : ""].filter(Boolean).join(" · "),
-      origin: "manual",
+      origin: initial?.origin ?? "manual",
     });
   };
 
@@ -118,7 +125,7 @@ export default function EventWizard({
       <div className="box wizard" style={{ width: 840 }}>
         <div className="m-head">
           <div>
-            <div className="mt">New promotion event — {year} plan</div>
+            <div className="mt">{initial ? "Edit promotion event" : "New promotion event"} — {year} plan</div>
             <div className="ms">
               Plan a promotion by customer and item. Base volume and predicted lift pre-fill from the NIQ history
               in scope — the plan economics on the right calculate live as you make selections.
@@ -147,6 +154,9 @@ export default function EventWizard({
                   <label>Customer <span className="req">*</span></label>
                   <select value={cust} onChange={(e) => setCust(e.target.value)}>
                     <option value="">— select customer —</option>
+                    {cust && !plan.customers.some((c) => c.id === cust) && (
+                      <option value={cust}>{initial?.customer ?? cust}</option>
+                    )}
                     {plan.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                   <div className="hint">The Telus customers in the current scope.</div>
@@ -155,7 +165,7 @@ export default function EventWizard({
                   <label>Brand <span className="req">*</span></label>
                   <select value={brand} onChange={(e) => pickBrand(e.target.value)}>
                     <option value="">— select brand —</option>
-                    {brands.map((b) => <option key={b}>{b}</option>)}
+                    {brands.map((b) => <option key={b} value={b}>{b === "MIXED" ? "Mixed / whole book" : b}</option>)}
                   </select>
                 </div>
                 <div className="f-row">
@@ -163,6 +173,8 @@ export default function EventWizard({
                   <div className="itemlist">
                     {!brand ? (
                       <div className="itemempty">Pick a brand to see the item list.</div>
+                    ) : mixed ? (
+                      <div className="itemempty">Mixed / whole-book event — planned at spend level, no item scoring.</div>
                     ) : st && st.items.length ? (
                       st.items.map((i) => (
                         <label className="itemopt" key={i.upc}>
@@ -344,7 +356,7 @@ export default function EventWizard({
               disabled={!valid(step)}
               onClick={() => (step < 3 ? setStep((s) => s + 1) : submit())}
             >
-              {step < 3 ? "Next →" : "Add to plan →"}
+              {step < 3 ? "Next →" : initial ? "Save changes →" : "Add to plan →"}
             </button>
           </div>
         </div>
