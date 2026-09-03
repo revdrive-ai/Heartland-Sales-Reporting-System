@@ -32,6 +32,7 @@ export type PlannerData = {
     priorPlannedTotal: number;
     brandStats: Record<string, {
       weeklyBaseUnits: number; price: number; avgLift: number;
+      tactics: Record<string, { lift: number; reads: number }>; // measured lift by performance type
       items: { upc: string; name: string; wk: number }[];  // per-item weekly base in scope
     }>;
     customers: { id: string; name: string }[];

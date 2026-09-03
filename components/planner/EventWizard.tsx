@@ -50,7 +50,11 @@ export default function EventWizard({
   const [notes, setNotes] = useState("");
 
   const st = brand ? plan.brandStats[brand] : undefined;
-  const liftDef = st?.avgLift ?? null;
+  // per-tactic measured lift (FY windows joined to NIQ); brand average when a
+  // tactic has no measured windows yet
+  const tacticRead = (t: string) => st?.tactics?.[t] ?? null;
+  const defFor = (t: string) => tacticRead(t)?.lift ?? st?.avgLift ?? null;
+  const liftDef = tactic ? defFor(tactic) : null;
   const overridden = lift !== null && liftDef !== null && lift !== liftDef;
 
   const pickBrand = (b: string) => {
@@ -62,7 +66,7 @@ export default function EventWizard({
   };
   const pickTactic = (t: string) => {
     setTactic(t);
-    setLift(liftDef);
+    setLift(defFor(t));
     setReason("");
   };
   const toggleItem = (u: string) =>
@@ -188,16 +192,31 @@ export default function EventWizard({
                 <div className="f-row">
                   <label>Tactic <span className="req">*</span></label>
                   <div className="tacticgrid">
-                    {data.perfTypes.map((t) => (
-                      <div key={t} className={"tactic" + (tactic === t ? " on" : "")} onClick={() => pickTactic(t)}>
-                        {t}
-                        <span className="tl">{liftDef !== null ? `+${liftDef}% hist.` : "—"}</span>
-                      </div>
-                    ))}
+                    {data.perfTypes.map((t) => {
+                      const read = tacticRead(t);
+                      const d = defFor(t);
+                      return (
+                        <div
+                          key={t}
+                          className={"tactic" + (tactic === t ? " on" : "")}
+                          onClick={() => pickTactic(t)}
+                          title={read
+                            ? `Measured on ${read.reads} FY${plan.priorYear} ${t} window${read.reads === 1 ? "" : "s"} at the divisions in scope — actual vs NIQ base over each window`
+                            : `No measured ${t} windows for ${brand || "this brand"} in scope yet — pre-fills the brand's average promoted-week lift`}
+                        >
+                          {t}
+                          <span className="tl">
+                            {read ? `${read.lift >= 0 ? "+" : "−"}${Math.abs(read.lift)}% · ${read.reads} read${read.reads === 1 ? "" : "s"}`
+                              : d !== null ? `+${d}% avg` : "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   <div className="hint">
-                    Chips pre-fill with {brand || "the brand"}&apos;s average NIQ promoted-week lift in scope — per-tactic
-                    reads sharpen once Promo Analysis lands.
+                    Chips show <b>measured lift by tactic</b> — each FY{plan.priorYear} window of that type at the
+                    divisions in scope, actual vs NIQ base. &ldquo;avg&rdquo; chips have no measured windows yet and
+                    pre-fill the brand&apos;s promoted-week average instead.
                   </div>
                 </div>
                 <div className="f-2col">
@@ -220,8 +239,12 @@ export default function EventWizard({
                     />
                     <div className="hint">
                       {overridden
-                        ? <>✎ Override of the historical estimate (+{liftDef}%) — flagged for closed-loop learning.</>
-                        : tactic ? <>Pre-filled from {brand} history — edit to override.</> : <>Pick a tactic to pre-fill — edit to override.</>}
+                        ? <>✎ Override of the {tacticRead(tactic) ? `measured ${tactic}` : "brand-average"} estimate ({liftDef !== null && liftDef >= 0 ? "+" : ""}{liftDef}%) — flagged for closed-loop learning.</>
+                        : tactic
+                        ? tacticRead(tactic)
+                          ? <>Pre-filled from {tacticRead(tactic)!.reads} measured {tactic} window{tacticRead(tactic)!.reads === 1 ? "" : "s"} — edit to override.</>
+                          : <>No measured {tactic} windows yet — pre-filled from the {brand} average. Edit to override.</>
+                        : <>Pick a tactic to pre-fill — edit to override.</>}
                     </div>
                   </div>
                   {overridden && (

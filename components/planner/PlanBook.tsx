@@ -199,12 +199,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         }
         const brand = BRAND_CHOICES.includes(g("brand").toUpperCase()) ? g("brand").toUpperCase() : "MIXED";
         const lift = parseFloat(g("lift_pct"));
+        const perf = g("performance_type") || data.perfTypes[0] || "TPR";
+        const bs = plan.brandStats[brand];
         rows.push({
           id: newId(), plan_year: year,
           customer_id: cust.id, customer: cust.name, brand,
-          title: g("title") || "Imported event", perf: g("performance_type") || data.perfTypes[0] || "TPR",
+          title: g("title") || "Imported event", perf,
           start, end, spend: Math.round(spend),
-          lift_pct: isNaN(lift) ? (plan.brandStats[brand]?.avgLift ?? null) : lift,
+          // blank lift → the measured lift for that tactic, else the brand average
+          lift_pct: isNaN(lift) ? (bs?.tactics?.[perf]?.lift ?? bs?.avgLift ?? null) : lift,
           note: g("note"), origin: "import", created_at: new Date().toISOString(),
         });
       });
@@ -372,8 +375,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             </div>
           </div>
           <div className="note" style={{ marginTop: 10 }}>
-            ◇ Lift defaults to each brand&apos;s average NIQ promoted-week lift in scope
-            ({BRAND_CHOICES.slice(0, 3).map((b) => `${b} +${plan.brandStats[b]?.avgLift ?? 0}%`).join(" · ")}) — override any cell where you know better.
+            ◇ Lift pre-fills from <b>measured lift by tactic</b> — each FY{plan.priorYear} window of that type in
+            scope, actual vs NIQ base — falling back to the brand average
+            ({BRAND_CHOICES.slice(0, 3).map((b) => `${b} +${plan.brandStats[b]?.avgLift ?? 0}%`).join(" · ")}) for
+            tactics with no reads yet. Override any cell where you know better.
           </div>
         </div>
       </div>
