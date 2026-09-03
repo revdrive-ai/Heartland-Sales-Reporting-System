@@ -91,17 +91,20 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     (brandChip === "All brands" || e.brand === brandChip)
   ).sort((a, b) => a.start.localeCompare(b.start)), [events, plan.scopeActive, scopeIds, brandChip]);
 
-  /* Base / incremental / ROI per event, from the scoped NIQ brand stats:
-     window base = weekly base run-rate × weeks (the deal's items when the
-     wizard picked them, else the whole brand); incremental = base × lift;
-     ROI = incremental retail $ ÷ trade spend. */
+  /* Base / incremental / ROI per event: window base = weekly base run-rate ×
+     weeks — the deal's items when the wizard picked them, else the brand's
+     run-rate at THIS EVENT'S customer's divisions (a customer with no NIQ
+     divisions in scope — Ahold, Amazon etc. — scores "—", not the whole
+     scope's base); incremental = base × lift; ROI = incremental retail $ ÷
+     trade spend. */
   const calc = (e: PlanEvent): EventCalc => {
     const weeks = weeksOf(e);
     const st = plan.brandStats[e.brand];
     if (!st || st.weeklyBaseUnits <= 0) return { weeks, base: null, incr: null, roi: null };
     const wkBase = e.upcs?.length
       ? e.upcs.reduce((a, u) => a + (st.items.find((i) => i.upc === u)?.wk ?? 0), 0)
-      : st.weeklyBaseUnits;
+      : (plan.custMarkets[e.customer_id] ?? []).reduce((a, m) => a + (plan.divBrandWk[m]?.[e.brand] ?? 0), 0);
+    if (wkBase <= 0) return { weeks, base: null, incr: null, roi: null };
     const base = wkBase * weeks;
     if (e.lift_pct === null) return { weeks, base, incr: null, roi: null };
     const incr = base * (e.lift_pct / 100);
@@ -156,9 +159,11 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const rows: PlanEvent[] = plan.copySource.map((p) => ({
       id: newId(), plan_year: year,
       customer_id: p.customer_id, customer: p.customer,
-      brand: "MIXED", title: p.title, perf: p.perf,
+      brand: p.brand, title: p.title, perf: p.perf,
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
-      lift_pct: null, note: `carried from FY${plan.priorYear}`,
+      // scored like an import: the tactic's measured lift, else the brand average
+      lift_pct: plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
+      note: `carried from FY${plan.priorYear}`,
       origin: "carry", created_at: new Date().toISOString(),
     }));
     if (!rows.length) return;
@@ -238,7 +243,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       const st = plan.brandStats[e.brand];
       const wkBase = e.upcs?.length
         ? e.upcs.reduce((a, u) => a + (st?.items.find((i) => i.upc === u)?.wk ?? 0), 0)
-        : st?.weeklyBaseUnits ?? 0;
+        : (plan.custMarkets[e.customer_id] ?? []).reduce((a, m) => a + (plan.divBrandWk[m]?.[e.brand] ?? 0), 0);
       const units = wkBase * weeksOf(e) * (1 + (lift ?? 0) / 100);
       patch.spend = Math.round(units * (e.funding.oi + e.funding.scan) + e.funding.fixed);
     }
@@ -247,7 +252,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   const roiCell = (roi: number | null) =>
     roi === null
-      ? <span style={{ color: "var(--warn)", fontWeight: 700 }} title="No lift set, or no NIQ base for this brand in scope — set a lift % to score it">n/a</span>
+      ? <span style={{ color: "var(--warn)", fontWeight: 700 }} title="Not scored: no lift set, no spend, or this customer has no NIQ divisions in scope to score a base from">n/a</span>
       : <span style={{ fontWeight: 800, color: roi >= ROI_GUARDRAIL ? "var(--good)" : "var(--bad)" }}
           title={roi >= ROI_GUARDRAIL ? `Clears the ${ROI_GUARDRAIL}× guardrail` : `Below the ${ROI_GUARDRAIL}× guardrail`}>
           {roi.toFixed(1)}×
@@ -385,9 +390,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               <div style={{ fontSize: 24, fontWeight: 800, color: "var(--bad)" }}>{guards.below}</div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-2)" }}>Below ROI {ROI_GUARDRAIL}×</div>
             </div>
-            <div style={{ flex: 1, textAlign: "center", padding: 10, background: "var(--warn-soft, rgba(217,119,6,.10))", borderRadius: 10 }}>
+            <div style={{ flex: 1, textAlign: "center", padding: 10, background: "var(--warn-soft, rgba(217,119,6,.10))", borderRadius: 10 }}
+              title="Events with no lift set, or whose customer has no NIQ divisions in scope to score a base from">
               <div style={{ fontSize: 24, fontWeight: 800, color: "var(--warn)" }}>{guards.low}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-2)" }}>No lift scored</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-2)" }}>Not scored</div>
             </div>
             <div style={{ flex: 1, textAlign: "center", padding: 10, background: "var(--good-soft, rgba(22,163,74,.10))", borderRadius: 10 }}>
               <div style={{ fontSize: 24, fontWeight: 800, color: "var(--good)" }}>{guards.clear}</div>
