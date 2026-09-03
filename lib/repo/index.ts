@@ -15,6 +15,7 @@ import path from "node:path";
 import type { Market, Item, NielsenWeeklyRow } from "@/lib/types/db";
 import marketsJson from "@/lib/fixtures/markets.json";
 import itemsJson from "@/lib/fixtures/items.json";
+import itemXwalkJson from "@/lib/fixtures/item-crosswalk.json";
 
 const MARKETS = marketsJson as Market[];
 const ITEMS = itemsJson as Item[];
@@ -39,6 +40,50 @@ export async function listItems(opts?: { brand?: string; ownOnly?: boolean }): P
 
 export async function getItem(upc: string): Promise<Item | undefined> {
   return ITEMS.find((i) => i.upc === upc);
+}
+
+/* ---------------------------------------------------------- ITEM CROSSWALK */
+
+export type NiqItemAttrs = {
+  upc_core: string; item: string; brand: string;
+  category: string; sub_category: string; segment: string;
+  hrt_type: string; hrt_form: string; hrt_package: string;
+  base_size: string; pack_size: string; flavor: string;
+};
+
+type ItemXwalkFile = {
+  telus_items: { item_number: string; upc_core: string; brand: string; business_unit: string; description: string }[];
+  niq_items: NiqItemAttrs[];
+};
+
+const upcCore = (upc: string) => upc.replace(/\D/g, "").replace(/^0+/, "");
+
+let itemXwalkCache: { telusUpcs: Record<string, string[]>; attrs: Record<string, NiqItemAttrs> } | null = null;
+
+/** The item crosswalk, resolved to the NIQ items on file: Telus item number →
+    loaded UPCs (for scoring promo lines against NIQ volume), and the NIQ/HRT
+    attribute hierarchy per loaded item (for combining by brand or segment). */
+export async function getItemCrosswalk(): Promise<{
+  telusUpcs: Record<string, string[]>;
+  attrs: Record<string, NiqItemAttrs>;
+}> {
+  if (!itemXwalkCache) {
+    const fx = itemXwalkJson as ItemXwalkFile;
+    const coreToUpc = new Map(ITEMS.map((i) => [upcCore(i.upc), i.upc]));
+    const telusUpcs: Record<string, string[]> = {};
+    for (const t of fx.telus_items) {
+      const upc = coreToUpc.get(t.upc_core);
+      if (!upc) continue; // Telus item exists but that UPC isn't in the NIQ pull
+      (telusUpcs[t.item_number] ??= []).push(upc);
+    }
+    const attrs: Record<string, NiqItemAttrs> = {};
+    for (const n of fx.niq_items) {
+      const upc = coreToUpc.get(n.upc_core);
+      if (upc) attrs[upc] = n;
+    }
+    itemXwalkCache = { telusUpcs, attrs };
+  }
+  return itemXwalkCache;
 }
 
 export async function listBrands(opts?: { ownOnly?: boolean }): Promise<string[]> {

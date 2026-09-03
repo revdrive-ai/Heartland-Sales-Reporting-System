@@ -36,9 +36,10 @@ export type PlannerData = {
       items: { upc: string; name: string; wk: number }[];  // per-item weekly base in scope
     }>;
     divBrandWk: Record<string, Record<string, number>>;  // market → brand → weekly base (latest 52w)
+    divItemWk: Record<string, Record<string, number>>;   // market → upc → weekly base (latest 52w)
     custMarkets: Record<string, string[]>;               // Telus customer id → scoped divisions covered
     customers: { id: string; name: string }[];
-    copySource: { title: string; customer_id: string; customer: string; brand: string; perf: string; start: string; end: string; planned: number }[];
+    copySource: { title: string; customer_id: string; customer: string; brand: string; upcs: string[]; perf: string; start: string; end: string; planned: number }[];
     scopeActive: boolean;
   };
   byStatus: Record<string, number>;

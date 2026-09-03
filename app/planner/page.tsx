@@ -1,4 +1,4 @@
-import { getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
+import { getItemCrosswalk, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { getScope } from "@/lib/server/scope";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
@@ -99,9 +99,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
     }> = {};
     const DAY = 86400000;
     const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-    // per-division brand weekly base (latest 52w) — events score on their own
-    // customer's divisions, not the whole scope
+    // per-division weekly base (latest 52w), brand-level and per item — events
+    // score on their own customer's divisions, not the whole scope
     const divBrandWk: Record<string, Record<string, number>> = {};
+    const divItemWk: Record<string, Record<string, number>> = {};
     for (const brand of OWN_BRANDS) {
       // week → sums across the scoped divisions, plus per-item base totals and
       // per-tactic lift sums measured from the Telus windows on each division
@@ -122,11 +123,18 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           mA.set(r.week_ending, (mA.get(r.week_ending) ?? 0) + (r.units ?? 0));
           mB.set(r.week_ending, (mB.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
         }
-        // this division's latest-52w weekly base run-rate for the brand
+        // this division's latest-52w weekly base run-rate, brand and per item
         const mWeeks = [...mB.keys()].sort();
         const m52 = mWeeks.slice(-52);
         (divBrandWk[m.code] ??= {})[brand] =
           m52.reduce((a, w) => a + (mB.get(w) ?? 0), 0) / Math.max(m52.length, 1);
+        const c0 = m52[0] ?? "";
+        const perUpc = (divItemWk[m.code] ??= {});
+        for (const r of facts) {
+          if (r.week_ending < c0) continue;
+          const v = r.base_units ?? r.units ?? 0;
+          if (v > 0) perUpc[r.upc] = (perUpc[r.upc] ?? 0) + v / Math.max(m52.length, 1);
+        }
 
         // measured lift per Telus window at this division, grouped by tactic
         const latest = mWeeks[mWeeks.length - 1] ?? "";
@@ -175,15 +183,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           .sort((a, b) => b.wk - a.wk),
       };
     }
-    // Brand per promo, from its Telus component lines: exactly one own NIQ
-    // brand → that brand (base and lift score at brand level); anything else
-    // stays MIXED. Item-level tie-out waits on the Tie List (Telus SKU ↔ UPC).
+    // Brand and items per promo, from its Telus component lines: exactly one
+    // own NIQ brand → that brand; the item crosswalk resolves line item
+    // numbers to NIQ UPCs on file, so carried events score at item level.
     const ownByNorm = new Map(OWN_BRANDS.map((b) => [normBrand(b), b]));
+    const xwalk = await getItemCrosswalk();
     const promoBrandSets = new Map<string, Set<string>>();
+    const promoUpcs = new Map<string, Set<string>>();
     for (const l of await listAllPromoLines()) {
       const own = ownByNorm.get(normBrand(l.brand));
-      if (!own) continue;
-      (promoBrandSets.get(l.promo_id) ?? promoBrandSets.set(l.promo_id, new Set()).get(l.promo_id)!).add(own);
+      if (own) {
+        (promoBrandSets.get(l.promo_id) ?? promoBrandSets.set(l.promo_id, new Set()).get(l.promo_id)!).add(own);
+      }
+      for (const u of xwalk.telusUpcs[l.item_number] ?? []) {
+        (promoUpcs.get(l.promo_id) ?? promoUpcs.set(l.promo_id, new Set()).get(l.promo_id)!).add(u);
+      }
     }
     const brandFor = (promoId: string) => {
       const s = promoBrandSets.get(promoId);
@@ -203,11 +217,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       priorPlannedTotal: Math.round(scopedMeta.planned_total),
       brandStats,
       divBrandWk,
+      divItemWk,
       custMarkets,
       customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
       copySource: promos.map((p) => ({
         title: p.promo_title, customer_id: p.customer_id, customer: p.customer_name,
         brand: brandFor(p.promo_id),
+        upcs: [...(promoUpcs.get(p.promo_id) ?? [])],
         perf: p.performance_type, start: p.start_date, end: p.end_date,
         planned: Math.round(p.planned_amount),
       })),

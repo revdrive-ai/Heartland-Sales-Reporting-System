@@ -9,6 +9,7 @@ import {
   setPlanBudget, updatePlanEvent, type PlanEvent,
 } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
+import { eventWeeklyBase } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 
 /* The forward Promotion Planner — a future year (2027+) selected on the
@@ -92,18 +93,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   ).sort((a, b) => a.start.localeCompare(b.start)), [events, plan.scopeActive, scopeIds, brandChip]);
 
   /* Base / incremental / ROI per event: window base = weekly base run-rate ×
-     weeks — the deal's items when the wizard picked them, else the brand's
-     run-rate at THIS EVENT'S customer's divisions (a customer with no NIQ
-     divisions in scope — Ahold, Amazon etc. — scores "—", not the whole
-     scope's base); incremental = base × lift; ROI = incremental retail $ ÷
-     trade spend. */
+     weeks, scored at THIS EVENT'S customer's divisions — its items when the
+     crosswalk knows them, else the brand run-rate there. A customer with no
+     NIQ divisions in scope (Ahold, Amazon etc.) scores "—". Incremental =
+     base × lift; ROI = incremental retail $ ÷ trade spend. */
   const calc = (e: PlanEvent): EventCalc => {
     const weeks = weeksOf(e);
     const st = plan.brandStats[e.brand];
     if (!st || st.weeklyBaseUnits <= 0) return { weeks, base: null, incr: null, roi: null };
-    const wkBase = e.upcs?.length
-      ? e.upcs.reduce((a, u) => a + (st.items.find((i) => i.upc === u)?.wk ?? 0), 0)
-      : (plan.custMarkets[e.customer_id] ?? []).reduce((a, m) => a + (plan.divBrandWk[m]?.[e.brand] ?? 0), 0);
+    const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
     if (wkBase <= 0) return { weeks, base: null, incr: null, roi: null };
     const base = wkBase * weeks;
     if (e.lift_pct === null) return { weeks, base, incr: null, roi: null };
@@ -160,6 +158,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       id: newId(), plan_year: year,
       customer_id: p.customer_id, customer: p.customer,
       brand: p.brand, title: p.title, perf: p.perf,
+      upcs: p.upcs.length ? p.upcs : undefined, // items via the crosswalk, when known
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
       // scored like an import: the tactic's measured lift, else the brand average
       lift_pct: plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
@@ -240,11 +239,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const lift = isNaN(v) ? null : v;
     const patch: Partial<PlanEvent> = { lift_pct: lift };
     if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
-      const st = plan.brandStats[e.brand];
-      const wkBase = e.upcs?.length
-        ? e.upcs.reduce((a, u) => a + (st?.items.find((i) => i.upc === u)?.wk ?? 0), 0)
-        : (plan.custMarkets[e.customer_id] ?? []).reduce((a, m) => a + (plan.divBrandWk[m]?.[e.brand] ?? 0), 0);
-      const units = wkBase * weeksOf(e) * (1 + (lift ?? 0) / 100);
+      const units = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs) * weeksOf(e) * (1 + (lift ?? 0) / 100);
       patch.spend = Math.round(units * (e.funding.oi + e.funding.scan) + e.funding.fixed);
     }
     setEvents(await updatePlanEvent(e.id, year, patch));

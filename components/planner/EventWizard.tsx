@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PlanEvent } from "@/lib/repo/client";
+import { eventWeeklyBase, itemWeeklyBase } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 
 /* The new-event wizard from the reference mockup, on real data: three steps
@@ -80,7 +81,8 @@ export default function EventWizard({
 
   const calc = useMemo(() => {
     const weeks = end >= start ? Math.max(1, Math.round((utc(end) - utc(start)) / DAY / 7)) : 0;
-    const wkBase = st ? upcs.reduce((a, u) => a + (st.items.find((i) => i.upc === u)?.wk ?? 0), 0) : 0;
+    // scored at the chosen customer's divisions — same math as the events table
+    const wkBase = st && cust && upcs.length ? eventWeeklyBase(plan, cust, brand, upcs) : 0;
     const base = wkBase * weeks;
     const incr = lift !== null ? base * (lift / 100) : null;
     const units = base + (incr ?? 0);
@@ -89,7 +91,7 @@ export default function EventWizard({
     const spend = oi$ + scan$ + fx;
     const roi = spend > 0 && incr !== null && st ? (incr * st.price) / spend : null;
     return { weeks, base, incr, units, oi$, scan$, fx, spend, roi };
-  }, [st, upcs, start, end, lift, oi, scan, fixed]);
+  }, [st, plan, cust, brand, upcs, start, end, lift, oi, scan, fixed]);
 
   const mixed = brand === "MIXED";
   const valid = (s: number) =>
@@ -176,13 +178,19 @@ export default function EventWizard({
                     ) : mixed ? (
                       <div className="itemempty">Mixed / whole-book event — planned at spend level, no item scoring.</div>
                     ) : st && st.items.length ? (
-                      st.items.map((i) => (
-                        <label className="itemopt" key={i.upc}>
-                          <input type="checkbox" checked={upcs.includes(i.upc)} onChange={() => toggleItem(i.upc)} />
-                          {i.name.length > 46 ? i.name.slice(0, 45) + "…" : i.name}
-                          <span className="meta2"><span className="ta">NIQ</span> base {fmtK(i.wk)} u / wk</span>
-                        </label>
-                      ))
+                      st.items.map((i) => {
+                        const wk = itemWeeklyBase(plan, cust, i.upc, i.wk);
+                        return (
+                          <label className="itemopt" key={i.upc}>
+                            <input type="checkbox" checked={upcs.includes(i.upc)} onChange={() => toggleItem(i.upc)} />
+                            {i.name.length > 46 ? i.name.slice(0, 45) + "…" : i.name}
+                            <span className="meta2">
+                              <span className="ta">NIQ</span>{" "}
+                              {wk > 0 ? `base ${fmtK(wk)} u / wk${cust ? " here" : ""}` : "no volume at this customer"}
+                            </span>
+                          </label>
+                        );
+                      })
                     ) : (
                       <div className="itemempty">No {brand} items with NIQ volume in this scope.</div>
                     )}
