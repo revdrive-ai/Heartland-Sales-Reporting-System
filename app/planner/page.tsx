@@ -1,4 +1,4 @@
-import { getWeeklyFacts, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
+import { getWeeklyFacts, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
 
@@ -88,12 +88,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
      and that book's rows to carry forward. */
   let plan: PlannerData["plan"];
   if (year > bookYear) {
-    const allMarkets = await listMarkets();
+    const [allMarkets, allItems] = await Promise.all([listMarkets(), listItems()]);
     const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
-    const brandStats: Record<string, { weeklyBaseUnits: number; price: number; avgLift: number }> = {};
+    const itemName = new Map(allItems.map((i) => [i.upc, i.name]));
+    const brandStats: Record<string, { weeklyBaseUnits: number; price: number; avgLift: number; items: { upc: string; name: string; wk: number }[] }> = {};
     for (const brand of OWN_BRANDS) {
-      // week → sums across the scoped divisions
+      // week → sums across the scoped divisions, plus per-item base totals
       const wk = new Map<string, { bu: number; bd: number; au: number; promo: boolean }>();
+      const perItem = new Map<string, number>(); // upc → base units over the latest 52w
+      const recent = new Map<string, Set<string>>(); // upc → weeks seen (to bound the divisor)
+      let cutoff = "";
       for (const m of markets) {
         const facts = await getWeeklyFacts({ market_code: m.code, brand });
         for (const r of facts) {
@@ -106,6 +110,17 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         }
       }
       const weeks = [...wk.keys()].sort().slice(-52);
+      cutoff = weeks[0] ?? "";
+      for (const m of markets) {
+        const facts = await getWeeklyFacts({ market_code: m.code, brand });
+        for (const r of facts) {
+          if (r.week_ending < cutoff) continue;
+          const v = r.base_units ?? r.units ?? 0;
+          if (v <= 0) continue;
+          perItem.set(r.upc, (perItem.get(r.upc) ?? 0) + v);
+          (recent.get(r.upc) ?? recent.set(r.upc, new Set()).get(r.upc)!).add(r.week_ending);
+        }
+      }
       let bu = 0, bd = 0, pAu = 0, pBu = 0;
       for (const w of weeks) {
         const v = wk.get(w)!;
@@ -116,6 +131,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         weeklyBaseUnits: weeks.length ? bu / weeks.length : 0,
         price: bu > 0 ? bd / bu : 0,
         avgLift: pBu > 0 ? +(((pAu - pBu) / pBu) * 100).toFixed(1) : 0,
+        items: [...perItem.entries()]
+          .map(([upc, tot]) => ({ upc, name: itemName.get(upc) ?? upc, wk: +(tot / Math.max(weeks.length, 1)).toFixed(1) }))
+          .sort((a, b) => b.wk - a.wk),
       };
     }
     plan = {

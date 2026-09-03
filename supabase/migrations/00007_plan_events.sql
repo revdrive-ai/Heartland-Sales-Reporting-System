@@ -17,6 +17,10 @@ create table public.plan_events (
   end_date         date not null,
   spend            numeric not null check (spend >= 0),   -- planned trade $
   lift_pct         numeric,                   -- expected % lift over base; null = unset
+  items            text[] not null default '{}',          -- UPCs on the deal; empty = whole brand
+  funding_oi       numeric,                   -- $/unit off-invoice rate behind spend
+  funding_scan     numeric,                   -- $/unit scan rate
+  funding_fixed    numeric,                   -- fixed fees $
   note             text,
   origin           text not null check (origin in ('manual', 'import', 'carry')),
   created_by       text,                      -- auth user id/email once auth lands

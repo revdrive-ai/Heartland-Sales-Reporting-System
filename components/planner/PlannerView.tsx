@@ -30,7 +30,10 @@ export type PlannerData = {
     priorYear: number;
     priorPlannedByMonth: number[];
     priorPlannedTotal: number;
-    brandStats: Record<string, { weeklyBaseUnits: number; price: number; avgLift: number }>;
+    brandStats: Record<string, {
+      weeklyBaseUnits: number; price: number; avgLift: number;
+      items: { upc: string; name: string; wk: number }[];  // per-item weekly base in scope
+    }>;
     customers: { id: string; name: string }[];
     copySource: { title: string; customer_id: string; customer: string; perf: string; start: string; end: string; planned: number }[];
     scopeActive: boolean;

@@ -113,6 +113,8 @@ export type PlanEvent = {
   note: string;
   origin: "manual" | "import" | "carry";
   created_at: string;
+  upcs?: string[];          // items on the deal (wizard entries); absent = whole brand
+  funding?: { oi: number; scan: number; fixed: number };  // $/unit rates + fixed fees behind spend
 };
 
 async function readEvents(): Promise<PlanEvent[]> {

@@ -8,6 +8,7 @@ import {
   addPlanEvents, clearPlanEvents, deletePlanEvent, getPlanBudget, getPlanEvents,
   setPlanBudget, updatePlanEvent, type PlanEvent,
 } from "@/lib/repo/client";
+import EventWizard from "./EventWizard";
 import type { PlannerData } from "./PlannerView";
 
 /* The forward Promotion Planner — a future year (2027+) selected on the
@@ -70,16 +71,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const [budgetEdit, setBudgetEdit] = useState(false);
   const budgetKey = `${year}|${data.scopeLabel ?? "all"}`;
 
-  // new-event form
-  const [fCust, setFCust] = useState("");
-  const [fBrand, setFBrand] = useState("SPLENDA");
-  const [fTitle, setFTitle] = useState("");
-  const [fPerf, setFPerf] = useState("");
-  const [fStart, setFStart] = useState(`${year}-01-01`);
-  const [fEnd, setFEnd] = useState(`${year}-01-28`);
-  const [fSpend, setFSpend] = useState("");
-  const [fLift, setFLift] = useState("");
-  const [showForm, setShowForm] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   // CSV import
   const fileRef = useRef<HTMLInputElement>(null);
@@ -98,13 +90,17 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   ).sort((a, b) => a.start.localeCompare(b.start)), [events, plan.scopeActive, scopeIds, brandChip]);
 
   /* Base / incremental / ROI per event, from the scoped NIQ brand stats:
-     window base = brand weekly base run-rate × weeks; incremental = base ×
-     lift; ROI = incremental retail $ ÷ trade spend. */
+     window base = weekly base run-rate × weeks (the deal's items when the
+     wizard picked them, else the whole brand); incremental = base × lift;
+     ROI = incremental retail $ ÷ trade spend. */
   const calc = (e: PlanEvent): EventCalc => {
     const weeks = weeksOf(e);
     const st = plan.brandStats[e.brand];
     if (!st || st.weeklyBaseUnits <= 0) return { weeks, base: null, incr: null, roi: null };
-    const base = st.weeklyBaseUnits * weeks;
+    const wkBase = e.upcs?.length
+      ? e.upcs.reduce((a, u) => a + (st.items.find((i) => i.upc === u)?.wk ?? 0), 0)
+      : st.weeklyBaseUnits;
+    const base = wkBase * weeks;
     if (e.lift_pct === null) return { weeks, base, incr: null, roi: null };
     const incr = base * (e.lift_pct / 100);
     const roi = e.spend > 0 ? (incr * st.price) / e.spend : null;
@@ -143,19 +139,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     void setPlanBudget(budgetKey, v);
   };
 
-  const addManual = async () => {
-    const spend = parseFloat(fSpend);
-    if (!fCust || !fTitle.trim() || !spend || spend <= 0 || fEnd < fStart) return;
-    const lift = parseFloat(fLift);
-    setEvents(await addPlanEvents([{
-      id: newId(), plan_year: year,
-      customer_id: fCust, customer: plan.customers.find((c) => c.id === fCust)?.name ?? fCust,
-      brand: fBrand, title: fTitle.trim(), perf: fPerf || data.perfTypes[0] || "TPR",
-      start: fStart, end: fEnd, spend: Math.round(spend),
-      lift_pct: isNaN(lift) ? (plan.brandStats[fBrand]?.avgLift ?? null) : lift,
-      note: "", origin: "manual", created_at: new Date().toISOString(),
-    }]));
-    setFTitle(""); setFSpend(""); setFLift(""); setShowForm(false);
+  const addFromWizard = async (e: Omit<PlanEvent, "id" | "created_at">) => {
+    setEvents(await addPlanEvents([{ ...e, id: newId(), created_at: new Date().toISOString() }]));
+    setWizardOpen(false);
   };
 
   const carryForward = async () => {
@@ -302,7 +288,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               ✕ Clear plan
             </button>
           )}
-          <button className="btn primary" style={{ ...selStyle, cursor: "pointer", background: "var(--brand)", color: "var(--brand-ink)", borderColor: "var(--brand)" }} onClick={() => setShowForm((v) => !v)}>
+          <button className="btn primary" style={{ ...selStyle, cursor: "pointer", background: "var(--brand)", color: "var(--brand-ink)", borderColor: "var(--brand)" }} onClick={() => setWizardOpen(true)}>
             + New event
           </button>
         </div>
@@ -399,30 +385,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             {visible.length} events · {fmtMoney(committed)} committed · click a lift cell to override
           </span>
         </div>
-        {showForm && (
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", background: "var(--surface-2)" }}>
-            <select style={selStyle} value={fCust} onChange={(e) => setFCust(e.target.value)}>
-              <option value="">Customer…</option>
-              {plan.customers.map((c) => <option key={c.id} value={c.id}>{c.name.length > 30 ? c.name.slice(0, 29) + "…" : c.name}</option>)}
-            </select>
-            <select style={selStyle} value={fBrand} onChange={(e) => setFBrand(e.target.value)}>
-              {BRAND_CHOICES.map((b) => <option key={b}>{b}</option>)}
-            </select>
-            <input style={{ ...selStyle, flex: "1 1 180px", minWidth: 150 }} placeholder="Event title…" value={fTitle} onChange={(e) => setFTitle(e.target.value)} />
-            <select style={selStyle} value={fPerf} onChange={(e) => setFPerf(e.target.value)}>
-              <option value="">Type…</option>
-              {data.perfTypes.map((p) => <option key={p}>{p}</option>)}
-            </select>
-            <input style={{ ...selStyle, width: 140 }} type="date" value={fStart} onChange={(e) => setFStart(e.target.value)} />
-            <span style={{ color: "var(--ink-3)", fontSize: 12 }}>→</span>
-            <input style={{ ...selStyle, width: 140 }} type="date" value={fEnd} onChange={(e) => setFEnd(e.target.value)} />
-            <input style={{ ...selStyle, width: 110 }} type="number" placeholder="Spend $" value={fSpend} onChange={(e) => setFSpend(e.target.value)} />
-            <input style={{ ...selStyle, width: 96 }} type="number" placeholder={`Lift % (${plan.brandStats[fBrand]?.avgLift ?? 0})`} title="Expected % lift over base — blank uses the brand average" value={fLift} onChange={(e) => setFLift(e.target.value)} />
-            <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={addManual} disabled={!fCust || !fTitle.trim() || !parseFloat(fSpend)}>
-              ✓ Add to plan
-            </button>
-          </div>
-        )}
         <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
@@ -534,6 +496,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           for a single customer lives in the Base &amp; Lift Lab&apos;s plan view.
         </div>
       </div>
+
+      {wizardOpen && (
+        <EventWizard data={data} year={year} onClose={() => setWizardOpen(false)} onSubmit={addFromWizard} />
+      )}
     </div>
   );
 }
