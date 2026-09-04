@@ -38,7 +38,8 @@ export type BaseData = {
   brand: string;
   item: string;              // "ALL" or a upc
   itemName: string | null;
-  metric: "units" | "dollars";
+  metric: "units" | "dollars" | "gross";
+  grossCoverage: { priced: number; total: number } | null;  // gross metric: items with a list price
   win: string;               // 4w | 13w | 26w | 52w | ytd | a calendar year
   winLabel: string;
   years: number[];           // total-year choices (2024 → future, in perpetuity)
@@ -379,7 +380,8 @@ export default function BaseView({ data }: { data: BaseData }) {
   const liftPct = data.totals.base > 0 ? (data.totals.incremental / data.totals.base) * 100 : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const scopeName = data.itemName ?? data.brand;
-  const fmtVal = data.metric === "dollars" ? fmtMoney : (v: number) => fmtNum(v);
+  const fmtVal = data.metric === "units" ? (v: number) => fmtNum(v) : fmtMoney;
+  const metricLabel = data.metric === "units" ? "units" : data.metric === "dollars" ? "retail dollars" : "gross dollars (list price)";
 
   const opts = useMemo(() => {
     const o = gridOptions();
@@ -415,7 +417,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="crumb">Trade Workflow · Step 1</div>
           <h1>Base &amp; Lift Lab</h1>
           <p>
-            NIQ weekly {data.metric} for {scopeName} at {marketName} — actual against NIQ&apos;s modelled base,
+            NIQ weekly {metricLabel} for {scopeName} at {marketName} — actual against NIQ&apos;s modelled base,
             with the Telus promotion windows for this division overlaid. Event windows are shaded;
             always-on programs are listed below.
           </p>
@@ -461,9 +463,15 @@ export default function BaseView({ data }: { data: BaseData }) {
             <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
           ))}
         </select>
-        <select style={selStyle} value={data.metric} onChange={(e) => nav({ metric: e.target.value })}>
+        <select
+          style={selStyle}
+          value={data.metric}
+          onChange={(e) => nav({ metric: e.target.value })}
+          title="Units, NIQ retail dollars, or gross dollars = units × the dated list price in force each week"
+        >
           <option value="units">Units</option>
-          <option value="dollars">Dollars</option>
+          <option value="dollars">Dollars — retail (NIQ)</option>
+          <option value="gross">Dollars — list price (gross)</option>
         </select>
         <select
           style={selStyle}
@@ -543,7 +551,7 @@ export default function BaseView({ data }: { data: BaseData }) {
             <h3>
               {data.plan
                 ? <>Plan {data.win} — {data.plan.sourceYear} actualized base + projected remainder</>
-                : <>Weekly {data.metric} — actual vs NIQ base · event windows shaded</>}
+                : <>Weekly {metricLabel} — actual vs NIQ base · event windows shaded</>}
             </h3>
             <div className="chip-row">
               <span
@@ -690,7 +698,11 @@ export default function BaseView({ data }: { data: BaseData }) {
               : <>◇ Amber bands are Telus <b>event windows</b> (≤ 12 weeks); the blue lanes underneath are the
                 <b> always-on programs</b> (EDLP etc.), one per program, showing exactly when each runs and when it
                 doesn&apos;t{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
-                line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).</>}
+                line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).
+                {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}
+                {data.grossCoverage.priced} of {data.grossCoverage.total} item{data.grossCoverage.total === 1 ? "" : "s"} in
+                this selection {data.grossCoverage.priced === 1 && data.grossCoverage.total === 1 ? "is" : "are"} priced;
+                unpriced items contribute $0 (see the Price List).</>}</>}
           </div>
         </div>
 

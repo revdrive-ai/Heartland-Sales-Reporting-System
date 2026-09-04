@@ -2,6 +2,7 @@ import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets,
 import { getScope } from "@/lib/server/scope";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
+import type { NielsenWeeklyRow } from "@/lib/types/db";
 
 /* Base & Lift Lab — the Nielsen weekly trend (actual vs NIQ base) for one
    division × brand (or a single item), with the Telus promotion windows
@@ -45,7 +46,33 @@ export default async function Page({
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt!
     : markets.some((m) => m.code === "ALB-JEWEL") ? "ALB-JEWEL" : markets[0].code;
   const brand = OWN_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
-  const metric = sp.metric === "dollars" ? "dollars" : "units";
+  // units | dollars (NIQ retail) | gross (units × the dated list price in force)
+  const metric = sp.metric === "dollars" ? "dollars" : sp.metric === "gross" ? "gross" : "units";
+
+  // dated list-price lookup per UPC, for the gross metric and the change markers
+  const priceRows = await getPriceList();
+  const priceHist = new Map<string, { d: string; p: number }[]>();
+  for (const r of priceRows) {
+    if (!r.upc || r.unit_price === null) continue;
+    (priceHist.get(r.upc) ?? priceHist.set(r.upc, []).get(r.upc)!).push({ d: r.effective_from, p: r.unit_price });
+  }
+  for (const l of priceHist.values()) l.sort((a, b) => a.d.localeCompare(b.d));
+  const priceAt = (upc: string, onDate: string): number | null => {
+    const l = priceHist.get(upc);
+    if (!l) return null;
+    let p: number | null = null;
+    for (const e of l) { if (e.d > onDate) break; p = e.p; }
+    return p;
+  };
+  // row values in the chosen metric — gross counts only priced items
+  const aVal = (r: NielsenWeeklyRow) =>
+    metric === "units" ? (r.units ?? 0)
+    : metric === "dollars" ? (r.dollars ?? 0)
+    : (r.units ?? 0) * (priceAt(r.upc, r.week_ending) ?? 0);
+  const bVal = (r: NielsenWeeklyRow) =>
+    metric === "units" ? (r.base_units ?? r.units ?? 0)
+    : metric === "dollars" ? (r.base_dollars ?? r.dollars ?? 0)
+    : (r.base_units ?? r.units ?? 0) * (priceAt(r.upc, r.week_ending) ?? 0);
 
   const allWeeks = await listWeekEndings(mkt);
   const latestWeek = allWeeks[allWeeks.length - 1];
@@ -104,8 +131,7 @@ export default async function Page({
   // full-history weekly actuals for the selection — feeds the year-ago overlay
   const weekActual = new Map<string, number>();
   for (const r of scoped) {
-    const v = (metric === "units" ? r.units : r.dollars) ?? 0;
-    weekActual.set(r.week_ending, (weekActual.get(r.week_ending) ?? 0) + v);
+    weekActual.set(r.week_ending, (weekActual.get(r.week_ending) ?? 0) + aVal(r));
   }
   const yearAgoWeek = (w: string) =>
     new Date(Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10)) - 364 * DAY).toISOString().slice(0, 10);
@@ -119,8 +145,8 @@ export default async function Page({
   for (const r of facts) {
     const p = byWeek.get(r.week_ending);
     if (!p) continue;
-    p.actual = (p.actual ?? 0) + ((metric === "units" ? r.units : r.dollars) ?? 0);
-    p.base = (p.base ?? 0) + ((metric === "units" ? r.base_units : r.base_dollars) ?? 0);
+    p.actual = (p.actual ?? 0) + aVal(r);
+    p.base = (p.base ?? 0) + bVal(r);
     p.promoAcv = Math.max(p.promoAcv, r.acv_any_promo ?? 0);
   }
   const points = weeks.map((w) => {
@@ -172,8 +198,7 @@ export default async function Page({
   if (planningYear) {
     const weekBaseM = new Map<string, number>(); // weekly base in the chosen metric
     for (const r of scoped) {
-      const v = (metric === "units" ? r.base_units ?? r.units : r.base_dollars ?? r.dollars) ?? 0;
-      weekBaseM.set(r.week_ending, (weekBaseM.get(r.week_ending) ?? 0) + v);
+      weekBaseM.set(r.week_ending, (weekBaseM.get(r.week_ending) ?? 0) + bVal(r));
     }
     const last52 = allWeeks.slice(-52);
     const avgBase = last52.reduce((a, w) => a + (weekBaseM.get(w) ?? 0), 0) / Math.max(last52.length, 1);
@@ -198,7 +223,7 @@ export default async function Page({
     let shareSum = 0;
     for (const r of factsAll) {
       if (!last52Set.has(r.week_ending)) continue;
-      const v = (metric === "units" ? r.base_units ?? r.units : r.base_dollars ?? r.dollars) ?? 0;
+      const v = bVal(r);
       shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
       shareSum += v;
     }
@@ -220,7 +245,6 @@ export default async function Page({
      record counts as a change only when an earlier record exists for the same
      item, so the initial list seeding doesn't mark every chart. */
   const selUpcs = new Set(item === "ALL" ? items.map((i) => i.upc) : [item]);
-  const priceRows = await getPriceList();
   const seenFg = new Set<string>();
   const priceMarks: { date: string; label: string }[] = [];
   for (const r of priceRows) { // sorted fg → effective_from
@@ -245,8 +269,7 @@ export default async function Page({
   const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
   const weekBaseFull = new Map<string, number>(); // full-history base, chosen metric
   for (const r of scoped) {
-    const v = (metric === "units" ? r.base_units : r.base_dollars) ?? 0;
-    weekBaseFull.set(r.week_ending, (weekBaseFull.get(r.week_ending) ?? 0) + v);
+    weekBaseFull.set(r.week_ending, (weekBaseFull.get(r.week_ending) ?? 0) + bVal(r));
   }
   const promoWeeks = new Set<string>();
   for (const r of scoped) if ((r.acv_any_promo ?? 0) >= 10) promoWeeks.add(r.week_ending);
@@ -296,6 +319,11 @@ export default async function Page({
     points,
     overlays: overlayRows,
     priceMarks,
+    grossCoverage: metric === "gross"
+      ? (item === "ALL"
+          ? { priced: items.filter((i) => priceHist.has(i.upc)).length, total: items.length }
+          : { priced: priceHist.has(item) ? 1 : 0, total: 1 })
+      : null,
     season: { labels: MONTH_LABELS, engine, years: seasonYears },
     totals: {
       actual: totActual,
