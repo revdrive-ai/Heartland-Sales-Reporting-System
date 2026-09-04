@@ -7,8 +7,8 @@ import type { Plugin } from "chart.js";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import {
-  deletePlanAdjustment, getPlanAdjustments, getPlanRegistry, registerPlanYear,
-  savePlanAdjustment, type PlanAdjustment,
+  deletePlanAdjustment, getPlanAdjustments, getPlanRegistry, getPriceEdits,
+  registerPlanYear, savePlanAdjustment, type PlanAdjustment,
 } from "@/lib/repo/client";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
@@ -55,6 +55,7 @@ export type BaseData = {
   };
   points: WeekPoint[];
   overlays: OverlayRow[];
+  priceMarks: { date: string; label: string }[];  // dated list-price changes in the window
   season: {
     labels: string[];
     engine: (number | null)[];                       // full-history index
@@ -204,6 +205,23 @@ export default function BaseView({ data }: { data: BaseData }) {
     router.push(`/base?${p.toString()}`);
   };
 
+  /* Dated price-change markers: the server's (from the ingested list) plus
+     any browser-local manual price changes touching this selection. */
+  const [localMarks, setLocalMarks] = useState<{ date: string; label: string }[]>([]);
+  useEffect(() => {
+    const first = data.points[0]?.week, last = data.points.at(-1)?.week;
+    if (!first || !last) { setLocalMarks([]); return; }
+    const sel = new Set(data.item === "ALL" ? data.items.map((i) => i.upc) : [data.item]);
+    getPriceEdits().then((es) => setLocalMarks(
+      es.filter((e) => e.upc && sel.has(e.upc) && e.effective_from >= first && e.effective_from <= last)
+        .map((e) => ({ date: e.effective_from, label: `manual${e.unit_price !== null ? ` $${e.unit_price.toFixed(2)}` : ""}` }))
+    ));
+  }, [data.item, data.items, data.points]);
+  const priceMarks = useMemo(
+    () => [...data.priceMarks, ...localMarks].sort((a, b) => a.date.localeCompare(b.date)),
+    [data.priceMarks, localMarks]
+  );
+
   /* The projected series with the last actualized week copied in, so the
      orange projection line connects to the end of the blue actualized line. */
   const planProjected = useMemo(() => {
@@ -292,6 +310,30 @@ export default function BaseView({ data }: { data: BaseData }) {
         ctx.restore();
       };
       draw(bands.events, cssToken("--warn"), 0.16);
+      // dated price-change markers: dashed vertical line at the week the new
+      // list price takes effect, labeled at the top of the plot
+      if (priceMarks.length) {
+        const weekTs = data.points.map((p) => utc(p.week));
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = cssToken("--bad");
+        ctx.fillStyle = cssToken("--bad");
+        ctx.font = "700 9.5px " + getComputedStyle(document.body).fontFamily;
+        for (const mk of priceMarks) {
+          const t = utc(mk.date);
+          const i = weekTs.findIndex((w) => w >= t);
+          if (i < 0) continue;
+          const px = x.getPixelForValue(i) - half;
+          if (px < chartArea.left || px > chartArea.right) continue;
+          ctx.beginPath();
+          ctx.moveTo(px, chartArea.top);
+          ctx.lineTo(px, chartArea.bottom);
+          ctx.stroke();
+          ctx.fillText("$ " + mk.label, Math.min(px + 4, chartArea.right - 90), chartArea.top + 9);
+        }
+        ctx.restore();
+      }
     },
     afterDraw(chart) {
       // Dedicated always-on lanes: one strip per EDLP-style program, pinned
@@ -332,7 +374,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       }
       ctx.restore();
     },
-  }), [bands, showLanes, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [bands, showLanes, priceMarks, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liftPct = data.totals.base > 0 ? (data.totals.incremental / data.totals.base) * 100 : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;

@@ -157,6 +157,42 @@ export async function clearPlanEvents(plan_year: number, origin?: PlanEvent["ori
   return yearEvents(all, plan_year);
 }
 
+/* Price edits — per-item dated list-price changes entered in the Price List
+   screen: a new unit/case price with an effective date and a note. Overlaid
+   on the workbook-ingested fixture everywhere prices are read client-side.
+   Mirrors rows with source 'manual' in
+   supabase/migrations/00009_price_list.sql. */
+
+const PRICE_KEY = "hhPriceEdits";
+
+export type PriceEdit = {
+  id: string;
+  fg: string;
+  upc: string | null;         // resolved NIQ upc when the item is on file
+  unit_price: number | null;
+  case_price: number | null;
+  effective_from: string;     // ISO date
+  note: string;
+  created_at: string;
+};
+
+export async function getPriceEdits(): Promise<PriceEdit[]> {
+  try { return JSON.parse(localStorage.getItem(PRICE_KEY) ?? "[]") as PriceEdit[]; } catch { return []; }
+}
+
+export async function addPriceEdit(e: PriceEdit): Promise<PriceEdit[]> {
+  const all = await getPriceEdits();
+  all.push(e);
+  try { localStorage.setItem(PRICE_KEY, JSON.stringify(all)); } catch {}
+  return all;
+}
+
+export async function deletePriceEdit(id: string): Promise<PriceEdit[]> {
+  const all = (await getPriceEdits()).filter((e) => e.id !== id);
+  try { localStorage.setItem(PRICE_KEY, JSON.stringify(all)); } catch {}
+  return all;
+}
+
 /* Plan-year trade budget — one number per plan year + scope, editable on the
    planner's spend bar; defaults to the prior year's booked total. */
 

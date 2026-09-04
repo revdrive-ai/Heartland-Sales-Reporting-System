@@ -8,8 +8,9 @@ import {
   addPlanEvents, clearPlanEvents, deletePlanEvent, getPlanBudget, getPlanEvents,
   setPlanBudget, updatePlanEvent, type PlanEvent,
 } from "@/lib/repo/client";
+import { getPriceEdits } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
-import { eventWeeklyBase } from "./planMath";
+import { eventUnitPrice, eventWeeklyBase, type DatedPrice } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 
 /* The forward Promotion Planner — a future year (2027+) selected on the
@@ -75,6 +76,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardEdit, setWizardEdit] = useState<PlanEvent | null>(null);
+  // browser-local manual price changes, layered over the ingested price list
+  const [priceEdits, setPriceEdits] = useState<DatedPrice[]>([]);
+  useEffect(() => {
+    getPriceEdits().then((es) => setPriceEdits(
+      es.filter((e) => e.upc && e.unit_price !== null)
+        .map((e) => ({ upc: e.upc!, unit_price: e.unit_price!, effective_from: e.effective_from }))
+    ));
+  }, []);
 
   // CSV import
   const fileRef = useRef<HTMLInputElement>(null);
@@ -106,7 +115,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const base = wkBase * weeks;
     if (e.lift_pct === null) return { weeks, base, incr: null, roi: null };
     const incr = base * (e.lift_pct / 100);
-    const roi = e.spend > 0 ? (incr * st.price) / e.spend : null;
+    // gross revenue on the LIST price in force at the event's start (dated
+    // price list + local edits); retail price only where nothing is priced
+    const price = eventUnitPrice(plan, priceEdits, e) ?? st.price;
+    const roi = e.spend > 0 ? (incr * price) / e.spend : null;
     return { weeks, base, incr, roi };
   };
 
@@ -378,7 +390,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="card">
           <div className="c-head">
             <h3>Guardrails</h3>
-            <span className="sub">recalculate as you edit · ROI = incremental retail $ ÷ trade $</span>
+            <span className="sub">recalculate as you edit · ROI = incremental gross $ (dated list price) ÷ trade $</span>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1, textAlign: "center", padding: 10, background: "var(--bad-soft, rgba(220,38,38,.08))", borderRadius: 10 }}>
@@ -541,6 +553,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           data={data}
           year={year}
           initial={wizardEdit}
+          priceEdits={priceEdits}
           onClose={() => { setWizardOpen(false); setWizardEdit(null); }}
           onSubmit={addFromWizard}
         />

@@ -16,6 +16,7 @@ import type { Market, Item, NielsenWeeklyRow } from "@/lib/types/db";
 import marketsJson from "@/lib/fixtures/markets.json";
 import itemsJson from "@/lib/fixtures/items.json";
 import itemXwalkJson from "@/lib/fixtures/item-crosswalk.json";
+import priceListJson from "@/lib/fixtures/price-list.json";
 
 const MARKETS = marketsJson as Market[];
 const ITEMS = itemsJson as Item[];
@@ -173,6 +174,50 @@ export async function getTieList(): Promise<TieRow[]> {
     });
   }
   return rows.sort((a, b) => b.line_planned - a.line_planned);
+}
+
+/* ------------------------------------------------------------- PRICE LIST */
+
+/** One dated price record — the price in force on a date is the record with
+    the greatest effective_from ≤ that date for the item. */
+export type PriceRow = {
+  fg: string;
+  upc_core: string;            // "" when the item has no UPC yet (TBD)
+  upc: string | null;          // the NIQ pull's upc when the item is on file
+  item: string;
+  brand: string;
+  category: string;
+  form: string;
+  segment: string;
+  units_per_case: number | null;
+  case_price: number | null;
+  unit_price: number | null;
+  effective_from: string;      // ISO date
+  source: string;
+};
+
+let priceListCache: PriceRow[] | null = null;
+
+/** All dated price records, sorted fg → effective_from, resolved to the NIQ
+    pull's UPCs where the item is on file. */
+export async function getPriceList(): Promise<PriceRow[]> {
+  if (!priceListCache) {
+    const coreToUpc = new Map(ITEMS.map((i) => [upcCore(i.upc), i.upc]));
+    const raw = (priceListJson as { rows: Omit<PriceRow, "upc">[] }).rows;
+    priceListCache = raw.map((r) => ({ ...r, upc: r.upc_core ? coreToUpc.get(r.upc_core) ?? null : null }));
+  }
+  return priceListCache;
+}
+
+/** The price record in force for an fg (or a upc) on a date. */
+export function priceAsOf(rows: PriceRow[], onDate: string, key: { fg?: string; upc?: string }): PriceRow | null {
+  let best: PriceRow | null = null;
+  for (const r of rows) {
+    if (key.fg ? r.fg !== key.fg : r.upc !== key.upc) continue;
+    if (r.effective_from > onDate) continue;
+    if (!best || r.effective_from > best.effective_from) best = r;
+  }
+  return best;
 }
 
 export async function listBrands(opts?: { ownOnly?: boolean }): Promise<string[]> {

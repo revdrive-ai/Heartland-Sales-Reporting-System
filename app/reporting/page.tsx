@@ -1,4 +1,4 @@
-import { getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
+import { getPriceList, getWeeklyFacts, listItems, listMarkets, listWeekEndings, priceAsOf } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import ReportingView, { type ReportingData } from "@/components/reporting/ReportingView";
@@ -64,7 +64,7 @@ export default async function Page({
   if (planYear) {
     return renderPlanYear({
       planYear, years, markets, marketList: scopeMarkets, allWeeks, latestWeek,
-      ownBrands, mkt, brand, gscope,
+      ownBrands, mkt, brand, gscope, items,
     });
   }
 
@@ -198,13 +198,14 @@ export default async function Page({
    prior-year actuals on the same aligned weeks, with brand and division cuts
    against the latest 52 measured weeks. */
 async function renderPlanYear({
-  planYear, years, markets, marketList, allWeeks, latestWeek, ownBrands, mkt, brand, gscope,
+  planYear, years, markets, marketList, allWeeks, latestWeek, ownBrands, mkt, brand, gscope, items,
 }: {
   planYear: number; years: number[];
   markets: { code: string; name: string }[];
   marketList: string[]; allWeeks: string[]; latestWeek: string;
   ownBrands: string[]; mkt: string; brand: string;
   gscope: { active: boolean; label: string };
+  items: { upc: string; brand: string; is_own: boolean }[];
 }) {
   const planWeeks = saturdaysOfYear(planYear);
   const nW = planWeeks.length;
@@ -217,6 +218,7 @@ async function renderPlanYear({
   const byBrandP = new Map<string, { plan: number; act: number }>();
   const byDivP = new Map<string, { plan: number; act: number }>();
   const tot = { plan$: 0, planU: 0 };
+  const planUByBrand = new Map<string, number>(); // for gross revenue on list price
   // headline comparison basis: the most recent complete 52 measured weeks of
   // actual sales in the brand/market scope (same basis as the cuts below)
   const act52 = { dollars: 0, units: 0 };
@@ -260,6 +262,7 @@ async function renderPlanYear({
         divPlan$ += p$;
         series$[i] += p$;
         tot.plan$ += p$; tot.planU += pU;
+        planUByBrand.set(b, (planUByBrand.get(b) ?? 0) + pU);
         if (carried && wA$.has(src)) {
           priorSum[i] += wA$.get(src)!;
           priorHas[i] = true;
@@ -287,12 +290,26 @@ async function renderPlanYear({
   const planPrice = tot.planU > 0 ? tot.plan$ / tot.planU : null;
   const act52Price = act52.units > 0 ? act52.dollars / act52.units : null;
 
+  // gross revenue on the dated list price: plan units × the brand's average
+  // unit list price in force at the plan year's start
+  const priceRows = await getPriceList();
+  const jan1 = `${planYear}-01-01`;
+  let gross: number | null = null;
+  for (const [b, u] of planUByBrand) {
+    const priced = items.filter((i) => i.is_own && i.brand === b)
+      .map((i) => priceAsOf(priceRows, jan1, { upc: i.upc })?.unit_price ?? null)
+      .filter((p): p is number => p !== null);
+    if (!priced.length) continue;
+    const avg = priced.reduce((a, p) => a + p, 0) / priced.length;
+    gross = (gross ?? 0) + u * avg;
+  }
+
   const data: ReportingData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
     ownBrands,
     mkt, brand, win: 52,
     years,
-    plan: { year: planYear, priorYear: planYear - 1, matchedWeeks: matchedIdx.size },
+    plan: { year: planYear, priorYear: planYear - 1, matchedWeeks: matchedIdx.size, gross: gross === null ? null : Math.round(gross) },
     windowLabel: `Plan ${planYear} · ${nW} weeks`,
     weeks: planWeeks,
     seriesTY: series$.map(Math.round),

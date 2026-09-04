@@ -50,6 +50,7 @@ export const NAV: NavGroup[] = [
       { view: "integrations", label: "Integrations", icon: "plug", badge: "3", title: "Integrations & feed health — 3 open exceptions" },
       { view: "agents", label: "Agent Runs", icon: "bot", tag: "AI", title: "Agent Runs — AI automation" },
       { view: "tielist", label: "Tie List", icon: "link", title: "Tie List — identifier mapping" },
+      { view: "pricelist", label: "Price List", icon: "receipt", title: "Price List — dated list prices per item, the pricing basis for analysis" },
       { view: "alignkey", label: "Alignment Key", icon: "map", title: "Customer Alignment Key — territory hierarchy" },
       { view: "catkey", label: "Category Key", icon: "tag", badge: "3", title: "Category Key — item taxonomy & intake gate" },
       { view: "nielsenpull", label: "Nielsen Pull Spec", icon: "inbox", tag: "V1", title: "Nielsen Pull Spec — Albertsons data request template" },

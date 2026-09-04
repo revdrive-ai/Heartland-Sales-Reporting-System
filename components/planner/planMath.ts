@@ -27,3 +27,41 @@ export function itemWeeklyBase(plan: PlanPayload, customer_id: string, upc: stri
   if (!mkts?.length) return customer_id ? 0 : scopeWk;
   return mkts.reduce((a, m) => a + (plan.divItemWk[m]?.[upc] ?? 0), 0);
 }
+
+/* ---- dated list prices ---- */
+
+export type DatedPrice = { upc: string; unit_price: number; effective_from: string };
+
+/** The list price in force for a UPC on a date (greatest effective_from ≤ date). */
+export function listPriceAsOf(rows: DatedPrice[], upc: string, onDate: string): number | null {
+  let best: DatedPrice | null = null;
+  for (const r of rows) {
+    if (r.upc !== upc || r.effective_from > onDate) continue;
+    if (!best || r.effective_from > best.effective_from) best = r;
+  }
+  return best?.unit_price ?? null;
+}
+
+/** The unit list price an event's gross revenue scores on, as of its start
+    date: the deal's items weighted by their run-rate at the event's customer,
+    else the brand's weighted list price. `extra` carries browser-local manual
+    price edits, layered over the ingested list. null = no list price known. */
+export function eventUnitPrice(
+  plan: PlanPayload,
+  extra: DatedPrice[],
+  e: { upcs?: string[]; brand: string; start: string; customer_id: string },
+): number | null {
+  const rows = extra.length ? [...plan.prices, ...extra] : plan.prices;
+  if (e.upcs?.length) {
+    const mkts = plan.custMarkets[e.customer_id] ?? [];
+    let pw = 0, w = 0;
+    for (const u of e.upcs) {
+      const p = listPriceAsOf(rows, u, e.start);
+      if (p === null) continue;
+      const wk = mkts.reduce((a, m) => a + (plan.divItemWk[m]?.[u] ?? 0), 0) || 1;
+      pw += p * wk; w += wk;
+    }
+    if (w > 0) return pw / w;
+  }
+  return plan.brandListPrice[e.brand] ?? null;
+}

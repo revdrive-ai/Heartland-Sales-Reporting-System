@@ -1,4 +1,4 @@
-import { getPromoOverlays, getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
+import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
@@ -216,6 +216,24 @@ export default async function Page({
     };
   }
 
+  /* Dated list-price changes touching this selection inside the window — a
+     record counts as a change only when an earlier record exists for the same
+     item, so the initial list seeding doesn't mark every chart. */
+  const selUpcs = new Set(item === "ALL" ? items.map((i) => i.upc) : [item]);
+  const priceRows = await getPriceList();
+  const seenFg = new Set<string>();
+  const priceMarks: { date: string; label: string }[] = [];
+  for (const r of priceRows) { // sorted fg → effective_from
+    const isChange = seenFg.has(r.fg);
+    seenFg.add(r.fg);
+    if (!isChange || !r.upc || !selUpcs.has(r.upc)) continue;
+    if (r.effective_from < from || r.effective_from > to) continue;
+    priceMarks.push({
+      date: r.effective_from,
+      label: `${r.item.length > 22 ? r.item.slice(0, 21) + "…" : r.item}${r.unit_price !== null ? ` $${r.unit_price.toFixed(2)}` : ""}`,
+    });
+  }
+
   const overlays = await getPromoOverlays({ market_code: mkt, brand, from, to });
 
   /* Lift per promotion window, in the chosen metric.
@@ -277,6 +295,7 @@ export default async function Page({
     plan,
     points,
     overlays: overlayRows,
+    priceMarks,
     season: { labels: MONTH_LABELS, engine, years: seasonYears },
     totals: {
       actual: totActual,

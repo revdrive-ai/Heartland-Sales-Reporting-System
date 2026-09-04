@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { PlanEvent } from "@/lib/repo/client";
-import { eventWeeklyBase, itemWeeklyBase } from "./planMath";
+import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 
 /* The new-event wizard from the reference mockup, on real data: three steps
@@ -25,12 +25,14 @@ const fmt$ = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ?
 const fmtD = (iso: string) => new Date(utc(iso)).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
 
 export default function EventWizard({
-  data, year, initial, onClose, onSubmit,
+  data, year, initial, priceEdits = [], onClose, onSubmit,
 }: {
   data: PlannerData;
   year: number;
   /** editing an existing event — the wizard opens pre-filled and saves back */
   initial?: PlanEvent | null;
+  /** browser-local manual price changes, layered over the ingested list */
+  priceEdits?: DatedPrice[];
   onClose: () => void;
   onSubmit: (e: Omit<PlanEvent, "id" | "created_at">) => void;
 }) {
@@ -89,9 +91,11 @@ export default function EventWizard({
     const oiR = parseFloat(oi) || 0, scR = parseFloat(scan) || 0, fx = parseFloat(fixed) || 0;
     const oi$ = units * oiR, scan$ = units * scR;
     const spend = oi$ + scan$ + fx;
-    const roi = spend > 0 && incr !== null && st ? (incr * st.price) / spend : null;
+    // ROI on the dated list price in force at the window start; retail fallback
+    const price = brand ? (eventUnitPrice(plan, priceEdits, { upcs, brand, start, customer_id: cust }) ?? st?.price ?? null) : null;
+    const roi = spend > 0 && incr !== null && price !== null ? (incr * price) / spend : null;
     return { weeks, base, incr, units, oi$, scan$, fx, spend, roi };
-  }, [st, plan, cust, brand, upcs, start, end, lift, oi, scan, fixed]);
+  }, [st, plan, cust, brand, upcs, start, end, lift, oi, scan, fixed, priceEdits]);
 
   const mixed = brand === "MIXED";
   const valid = (s: number) =>

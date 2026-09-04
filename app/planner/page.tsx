@@ -1,4 +1,4 @@
-import { getItemCrosswalk, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums } from "@/lib/repo";
+import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, priceAsOf } from "@/lib/repo";
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { getScope } from "@/lib/server/scope";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
@@ -210,6 +210,23 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       for (const cid of promoCustomersFor(m.code)) (custMarkets[cid] ??= []).push(m.code);
     }
 
+    // Dated list prices (UPC-resolved) + a run-rate-weighted brand list price
+    // as of the plan year's start — ROI scores on manufacturer gross revenue.
+    const priceRows = await getPriceList();
+    const prices = priceRows
+      .filter((r) => r.upc && r.unit_price !== null)
+      .map((r) => ({ upc: r.upc!, unit_price: r.unit_price!, effective_from: r.effective_from }));
+    const jan1 = `${year}-01-01`;
+    const brandListPrice: Record<string, number | null> = {};
+    for (const b of OWN_BRANDS) {
+      let pw = 0, w = 0;
+      for (const it of brandStats[b].items) {
+        const p = priceAsOf(priceRows, jan1, { upc: it.upc })?.unit_price ?? null;
+        if (p !== null) { pw += p * it.wk; w += it.wk; }
+      }
+      brandListPrice[b] = w > 0 ? +(pw / w).toFixed(4) : null;
+    }
+
     plan = {
       year,
       priorYear: bookYear,
@@ -219,6 +236,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       divBrandWk,
       divItemWk,
       custMarkets,
+      prices,
+      brandListPrice,
       customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
       copySource: promos.map((p) => ({
         title: p.promo_title, customer_id: p.customer_id, customer: p.customer_name,

@@ -17,7 +17,7 @@ export type ReportingData = {
   brand: string;
   win: 13 | 26 | 52;
   years: number[];                       // plan years looking forward (2027, 2028, …)
-  plan: { year: number; priorYear: number; matchedWeeks: number } | null;
+  plan: { year: number; priorYear: number; matchedWeeks: number; gross: number | null } | null;
   windowLabel: string;
   weeks: string[];
   seriesTY: number[];
@@ -133,15 +133,21 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <div className="k-val">{data.kpis.price === null ? "—" : "$" + data.kpis.price.toFixed(2)}</div>
           <YoY v={data.kpis.priceYoY} suffix={data.plan ? "% vs latest 52 wks" : "% YoY"} />
         </div>
-        <div className="kpi">
-          <div className="k-top"><span className="k-label">Share of measured set</span></div>
-          <div className="k-val">{data.kpis.share === null ? "—" : data.kpis.share.toFixed(1) + "%"}</div>
-          {data.plan
-            ? <span className="k-sub flat">no plan for the competitive set</span>
-            : data.brand === "ALL"
-            ? <YoY v={data.kpis.sharePts} suffix=" pts YoY" />
-            : <span className="k-sub flat">share reads at all-own-brands scope</span>}
-        </div>
+        {data.plan ? (
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Plan gross revenue (list)</span></div>
+            <div className="k-val">{data.plan.gross === null ? "—" : fmtMoney(data.plan.gross)}</div>
+            <div className="k-sub flat">plan units × dated list price per brand, effective {data.plan.year}-01-01</div>
+          </div>
+        ) : (
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Share of measured set</span></div>
+            <div className="k-val">{data.kpis.share === null ? "—" : data.kpis.share.toFixed(1) + "%"}</div>
+            {data.brand === "ALL"
+              ? <YoY v={data.kpis.sharePts} suffix=" pts YoY" />
+              : <span className="k-sub flat">share reads at all-own-brands scope</span>}
+          </div>
+        )}
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
