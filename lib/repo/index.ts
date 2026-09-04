@@ -86,6 +86,95 @@ export async function getItemCrosswalk(): Promise<{
   return itemXwalkCache;
 }
 
+/** One row per identifier tie for the Tie List view — every Telus item number
+    ↔ NIQ UPC pair, NIQ items still missing a Heartland #, and Telus SKUs seen
+    on promotion lines that the crosswalk doesn't know yet, each carrying the
+    FY promo dollars riding on it. */
+export type TieRow = {
+  item_number: string | null;   // Telus/Heartland SKU; null = NIQ item with no mapping
+  upc_core: string | null;      // normalized NIQ UPC; null = unmapped Telus SKU
+  upc: string | null;           // the NIQ pull's upc when the item is on file
+  description: string;
+  brand: string;
+  business_unit: string | null;
+  segment: string | null;
+  niq_item: string | null;      // NIQ Static description
+  status: "tied" | "static_only" | "no_niq" | "no_item_number" | "unmapped_sku";
+  line_planned: number;         // FY planned $ on promo lines with this item number
+  line_count: number;
+};
+
+export async function getTieList(): Promise<TieRow[]> {
+  const fx = itemXwalkJson as ItemXwalkFile;
+  const coreToUpc = new Map(ITEMS.map((i) => [upcCore(i.upc), i.upc]));
+  const staticByCore = new Map(fx.niq_items.map((n) => [n.upc_core, n]));
+
+  // FY promo dollars per Telus item number
+  const lineAgg = new Map<string, { planned: number; n: number; desc: string; brand: string }>();
+  for (const l of promoLines()) {
+    const a = lineAgg.get(l.item_number) ?? { planned: 0, n: 0, desc: l.item_description ?? "", brand: l.brand };
+    a.planned += l.planned_amount; a.n += 1;
+    lineAgg.set(l.item_number, a);
+  }
+
+  const rows: TieRow[] = [];
+  const mappedCores = new Set<string>();
+  const mappedItemNumbers = new Set<string>();
+  for (const t of fx.telus_items) {
+    mappedCores.add(t.upc_core);
+    mappedItemNumbers.add(t.item_number);
+    const st = staticByCore.get(t.upc_core);
+    const upc = coreToUpc.get(t.upc_core) ?? null;
+    const lines = lineAgg.get(t.item_number);
+    rows.push({
+      item_number: t.item_number,
+      upc_core: t.upc_core,
+      upc,
+      description: t.description,
+      brand: t.brand,
+      business_unit: t.business_unit,
+      segment: st?.segment ?? null,
+      niq_item: st?.item ?? null,
+      status: !st ? "no_niq" : upc ? "tied" : "static_only",
+      line_planned: Math.round(lines?.planned ?? 0),
+      line_count: lines?.n ?? 0,
+    });
+  }
+  for (const n of fx.niq_items) {
+    if (mappedCores.has(n.upc_core)) continue;
+    rows.push({
+      item_number: null,
+      upc_core: n.upc_core,
+      upc: coreToUpc.get(n.upc_core) ?? null,
+      description: n.item,
+      brand: n.brand,
+      business_unit: null,
+      segment: n.segment,
+      niq_item: n.item,
+      status: "no_item_number",
+      line_planned: 0,
+      line_count: 0,
+    });
+  }
+  for (const [item_number, a] of lineAgg) {
+    if (mappedItemNumbers.has(item_number)) continue;
+    rows.push({
+      item_number,
+      upc_core: null,
+      upc: null,
+      description: a.desc,
+      brand: a.brand,
+      business_unit: null,
+      segment: null,
+      niq_item: null,
+      status: "unmapped_sku",
+      line_planned: Math.round(a.planned),
+      line_count: a.n,
+    });
+  }
+  return rows.sort((a, b) => b.line_planned - a.line_planned);
+}
+
 export async function listBrands(opts?: { ownOnly?: boolean }): Promise<string[]> {
   const src = opts?.ownOnly ? ITEMS.filter((i) => i.is_own) : ITEMS;
   return [...new Set(src.map((i) => i.brand))].sort();
