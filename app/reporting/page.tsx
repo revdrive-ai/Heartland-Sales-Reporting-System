@@ -30,7 +30,7 @@ function saturdaysOfYear(year: number): string[] {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ mkt?: string; brand?: string; win?: string }>;
+  searchParams: Promise<{ mkt?: string; brand?: string; win?: string; m?: string }>;
 }) {
   const [allMarkets, items, gscope] = await Promise.all([listMarkets(), listItems(), getScope()]);
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
@@ -48,6 +48,8 @@ export default async function Page({
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt! : "ALL";
   const brand = ownBrands.includes(sp.brand ?? "") ? sp.brand! : "ALL";
   const win = (WINDOWS as readonly number[]).includes(Number(sp.win)) ? (Number(sp.win) as 13 | 26 | 52) : 52;
+  // dollars basis: NIQ retail, or gross = units × the dated list price in force
+  const gross = sp.m === "gross";
 
   const scopeMarkets = mkt === "ALL" ? markets.map((m) => m.code) : [mkt];
 
@@ -79,6 +81,25 @@ export default async function Page({
     rows.push(...(await getWeeklyFacts({ market_code: code, from, to })));
   }
 
+  // dated list-price lookup, for the gross dollars basis
+  const priceHist = new Map<string, { d: string; p: number }[]>();
+  if (gross) {
+    for (const r of await getPriceList()) {
+      if (!r.upc || r.unit_price === null) continue;
+      (priceHist.get(r.upc) ?? priceHist.set(r.upc, []).get(r.upc)!).push({ d: r.effective_from, p: r.unit_price });
+    }
+    for (const l of priceHist.values()) l.sort((a, b) => a.d.localeCompare(b.d));
+  }
+  const priceAt = (upc: string, onDate: string): number | null => {
+    const l = priceHist.get(upc);
+    if (!l) return null;
+    let p: number | null = null;
+    for (const e of l) { if (e.d > onDate) break; p = e.p; }
+    return p;
+  };
+  const dollarsOf = (r: NielsenWeeklyRow) =>
+    gross ? (r.units ?? 0) * (priceAt(r.upc, r.week_ending) ?? 0) : (r.dollars ?? 0);
+
   const curSet = new Set(curWeeks);
   const lySet = new Set(lyWeeks);
   const lyIndex = new Map(lyWeeks.map((w, i) => [w, i]));
@@ -102,7 +123,7 @@ export default async function Page({
     const meta = itemMeta.get(r.upc);
     const own = meta?.is_own ?? false;
     const inBrandScope = own && (brand === "ALL" || r.brand === brand);
-    const d = r.dollars ?? 0;
+    const d = dollarsOf(r);
     const u = r.units ?? 0;
     const side = isCur ? "cur" : "ly";
 
@@ -134,15 +155,16 @@ export default async function Page({
   }
 
   const pct = (cur: number, ly: number) => (ly > 0 ? ((cur - ly) / ly) * 100 : null);
-  const shareCur = tot.cur.dollars + comp.cur.dollars > 0 && brand === "ALL"
+  // no list price exists for the competitive set, so share only reads on retail
+  const shareCur = !gross && tot.cur.dollars + comp.cur.dollars > 0 && brand === "ALL"
     ? (tot.cur.dollars / (tot.cur.dollars + comp.cur.dollars)) * 100 : null;
-  const shareLy = tot.ly.dollars + comp.ly.dollars > 0 && brand === "ALL"
+  const shareLy = !gross && tot.ly.dollars + comp.ly.dollars > 0 && brand === "ALL"
     ? (tot.ly.dollars / (tot.ly.dollars + comp.ly.dollars)) * 100 : null;
 
   const brandRows = [...byBrand.entries()]
     .map(([name, v]) => ({ name, ty: Math.round(v.cur.dollars), ly: Math.round(v.ly.dollars) }))
     .sort((a, b) => b.ty - a.ty);
-  brandRows.push({ name: "Competitive set", ty: Math.round(comp.cur.dollars), ly: Math.round(comp.ly.dollars) });
+  if (!gross) brandRows.push({ name: "Competitive set", ty: Math.round(comp.cur.dollars), ly: Math.round(comp.ly.dollars) });
 
   const groupRows = [...byGroup.entries()]
     .map(([name, v]) => ({ name, ty: Math.round(v.cur.dollars), ly: Math.round(v.ly.dollars) }))
@@ -164,10 +186,17 @@ export default async function Page({
     .sort((a, b) => b.delta - a.delta);
   const topMovers = [...movers.slice(0, 8), ...movers.slice(-8).filter((m) => m.delta < 0)];
 
+  const scopedOwnUpcs = [...byItem.keys()]; // own items in brand scope with volume in the window
+  const grossCoverage = gross
+    ? { priced: scopedOwnUpcs.filter((u) => priceHist.has(u)).length, total: scopedOwnUpcs.length }
+    : null;
+
   const data: ReportingData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
     ownBrands,
     mkt, brand, win,
+    metric: gross ? "gross" : "retail",
+    grossCoverage,
     years,
     plan: null,
     windowLabel: `${curWeeks[0]} → ${to}`,
@@ -308,6 +337,8 @@ async function renderPlanYear({
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
     ownBrands,
     mkt, brand, win: 52,
+    metric: "retail",
+    grossCoverage: null,
     years,
     plan: { year: planYear, priorYear: planYear - 1, matchedWeeks: matchedIdx.size, gross: gross === null ? null : Math.round(gross) },
     windowLabel: `Plan ${planYear} · ${nW} weeks`,

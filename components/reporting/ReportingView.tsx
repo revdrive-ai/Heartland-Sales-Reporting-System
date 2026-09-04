@@ -16,6 +16,8 @@ export type ReportingData = {
   mkt: string;
   brand: string;
   win: 13 | 26 | 52;
+  metric: "retail" | "gross";             // dollars basis: NIQ retail, or units × dated list price
+  grossCoverage: { priced: number; total: number } | null;
   years: number[];                       // plan years looking forward (2027, 2028, …)
   plan: { year: number; priorYear: number; matchedWeeks: number; gross: number | null } | null;
   windowLabel: string;
@@ -57,10 +59,12 @@ export default function ReportingView({ data }: { data: ReportingData }) {
   const tick = useThemeTick();
   const router = useRouter();
 
-  const nav = (patch: Partial<Record<"mkt" | "brand" | "win", string>>) => {
-    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, win: String(data.win), ...patch });
+  const nav = (patch: Partial<Record<"mkt" | "brand" | "win" | "m", string>>) => {
+    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, win: String(data.win), m: data.metric, ...patch });
     router.push(`/reporting?${p.toString()}`);
   };
+  const gross = data.metric === "gross";
+  const dollarsWord = gross ? "gross dollars (list price)" : "retail dollars";
 
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const brandName = data.brand === "ALL" ? "all own brands" : data.brand;
@@ -115,11 +119,22 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <option value="52">Last 52 weeks</option>
           {data.years.map((y) => <option key={y} value={String(y)}>Plan {y} vs prior year</option>)}
         </select>
+        {!data.plan && (
+          <select
+            style={selStyle}
+            value={data.metric}
+            onChange={(e) => nav({ m: e.target.value })}
+            title="Dollars basis: NIQ retail, or gross = units × the dated list price in force each week"
+          >
+            <option value="retail">Dollars — retail (NIQ)</option>
+            <option value="gross">Dollars — list price (gross)</option>
+          </select>
+        )}
       </div>
 
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">{data.plan ? "Plan base dollars — full year" : "Retail dollars"}</span></div>
+          <div className="k-top"><span className="k-label">{data.plan ? "Plan base dollars — full year" : gross ? "Gross dollars (list)" : "Retail dollars"}</span></div>
           <div className="k-val">{fmtMoney(data.kpis.dollars)}</div>
           <YoY v={data.kpis.dollarsYoY} suffix={data.plan ? "% vs latest 52 wks sold" : "% YoY"} />
         </div>
@@ -129,7 +144,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <YoY v={data.kpis.unitsYoY} suffix={data.plan ? "% vs latest 52 wks" : "% YoY"} />
         </div>
         <div className="kpi">
-          <div className="k-top"><span className="k-label">Avg price / unit</span></div>
+          <div className="k-top"><span className="k-label">{gross ? "Avg list price / unit" : "Avg price / unit"}</span></div>
           <div className="k-val">{data.kpis.price === null ? "—" : "$" + data.kpis.price.toFixed(2)}</div>
           <YoY v={data.kpis.priceYoY} suffix={data.plan ? "% vs latest 52 wks" : "% YoY"} />
         </div>
@@ -143,7 +158,9 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <div className="kpi">
             <div className="k-top"><span className="k-label">Share of measured set</span></div>
             <div className="k-val">{data.kpis.share === null ? "—" : data.kpis.share.toFixed(1) + "%"}</div>
-            {data.brand === "ALL"
+            {gross
+              ? <span className="k-sub flat">no list price for the competitive set — share reads on retail</span>
+              : data.brand === "ALL"
               ? <YoY v={data.kpis.sharePts} suffix=" pts YoY" />
               : <span className="k-sub flat">share reads at all-own-brands scope</span>}
           </div>
@@ -153,7 +170,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
       <div className="card" style={{ marginBottom: 16 }}>
         <b>{data.plan
           ? `Weekly base dollars — ${data.plan.year} plan vs ${data.plan.priorYear} actuals`
-          : "Weekly retail dollars — this year vs same weeks last year"}</b>
+          : `Weekly ${dollarsWord} — this year vs same weeks last year`}</b>
         <div className="chartbox" style={{ height: 300, marginTop: 12 }}>
           <Line
             key={"t" + tick + data.mkt + data.brand + data.win + (data.plan?.year ?? "")}
@@ -185,7 +202,10 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             ? <>◇ The plan line is base only (no promo lift): {data.plan.priorYear} actual base for its measured weeks,
               seasonality-shaped projection after. The dashed line is what actually sold in the matching weeks a year
               earlier — it stops where {data.plan.priorYear} data ends and fills in as weeks land.</>
-            : <>◇ Year-ago is the identical NIQ weeks shifted 52 — holiday weeks line up with holiday weeks.</>}
+            : <>◇ Year-ago is the identical NIQ weeks shifted 52 — holiday weeks line up with holiday weeks.
+              {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}
+              {data.grossCoverage.priced} of {data.grossCoverage.total} items in this scope are priced; unpriced
+              items contribute $0 (see the Price List).</>}</>}
         </div>
       </div>
 
