@@ -588,6 +588,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                       {e.funding && (e.funding.oi > 0 || e.funding.scan > 0) && (
                         <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
                       )}
+                      <div style={{ fontSize: 10.5, color: "var(--ink-3)", whiteSpace: "nowrap", fontWeight: 600 }}>
+                        {e.funding && (e.funding.oi > 0 || e.funding.scan > 0 || e.funding.fixed > 0)
+                          ? [
+                              e.funding.oi > 0 ? `OI $${e.funding.oi.toFixed(2)}/u` : null,
+                              e.funding.scan > 0 ? `Scan $${e.funding.scan.toFixed(2)}/u` : null,
+                              e.funding.fixed > 0 ? `Fixed ${fmtExact(e.funding.fixed)}` : null,
+                            ].filter(Boolean).join(" · ")
+                          : "committed total"}
+                      </div>
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi)}</td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }}>
