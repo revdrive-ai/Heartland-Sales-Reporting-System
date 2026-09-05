@@ -9,9 +9,10 @@ import {
 } from "@/lib/repo/client";
 import { getPriceEdits } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
-import { LinesTable, usePromoLines } from "./lines";
-import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice } from "./planMath";
+import { usePromoLines } from "./lines";
+import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice, type PlanPayload } from "./planMath";
 import type { PlannerData } from "./PlannerView";
+import type { PromoLine } from "@/lib/types/db";
 
 /* The forward Promotion Planner — a future year (2027+) selected on the
    planner opens this builder, modeled on the reference mockup's planner page:
@@ -633,9 +634,16 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                         {e.source_promo_id ? (
                           <>
                             <div style={{ padding: "10px 16px 2px", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>
-                              FY{plan.priorYear} component lines behind this carried event
+                              FY{plan.priorYear} deal lines behind this carried event — with their NIQ tie
                             </div>
-                            <LinesTable rows={lines[e.source_promo_id]} />
+                            <CarriedLines
+                              rows={lines[e.source_promo_id]}
+                              plan={plan}
+                              customer_id={e.customer_id}
+                              customer={e.customer}
+                              itemLabel={itemLabel}
+                              scopeWk={(u) => itemMeta.get(u)?.wk ?? 0}
+                            />
                           </>
                         ) : e.upcs?.length ? (
                           <div style={{ padding: "4px 0 8px" }}>
@@ -754,5 +762,66 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         />
       )}
     </div>
+  );
+}
+
+/** A carried event's drill-down: the FY book's component lines joined to
+    their NIQ tie — per-line rate and planned dollars from Telus, plus the
+    crosswalked NIQ item and its weekly base at the event's customer. */
+function CarriedLines({
+  rows, plan, customer_id, customer, itemLabel, scopeWk,
+}: {
+  rows: PromoLine[] | "loading" | undefined;
+  plan: PlanPayload;
+  customer_id: string;
+  customer: string;
+  itemLabel: (u: string) => string;
+  scopeWk: (u: string) => number;
+}) {
+  if (rows === "loading" || rows === undefined) {
+    return <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--ink-3)" }}>Loading lines…</div>;
+  }
+  const td: React.CSSProperties = { padding: "7px 14px" };
+  const right: React.CSSProperties = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" };
+  return (
+    <table style={{ fontSize: 12.5 }}>
+      <thead>
+        <tr>
+          <th>Component</th><th>Item (Telus)</th>
+          <th style={{ textAlign: "right" }}>Rate</th>
+          <th style={{ textAlign: "right" }}>Planned</th>
+          <th>NIQ tie</th>
+          <th style={{ textAlign: "right" }} title="NIQ weekly base run-rate, latest 52 weeks, at this event's customer">Base at {customer}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((l) => {
+          const upcs = plan.telusUpcs[l.item_number] ?? [];
+          const wk = upcs.reduce((a, u) => a + itemWeeklyBase(plan, customer_id, u, scopeWk(u)), 0);
+          return (
+            <tr key={l.line_id}>
+              <td style={td}>{l.component_type}</td>
+              <td style={td}>
+                {l.item_description ?? "—"}
+                <span style={{ color: "var(--ink-3)", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11 }}> {l.item_number}</span>
+              </td>
+              <td style={right}>{l.rate_uom === "Lump Sum" && l.rate === 0 ? "lump sum" : `${l.rate} / ${l.rate_uom}`}</td>
+              <td style={right}>{fmtMoney(l.planned_amount)}</td>
+              <td style={td}>
+                {upcs.length ? (
+                  <span title={upcs.map((u) => `${itemLabel(u)}  (${u})`).join("\n")}>
+                    {(() => { const n = itemLabel(upcs[0]); return n.length > 38 ? n.slice(0, 37) + "…" : n; })()}
+                    {upcs.length > 1 ? <span style={{ color: "var(--ink-3)" }}> +{upcs.length - 1}</span> : null}
+                  </span>
+                ) : (
+                  <span style={{ color: "var(--warn)", fontWeight: 600 }} title="This Telus SKU isn't in the item crosswalk yet — extend Crosswalk_items_V1.xlsx to tie it">no tie</span>
+                )}
+              </td>
+              <td style={right}>{wk > 0 ? `${Math.round(wk).toLocaleString()} u/wk` : "—"}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

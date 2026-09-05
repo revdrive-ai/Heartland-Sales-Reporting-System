@@ -40,6 +40,7 @@ export type PlannerData = {
     custMarkets: Record<string, string[]>;               // Telus customer id → scoped divisions covered
     prices: { upc: string; unit_price: number; effective_from: string }[]; // dated list prices
     brandListPrice: Record<string, number | null>;       // run-rate-weighted brand list price, plan-year start
+    telusUpcs: Record<string, string[]>;                 // Telus item number → NIQ UPCs (book SKUs only)
     customers: { id: string; name: string }[];
     copySource: {
       promo_id: string;

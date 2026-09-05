@@ -201,6 +201,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       }
       (linesByPromo.get(l.promo_id) ?? linesByPromo.set(l.promo_id, []).get(l.promo_id)!).push(l);
     }
+    // Telus item number → NIQ UPCs, for just the SKUs in the book — lets the
+    // client join a carried event's FY lines to their NIQ items on drill-down
+    const telusUpcs: Record<string, string[]> = {};
+    for (const ls of linesByPromo.values()) {
+      for (const l of ls) {
+        if (!(l.item_number in telusUpcs)) telusUpcs[l.item_number] = xwalk.telusUpcs[l.item_number] ?? [];
+      }
+    }
     const brandFor = (promoId: string) => {
       const s = promoBrandSets.get(promoId);
       return s && s.size === 1 ? [...s][0] : "MIXED";
@@ -285,6 +293,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       custMarkets,
       prices,
       brandListPrice,
+      telusUpcs,
       customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
       copySource: promos.map((p) => ({
         promo_id: p.promo_id,
