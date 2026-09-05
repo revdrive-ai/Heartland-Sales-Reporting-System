@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bar, Line } from "react-chartjs-2";
 import WorkflowStrip from "@/components/WorkflowStrip";
@@ -18,6 +18,15 @@ export type ReportingData = {
   win: 13 | 26 | 52;
   metric: "retail" | "gross";             // dollars basis: NIQ retail, or units × dated list price
   grossCoverage: { priced: number; total: number } | null;
+  insights: {
+    kind: "distribution" | "price" | "volume" | "promo" | "delisted" | "listprice";
+    severity: "good" | "bad" | "info";
+    title: string;
+    detail: string;
+    impact: number;
+    href?: string;             // a Base & Lift deep link when the shift is division-shaped
+  }[];
+  insightsTotal: number;
   years: number[];                       // plan years looking forward (2027, 2028, …)
   plan: { year: number; priorYear: number; matchedWeeks: number; gross: number | null } | null;
   windowLabel: string;
@@ -65,6 +74,16 @@ export default function ReportingView({ data }: { data: ReportingData }) {
   };
   const gross = data.metric === "gross";
   const dollarsWord = gross ? "gross dollars (list price)" : "retail dollars";
+  const [insHide, setInsHide] = useState(false);
+  useEffect(() => {
+    try { setInsHide(localStorage.getItem("hhInsightsHideDash") === "1"); } catch {}
+  }, []);
+  const toggleIns = () => {
+    setInsHide((h) => {
+      try { localStorage.setItem("hhInsightsHideDash", h ? "0" : "1"); } catch {}
+      return !h;
+    });
+  };
 
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const brandName = data.brand === "ALL" ? "all own brands" : data.brand;
@@ -259,6 +278,68 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           </div>
         </div>
       </div>
+
+      {data.insights.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="c-head">
+            <h3>Key insights — what might move the plan</h3>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span className="sub">
+                {insHide
+                  ? `${data.insightsTotal} measured shift${data.insightsTotal === 1 ? "" : "s"} flagged`
+                  : "measured shifts across this scope, latest 8 weeks vs the same weeks a year ago · ranked by base-volume impact"}
+              </span>
+              <div className="chip-row">
+                <span
+                  className={"minichip" + (insHide ? "" : " on")}
+                  onClick={toggleIns}
+                  title={insHide ? "Open the key-insights list" : "Collapse the key-insights list — the header keeps the count"}
+                >
+                  {insHide ? "⊕ Show insights" : "⊖ Hide insights"}
+                </span>
+              </div>
+            </div>
+          </div>
+          {!insHide && (<>
+          <div>
+            {data.insights.map((ins, i) => {
+              const color = ins.severity === "bad" ? "var(--bad)" : ins.severity === "good" ? "var(--good)" : "var(--accent)";
+              const KIND: Record<string, string> = {
+                distribution: "Distribution", price: "Base price", volume: "Volume",
+                promo: "Promo support", delisted: "Delisted?", listprice: "List price",
+              };
+              return (
+                <div key={i} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 2px", borderTop: i ? "1px solid var(--line)" : "none" }}>
+                  <span style={{ color, fontWeight: 900, fontSize: 15, lineHeight: "19px" }}>
+                    {ins.severity === "bad" ? "▼" : ins.severity === "good" ? "▲" : "◇"}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <b style={{ fontSize: 13 }}>{ins.title}</b>
+                    <span className="badge" style={{ marginLeft: 8, background: "var(--surface-2)", color: "var(--ink-3)" }}>{KIND[ins.kind]}</span>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>{ins.detail}</div>
+                  </div>
+                  {ins.href && (
+                    <span
+                      className="minichip"
+                      style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
+                      title="Open this division in the Base & Lift Lab"
+                      onClick={() => router.push(ins.href!)}
+                    >
+                      Open in Base & Lift →
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="note" style={{ marginTop: 8 }}>
+            ◇ Same detector as the Base & Lift Lab, run across every division in scope, plus division-level base
+            moves ≥ 15%. Small items and divisions stay quiet.
+            {data.insightsTotal > data.insights.length && <> Showing the top {data.insights.length} of {data.insightsTotal} by impact.</>}
+          </div>
+          </>)}
+        </div>
+      )}
 
       {data.plan ? (
         <div className="card" style={{ marginTop: 16 }}>

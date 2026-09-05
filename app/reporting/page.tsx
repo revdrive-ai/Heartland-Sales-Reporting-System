@@ -1,5 +1,6 @@
 import { getPriceList, getWeeklyFacts, listItems, listMarkets, listWeekEndings, priceAsOf } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
+import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import ReportingView, { type ReportingData } from "@/components/reporting/ReportingView";
 import type { NielsenWeeklyRow } from "@/lib/types/db";
@@ -191,12 +192,58 @@ export default async function Page({
     ? { priced: scopedOwnUpcs.filter((u) => priceHist.has(u)).length, total: scopedOwnUpcs.length }
     : null;
 
+  /* Key insights for the scope: item-level shifts across all divisions in
+     view (shared detector), plus a dashboard-only division pass — a whole
+     division's base moving is a signal the item scan can dilute. */
+  const ownScoped = rows.filter((r) => {
+    const meta = itemMeta.get(r.upc);
+    return (meta?.is_own ?? false) && (brand === "ALL" || r.brand === brand);
+  });
+  const insights: (ReturnType<typeof detectInsights>[number] & { href?: string })[] = detectInsights({
+    rows: ownScoped,
+    allWeeks,
+    latestWeek,
+    itemName: (u) => itemMeta.get(u)?.name ?? u,
+    priceRows: await getPriceList(),
+    selUpcs: new Set(scopedOwnUpcs),
+  });
+  if (mkt === "ALL") {
+    // per-division base, latest 8 weeks vs the same weeks a year earlier
+    const recent8 = new Set(allWeeks.slice(-8));
+    const ya8 = new Set([...recent8].map(yearAgoWeek));
+    const div = new Map<string, { c: number; p: number }>();
+    for (const r of ownScoped) {
+      const side = recent8.has(r.week_ending) ? "c" : ya8.has(r.week_ending) ? "p" : null;
+      if (!side) continue;
+      const d = div.get(r.market_code) ?? { c: 0, p: 0 };
+      d[side] += r.base_units ?? 0;
+      div.set(r.market_code, d);
+    }
+    const scopeWk = [...div.values()].reduce((a, d) => a + d.c, 0) / 8;
+    for (const [code, d] of div) {
+      const cw = d.c / 8, pw = d.p / 8;
+      if (pw <= 0 || Math.max(cw, pw) < scopeWk * 0.03) continue;
+      const chg = ((cw - pw) / pw) * 100;
+      if (Math.abs(chg) < 15) continue;
+      const name = marketName.get(code) ?? code;
+      insights.push({
+        kind: "volume", severity: chg < 0 ? "bad" : "good", impact: Math.abs(cw - pw),
+        title: `Base volume ${chg < 0 ? "down" : "up"} ${Math.abs(chg).toFixed(0)}% at ${name.replace("Albertsons ", "")}`,
+        detail: `~${Math.round(pw)} → ~${Math.round(cw)} base units/wk across ${brand === "ALL" ? "own brands" : brand} (latest 8 wks vs same wks YA). Open the division in Base & Lift to see which items are driving it.`,
+        href: `/base?mkt=${code}${brand !== "ALL" ? `&brand=${encodeURIComponent(brand)}` : ""}`,
+      });
+    }
+    insights.sort((a, b) => b.impact - a.impact);
+  }
+
   const data: ReportingData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
     ownBrands,
     mkt, brand, win,
     metric: gross ? "gross" : "retail",
     grossCoverage,
+    insights: insights.slice(0, 6),
+    insightsTotal: insights.length,
     years,
     plan: null,
     windowLabel: `${curWeeks[0]} → ${to}`,
@@ -339,6 +386,8 @@ async function renderPlanYear({
     mkt, brand, win: 52,
     metric: "retail",
     grossCoverage: null,
+    insights: [],
+    insightsTotal: 0,
     years,
     plan: { year: planYear, priorYear: planYear - 1, matchedWeeks: matchedIdx.size, gross: gross === null ? null : Math.round(gross) },
     windowLabel: `Plan ${planYear} · ${nW} weeks`,
