@@ -144,6 +144,10 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [engDepth, setEngDepth] = useState("20");
   const [engTactic, setEngTactic] = useState("Feature");
   const [insHide, setInsHide] = useState(false); // key-insights card collapsed
+  // base-units export dialog
+  const [expOpen, setExpOpen] = useState(false);
+  const [expGran, setExpGran] = useState<"week" | "month">("week");
+  const [expFmt, setExpFmt] = useState<"csv" | "xlsx">("xlsx");
   const toggleIns = () => {
     setInsHide((h) => {
       try { localStorage.setItem(INS_KEY, h ? "0" : "1"); } catch {}
@@ -472,6 +476,14 @@ export default function BaseView({ data }: { data: BaseData }) {
           </p>
         </div>
         <div className="actions">
+          <button
+            className="btn"
+            style={{ ...selStyle, cursor: "pointer" }}
+            title="Export this selection's base units — brand by item, weekly or monthly, CSV or Excel; plan years export the carried + projected base"
+            onClick={() => setExpOpen(true)}
+          >
+            ⬇ Export base
+          </button>
           {planYear ? (
             <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
               ✓ {planYear} registered for {marketName}
@@ -1240,6 +1252,63 @@ export default function BaseView({ data }: { data: BaseData }) {
           </table>
         </div>
       </div>
+      )}
+
+      {expOpen && (
+        <div className="modal open">
+          <div className="box" style={{ width: 480 }}>
+            <div className="m-head">
+              <div>
+                <div className="mt">Export base units</div>
+                <div className="ms">
+                  {marketName} · {data.brand}{data.itemName ? ` · ${data.itemName}` : " · brand by item"} · {data.winLabel}
+                </div>
+              </div>
+              <button className="x" onClick={() => setExpOpen(false)}>✕</button>
+            </div>
+            <div className="m-body" style={{ padding: "14px 20px" }}>
+              <div className="f-2col">
+                <div className="f-row">
+                  <label>Output by</label>
+                  <select value={expGran} onChange={(e) => setExpGran(e.target.value as "week" | "month")}>
+                    <option value="week">Week (NIQ week-endings)</option>
+                    <option value="month">Month</option>
+                  </select>
+                </div>
+                <div className="f-row">
+                  <label>Format</label>
+                  <select value={expFmt} onChange={(e) => setExpFmt(e.target.value as "csv" | "xlsx")}>
+                    <option value="xlsx">Excel (.xlsx)</option>
+                    <option value="csv">CSV</option>
+                  </select>
+                </div>
+              </div>
+              <div className="hint" style={{ marginTop: 2 }}>
+                One row per item with {expGran === "week" ? "week" : "month"} columns and totals.
+                {data.planningYear
+                  ? " Plan year: the year-ago base carries in as far as it has actualized; * columns are the seasonality-shaped projection. Planner adjustments are not applied."
+                  : " Measured NIQ base units for the selected window."}
+              </div>
+            </div>
+            <div className="m-foot">
+              <div className="right">
+                <button className="btn ghost" onClick={() => setExpOpen(false)}>Cancel</button>
+                <button
+                  className="btn primary"
+                  onClick={() => {
+                    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, item: data.item, win: data.win, gran: expGran, fmt: expFmt });
+                    const a = document.createElement("a");
+                    a.href = `/api/base/export?${p.toString()}`;
+                    a.click();
+                    setExpOpen(false);
+                  }}
+                >
+                  ⬇ Download
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
