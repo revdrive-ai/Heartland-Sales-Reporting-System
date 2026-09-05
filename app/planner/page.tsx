@@ -190,6 +190,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
     const xwalk = await getItemCrosswalk();
     const promoBrandSets = new Map<string, Set<string>>();
     const promoUpcs = new Map<string, Set<string>>();
+    const linesByPromo = new Map<string, Awaited<ReturnType<typeof listAllPromoLines>>>();
     for (const l of await listAllPromoLines()) {
       const own = ownByNorm.get(normBrand(l.brand));
       if (own) {
@@ -198,6 +199,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       for (const u of xwalk.telusUpcs[l.item_number] ?? []) {
         (promoUpcs.get(l.promo_id) ?? promoUpcs.set(l.promo_id, new Set()).get(l.promo_id)!).add(u);
       }
+      (linesByPromo.get(l.promo_id) ?? linesByPromo.set(l.promo_id, []).get(l.promo_id)!).push(l);
     }
     const brandFor = (promoId: string) => {
       const s = promoBrandSets.get(promoId);
@@ -227,6 +229,51 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       brandListPrice[b] = w > 0 ? +(pw / w).toFixed(4) : null;
     }
 
+    /* Funding split per promo, from its Telus component lines, normalized to
+       the planner's {oi, scan, fixed} model: Scan lines feed the scan rate
+       and Off Invoice / Billback lines the O/I rate — "Each" rates as-is,
+       "Case" rates ÷ units-per-case, "Percent" rates × the dated unit list
+       price (both via the item crosswalk + price list). Lump-sum components
+       (ad fees, tag fees, slotting, …) and any rate line that can't be
+       normalized land in fixed by their planned dollars, so nothing drops.
+       Rates are planned-dollar-weighted averages across a promo's lines. */
+    const unitPriceInfo = (item_number: string): { unit: number | null; perCase: number | null } => {
+      for (const u of xwalk.telusUpcs[item_number] ?? []) {
+        const p = priceAsOf(priceRows, jan1, { upc: u });
+        if (p?.unit_price) {
+          const perCase = p.units_per_case
+            ?? (p.case_price && p.unit_price ? Math.round(p.case_price / p.unit_price) : null);
+          return { unit: p.unit_price, perCase: perCase && perCase >= 1 ? perCase : null };
+        }
+      }
+      return { unit: null, perCase: null };
+    };
+    const promoFunding = new Map<string, { oi: number; scan: number; fixed: number }>();
+    for (const [pid, ls] of linesByPromo) {
+      let fixed = 0;
+      const agg = { oi: { pw: 0, w: 0 }, scan: { pw: 0, w: 0 } };
+      for (const l of ls) {
+        const bucket = l.component_type === "Scan" ? "scan"
+          : /^(Off Invoice|Billback)/.test(l.component_type) ? "oi" : null;
+        if (!bucket || l.rate_uom === "Lump Sum" || !(l.rate > 0)) { fixed += l.planned_amount; continue; }
+        let perUnit: number | null = null;
+        if (l.rate_uom === "Each") perUnit = l.rate;
+        else {
+          const { unit, perCase } = unitPriceInfo(l.item_number);
+          if (l.rate_uom === "Case" && perCase) perUnit = l.rate / perCase;
+          else if (l.rate_uom === "Percent" && unit) perUnit = (l.rate / 100) * unit;
+        }
+        if (perUnit === null || !(perUnit > 0)) { fixed += l.planned_amount; continue; }
+        const w = l.planned_amount > 0 ? l.planned_amount : 1;
+        agg[bucket].pw += perUnit * w;
+        agg[bucket].w += w;
+      }
+      const oi = agg.oi.w > 0 ? +(agg.oi.pw / agg.oi.w).toFixed(3) : 0;
+      const scan = agg.scan.w > 0 ? +(agg.scan.pw / agg.scan.w).toFixed(3) : 0;
+      fixed = Math.round(fixed);
+      if (oi > 0 || scan > 0 || fixed > 0) promoFunding.set(pid, { oi, scan, fixed });
+    }
+
     plan = {
       year,
       priorYear: bookYear,
@@ -245,6 +292,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         upcs: [...(promoUpcs.get(p.promo_id) ?? [])],
         perf: p.performance_type, start: p.start_date, end: p.end_date,
         planned: Math.round(p.planned_amount),
+        funding: promoFunding.get(p.promo_id),
       })),
       scopeActive: gscope.active,
     };

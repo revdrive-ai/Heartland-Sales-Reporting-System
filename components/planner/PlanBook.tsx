@@ -228,6 +228,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       customer_id: p.customer_id, customer: p.customer,
       brand: p.brand, title: p.title, perf: p.perf,
       upcs: p.upcs.length ? p.upcs : undefined, // items via the crosswalk, when known
+      funding: p.funding, // O/I + scan rates and fixed fees, normalized from the Telus lines
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
       // scored like an import: the tactic's measured lift, else the brand average
       lift_pct: plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
