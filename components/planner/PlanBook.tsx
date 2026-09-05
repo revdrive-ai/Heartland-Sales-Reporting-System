@@ -745,8 +745,8 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="c-head">
-          <h3>Monthly spend — {year} plan vs FY{plan.priorYear} book</h3>
-          <span className="sub">bars green where the plan funds a month at least as hard as last year · follows the filters</span>
+          <h3>Monthly spend — {year} plan vs FY{plan.priorYear} actuals</h3>
+          <span className="sub">plan bars green where the month is funded at least as hard as last year&apos;s actual spend · plan bars follow the filters</span>
         </div>
         <div className="chartbox" style={{ height: 240 }}>
           <Chart
@@ -759,12 +759,19 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                   type: "bar" as const,
                   label: `${year} plan`,
                   data: planByMonth,
-                  backgroundColor: planByMonth.map((v, m) => v >= plan.priorPlannedByMonth[m] ? cssToken("--good") : cssToken("--bad")),
+                  backgroundColor: planByMonth.map((v, m) => v >= data.actualByMonth[m] ? cssToken("--good") : cssToken("--bad")),
+                  borderRadius: 5,
+                },
+                {
+                  type: "bar" as const,
+                  label: `FY${plan.priorYear} actuals (paced to ${data.meta.snapshot_date})`,
+                  data: data.actualByMonth,
+                  backgroundColor: cssToken("--ink-3"),
                   borderRadius: 5,
                 },
                 {
                   type: "line" as const,
-                  label: `FY${plan.priorYear} book`,
+                  label: `FY${plan.priorYear} book (planned)`,
                   data: plan.priorPlannedByMonth,
                   borderColor: cssToken("--ink-3"),
                   backgroundColor: cssToken("--ink-3"),
@@ -779,11 +786,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           />
         </div>
         <div className="note">
-          ◇ A red month is funded lighter than the same month of the FY{plan.priorYear} book in this scope — room for
-          an event, or a deliberate cut. Amounts spread evenly across each event&apos;s window. Base and lift figures come
-          from the NIQ history at each event&apos;s customer — its items where the crosswalk knows them, else the brand
-          run-rate. The customer, brand and item selectors above narrow the whole page, so the plan reads at any
-          level down to a single UPC; the Base &amp; Lift Lab&apos;s plan view carries the week-by-week deep dive.
+          ◇ Gray bars are FY{plan.priorYear} <b>actual</b> trade spend, paced evenly across each promotion&apos;s elapsed
+          window to the {data.meta.snapshot_date} snapshot — months after the snapshot have little or no actuals yet,
+          so late-year comparisons lean on the dashed booked line instead. A red plan bar funds a month lighter than
+          last year&apos;s actuals — room for an event, or a deliberate cut. The prior-year series cover the whole scope;
+          the plan bars follow the customer, brand and item selectors. The Base &amp; Lift Lab&apos;s plan view carries the
+          week-by-week deep dive.
         </div>
       </div>
 
