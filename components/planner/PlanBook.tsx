@@ -537,6 +537,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                 <th style={{ textAlign: "right" }} title="Brand weekly base run-rate in scope × weeks (NIQ, latest 52 weeks)">Base units</th>
                 <th style={{ textAlign: "right" }} title="Expected % lift over base — click to override">Pred. lift</th>
                 <th style={{ textAlign: "right" }} title="Base × lift">Incr. vol</th>
+                <th style={{ textAlign: "right" }} title="Off-invoice rate ($/unit) — paid on every unit moved in the window">O/I</th>
+                <th style={{ textAlign: "right" }} title="Scan rate ($/unit) — paid per unit scanned at the promo price">Scan</th>
+                <th style={{ textAlign: "right" }} title="Fixed fees ($) — display, ad, or slotting">Fixed</th>
                 <th style={{ textAlign: "right" }}>Spend</th>
                 <th style={{ textAlign: "right" }} title={`Incremental retail $ ÷ trade spend — guardrail ${ROI_GUARDRAIL}×`}>ROI</th>
                 <th></th>
@@ -578,25 +581,27 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                       />
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.incr === null ? "—" : Math.round(c.incr).toLocaleString()}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                      {e.funding && e.funding.oi > 0 ? `$${e.funding.oi.toFixed(2)}` : "—"}
+                    </td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                      {e.funding && e.funding.scan > 0 ? `$${e.funding.scan.toFixed(2)}` : "—"}
+                    </td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
+                      {e.funding && e.funding.fixed > 0 ? fmtExact(e.funding.fixed) : "—"}
+                    </td>
                     <td
-                      style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                      style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
                       title={e.funding && (e.funding.oi > 0 || e.funding.scan > 0)
                         ? "Rate-funded — spend recomputes when the lift changes (per-unit funding pays on units moved)"
                         : "Fixed commitment — lift changes don't move this spend"}
                     >
                       {fmtExact(e.spend)}
-                      {e.funding && (e.funding.oi > 0 || e.funding.scan > 0) && (
+                      {e.funding && (e.funding.oi > 0 || e.funding.scan > 0) ? (
                         <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
+                      ) : (
+                        <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}>committed total</div>
                       )}
-                      <div style={{ fontSize: 10.5, color: "var(--ink-3)", whiteSpace: "nowrap", fontWeight: 600 }}>
-                        {e.funding && (e.funding.oi > 0 || e.funding.scan > 0 || e.funding.fixed > 0)
-                          ? [
-                              e.funding.oi > 0 ? `OI $${e.funding.oi.toFixed(2)}/u` : null,
-                              e.funding.scan > 0 ? `Scan $${e.funding.scan.toFixed(2)}/u` : null,
-                              e.funding.fixed > 0 ? `Fixed ${fmtExact(e.funding.fixed)}` : null,
-                            ].filter(Boolean).join(" · ")
-                          : "committed total"}
-                      </div>
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi)}</td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }}>
@@ -609,7 +614,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                 );
               })}
               {visible.length === 0 && (
-                <tr><td colSpan={10} style={{ padding: "18px 16px", color: "var(--ink-3)", fontSize: 12.5 }}>
+                <tr><td colSpan={13} style={{ padding: "18px 16px", color: "var(--ink-3)", fontSize: 12.5 }}>
                   The {year} book is empty
                   {itemSel ? ` for ${itemLabel(itemSel)}` : brandChip !== "All brands" ? ` for ${brandChip}` : ""}
                   {custSel ? ` at ${plan.customers.find((c) => c.id === custSel)?.name ?? custSel}` : ""}. Start with
