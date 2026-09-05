@@ -30,8 +30,32 @@ const csvEsc = (v: string | number) => {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
 
+type ExportAdjustment = {
+  upc: string;               // "ALL" = every item of the brand
+  pct: number;               // signed % impact on base volume
+  from: string;              // ISO effective window
+  to: string;
+};
+
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
+  return buildExport(Object.fromEntries(sp.entries()), []);
+}
+
+/** POST carries the browser-local planner adjustments so the export can add
+    adjusted-volume and Δ% rows — they live in localStorage, not on the server. */
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const adjustments: ExportAdjustment[] = Array.isArray(body.adjustments)
+    ? body.adjustments
+        .filter((a: Record<string, unknown>) => typeof a.pct === "number" && typeof a.from === "string" && typeof a.to === "string")
+        .map((a: { upc?: string; pct: number; from: string; to: string }) => ({ upc: a.upc ?? "ALL", pct: a.pct, from: a.from, to: a.to }))
+    : [];
+  return buildExport(body, adjustments);
+}
+
+async function buildExport(params: Record<string, string | undefined>, adjustments: ExportAdjustment[]) {
+  const sp = { get: (k: string) => params[k] ?? null };
   const [markets, allItems, gscope] = await Promise.all([listMarkets(), listItems(), getScope()]);
   const allowed = gscope.active ? markets.filter((m) => gscope.marketCodes.includes(m.code)) : markets;
 
@@ -133,20 +157,57 @@ export async function GET(req: NextRequest) {
   }
   const periodProj = periods.map((p) => planningYear && p.weeks.some((w) => yearAgoWeek(w) > latestWeek));
 
+  // planner adjustments (plan years only): factor per item per week — an
+  // item-level adjustment applies exactly to its item row, "ALL" to every row
+  const withAdj = planningYear && adjustments.length > 0;
+  const adjFactor = (upc: string, w: string): number => {
+    const wt = utcOf(w);
+    let f = 1;
+    for (const a of adjustments) {
+      if (a.upc !== "ALL" && a.upc !== upc) continue;
+      if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
+      f *= 1 + a.pct / 100;
+    }
+    return f;
+  };
+
   // table
-  const header = ["Brand", "UPC", "Item", ...periods.map((p, i) => p.label + (periodProj[i] ? " *" : "")), "Total"];
+  const header = ["Brand", "UPC", "Item", ...(withAdj ? ["Series"] : []), ...periods.map((p, i) => p.label + (periodProj[i] ? " *" : "")), "Total"];
   const rows: (string | number)[][] = [];
   const colTot = Array(periods.length).fill(0);
+  const colTotAdj = Array(periods.length).fill(0);
+  const pct1 = (adj: number, plain: number) => (plain > 0 ? +(((adj - plain) / plain) * 100).toFixed(1) : 0);
   for (const it of items) {
-    const vals = periods.map((p, i) => {
-      let s = 0;
-      for (const w of p.weeks) s += valueAt(it.upc, w).v;
-      colTot[i] += s;
-      return Math.round(s);
+    const vals: number[] = [], adjVals: number[] = [];
+    periods.forEach((p, i) => {
+      let s = 0, sa = 0;
+      for (const w of p.weeks) {
+        const { v } = valueAt(it.upc, w);
+        s += v;
+        sa += v * adjFactor(it.upc, w);
+      }
+      colTot[i] += s; colTotAdj[i] += sa;
+      vals.push(s); adjVals.push(sa);
     });
-    rows.push([brand, it.upc, it.name, ...vals, vals.reduce((a, v) => a + v, 0)]);
+    const tot = vals.reduce((a, v) => a + v, 0);
+    if (withAdj) {
+      const totA = adjVals.reduce((a, v) => a + v, 0);
+      rows.push([brand, it.upc, it.name, "Plan base", ...vals.map(Math.round), Math.round(tot)]);
+      rows.push([brand, it.upc, it.name, "Adjusted", ...adjVals.map(Math.round), Math.round(totA)]);
+      rows.push([brand, it.upc, it.name, "Δ %", ...adjVals.map((v, i) => pct1(v, vals[i])), pct1(totA, tot)]);
+    } else {
+      rows.push([brand, it.upc, it.name, ...vals.map(Math.round), Math.round(tot)]);
+    }
   }
-  rows.push([brand, "", `TOTAL ${brand}`, ...colTot.map(Math.round), Math.round(colTot.reduce((a, v) => a + v, 0))]);
+  const gTot = colTot.reduce((a, v) => a + v, 0);
+  if (withAdj) {
+    const gTotA = colTotAdj.reduce((a, v) => a + v, 0);
+    rows.push([brand, "", `TOTAL ${brand}`, "Plan base", ...colTot.map(Math.round), Math.round(gTot)]);
+    rows.push([brand, "", `TOTAL ${brand}`, "Adjusted", ...colTotAdj.map(Math.round), Math.round(gTotA)]);
+    rows.push([brand, "", `TOTAL ${brand}`, "Δ %", ...colTotAdj.map((v, i) => pct1(v, colTot[i])), pct1(gTotA, gTot)]);
+  } else {
+    rows.push([brand, "", `TOTAL ${brand}`, ...colTot.map(Math.round), Math.round(gTot)]);
+  }
 
   const meta = [
     ["Heartland — base units export"],
@@ -155,13 +216,15 @@ export async function GET(req: NextRequest) {
     ["Timeframe", `${winLabel} · ${weeks[0]} → ${weeks[weeks.length - 1]}`],
     ["Granularity", gran === "week" ? "Weekly (NIQ week-ending Saturdays)" : "Monthly (weeks grouped by their Saturday's month)"],
     ["Basis", planningYear
-      ? "Plan year: year-ago NIQ base carried in as far as actualized; * periods are seasonality-shaped projection. Planner adjustments are not applied."
+      ? `Plan year: year-ago NIQ base carried in as far as actualized; * periods are seasonality-shaped projection.${withAdj
+          ? ` Adjusted rows apply ${adjustments.length} planner adjustment${adjustments.length === 1 ? "" : "s"} from this browser; Δ % = adjusted vs plan base.`
+          : " Planner adjustments are not applied."}`
       : "Measured NIQ base units."],
     ["Exported", new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC"],
     [],
   ];
 
-  const fname = `base-units_${mkt}_${brand.replace(/\s+/g, "")}_${win}_${gran}ly`;
+  const fname = `base-units_${mkt}_${brand.replace(/\s+/g, "")}_${win}_${gran}ly${withAdj ? "_adjusted" : ""}`;
   if (fmt === "csv") {
     const csv = [...meta, header, ...rows].map((r) => r.map(csvEsc).join(",")).join("\n");
     return new NextResponse(csv, {
@@ -172,7 +235,7 @@ export async function GET(req: NextRequest) {
     });
   }
   const ws = XLSX.utils.aoa_to_sheet([...meta, header, ...rows]);
-  ws["!cols"] = [{ wch: 10 }, { wch: 14 }, { wch: 46 }, ...periods.map(() => ({ wch: gran === "week" ? 11 : 10 })), { wch: 10 }];
+  ws["!cols"] = [{ wch: 10 }, { wch: 14 }, { wch: 46 }, ...(withAdj ? [{ wch: 10 }] : []), ...periods.map(() => ({ wch: gran === "week" ? 11 : 10 })), { wch: 10 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Base units");
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;

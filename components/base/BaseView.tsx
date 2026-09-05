@@ -148,6 +148,7 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [expOpen, setExpOpen] = useState(false);
   const [expGran, setExpGran] = useState<"week" | "month">("week");
   const [expFmt, setExpFmt] = useState<"csv" | "xlsx">("xlsx");
+  const [expAdj, setExpAdj] = useState(true); // include adjusted + Δ% rows (plan years)
   const toggleIns = () => {
     setInsHide((h) => {
       try { localStorage.setItem(INS_KEY, h ? "0" : "1"); } catch {}
@@ -1283,10 +1284,30 @@ export default function BaseView({ data }: { data: BaseData }) {
                   </select>
                 </div>
               </div>
+              {data.planningYear && (
+                <div className="f-row" style={{ marginTop: 4 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: brandAdjs.length ? "pointer" : "default" }}>
+                    <input
+                      type="checkbox"
+                      checked={expAdj && brandAdjs.length > 0}
+                      disabled={brandAdjs.length === 0}
+                      onChange={(e) => setExpAdj(e.target.checked)}
+                    />
+                    Add adjusted volume + Δ% rows
+                    <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>
+                      {brandAdjs.length
+                        ? `(${brandAdjs.length} planner adjustment${brandAdjs.length === 1 ? "" : "s"} on ${data.brand} in this browser)`
+                        : "(no planner adjustments recorded for this selection)"}
+                    </span>
+                  </label>
+                </div>
+              )}
               <div className="hint" style={{ marginTop: 2 }}>
                 One row per item with {expGran === "week" ? "week" : "month"} columns and totals.
                 {data.planningYear
-                  ? " Plan year: the year-ago base carries in as far as it has actualized; * columns are the seasonality-shaped projection. Planner adjustments are not applied."
+                  ? expAdj && brandAdjs.length
+                    ? " Plan year: * columns are the seasonality-shaped projection. Each item gets three rows — Plan base, Adjusted (planner adjustments applied, item-level ones exactly to their item), and Δ% — so what changed reads straight off the file."
+                    : " Plan year: the year-ago base carries in as far as it has actualized; * columns are the seasonality-shaped projection. Planner adjustments are not applied."
                   : " Measured NIQ base units for the selected window."}
               </div>
             </div>
@@ -1295,11 +1316,25 @@ export default function BaseView({ data }: { data: BaseData }) {
                 <button className="btn ghost" onClick={() => setExpOpen(false)}>Cancel</button>
                 <button
                   className="btn primary"
-                  onClick={() => {
-                    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, item: data.item, win: data.win, gran: expGran, fmt: expFmt });
+                  onClick={async () => {
+                    const payload: Record<string, unknown> = {
+                      mkt: data.mkt, brand: data.brand, item: data.item, win: data.win, gran: expGran, fmt: expFmt,
+                    };
+                    if (data.planningYear && expAdj && brandAdjs.length) {
+                      payload.adjustments = brandAdjs.map((a) => ({ upc: a.upc, pct: a.pct, from: a.from, to: a.to }));
+                    }
+                    const res = await fetch("/api/base/export", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(payload),
+                    });
+                    const blob = await res.blob();
+                    const m = (res.headers.get("Content-Disposition") ?? "").match(/filename="([^"]+)"/);
                     const a = document.createElement("a");
-                    a.href = `/api/base/export?${p.toString()}`;
+                    a.href = URL.createObjectURL(blob);
+                    a.download = m?.[1] ?? "base-units-export";
                     a.click();
+                    URL.revokeObjectURL(a.href);
                     setExpOpen(false);
                   }}
                 >
