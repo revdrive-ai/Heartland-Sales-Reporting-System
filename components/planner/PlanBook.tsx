@@ -239,6 +239,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       brand: p.brand, title: p.title, perf: p.perf,
       upcs: p.upcs.length ? p.upcs : undefined, // items via the crosswalk, when known
       funding: p.funding, // O/I + scan rates and fixed fees, normalized from the Telus lines
+      item_rates: p.item_rates, // per-deal-line $/unit rates — editable in the drill-down
       source_promo_id: p.promo_id, // click the row to drill into the FY book's component lines
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
       // scored like an import: the tactic's measured lift, else the brand average
@@ -312,23 +313,63 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     rd.readAsText(file);
   };
 
-  /* Lift edits move rate-funded spend with them: per-unit funding pays on the
-     units moved, so more lift = more units = more trade dollars. Events whose
-     spend is a fixed commitment (carried/imported, no rates) keep it — and so
-     does an event whose base can't be scored (no NIQ divisions), since a zero
-     base would collapse its spend to just the fixed fees. */
+  /* Rate-funded spend: per-unit funding pays on the units moved, so lift and
+     rate edits move trade dollars. Events with per-item rates score each deal
+     line on its own item's base at the event's customer; events with only a
+     blended rate score on the whole event base. A fixed commitment, or an
+     event whose base can't be scored (no NIQ divisions), keeps its spend —
+     a zero base must not collapse it to just the fixed fees. */
+  const recomputeSpend = (e: PlanEvent, lift: number | null): number | undefined => {
+    const mult = weeksOf(e) * (1 + (lift ?? 0) / 100);
+    if (e.item_rates?.length) {
+      let spend = e.funding?.fixed ?? 0;
+      let anyBase = false;
+      for (const r of e.item_rates) {
+        const wk = (plan.telusUpcs[r.item_number] ?? [])
+          .reduce((a, u) => a + itemWeeklyBase(plan, e.customer_id, u, 0), 0);
+        if (wk > 0) anyBase = true;
+        spend += wk * mult * r.rate;
+      }
+      return anyBase ? Math.round(spend) : undefined;
+    }
+    if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
+      const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
+      if (wkBase > 0) return Math.round(wkBase * mult * (e.funding.oi + e.funding.scan) + e.funding.fixed);
+    }
+    return undefined;
+  };
+
   const setLift = (e: PlanEvent, raw: string) => {
     const v = parseFloat(raw);
     const lift = isNaN(v) ? null : v;
-    const patch: Partial<PlanEvent> = { lift_pct: lift };
-    if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
-      const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
-      if (wkBase > 0) {
-        const units = wkBase * weeksOf(e) * (1 + (lift ?? 0) / 100);
-        patch.spend = Math.round(units * (e.funding.oi + e.funding.scan) + e.funding.fixed);
-      }
+    const spend = recomputeSpend(e, lift);
+    persistSoon(latestEvents.current.map((x) =>
+      x.id === e.id ? { ...x, lift_pct: lift, ...(spend !== undefined ? { spend } : {}) } : x));
+  };
+
+  /** Edit one deal line's $/unit rate in the drill-down — spend follows. */
+  const setItemRate = (e: PlanEvent, line_id: string, raw: string) => {
+    const v = parseFloat(raw);
+    const rate = isNaN(v) ? 0 : Math.max(0, v);
+    const item_rates = (e.item_rates ?? []).map((r) => (r.line_id === line_id ? { ...r, rate } : r));
+    const next = { ...e, item_rates };
+    const spend = recomputeSpend(next, next.lift_pct);
+    persistSoon(latestEvents.current.map((x) =>
+      x.id === e.id ? { ...next, ...(spend !== undefined ? { spend } : {}) } : x));
+  };
+
+  /** The O/I and Scan columns: per-item rates show a single value when the
+      deal's lines agree and "various" when they differ — open the row to
+      edit each line. Blended-only events show the blend. */
+  const rateCell = (e: PlanEvent, kind: "oi" | "scan") => {
+    const rs = (e.item_rates ?? []).filter((r) => r.kind === kind);
+    if (rs.length) {
+      const vals = [...new Set(rs.map((r) => r.rate.toFixed(2)))];
+      return vals.length === 1
+        ? `$${vals[0]}`
+        : <span style={{ fontStyle: "italic", color: "var(--ink-2)" }} title={`${rs.length} deal lines at different rates ($${Math.min(...rs.map((r) => r.rate)).toFixed(2)}–$${Math.max(...rs.map((r) => r.rate)).toFixed(2)}) — open the row to edit each item`}>various</span>;
     }
-    persistSoon(latestEvents.current.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
+    return e.funding && e.funding[kind] > 0 ? `$${e.funding[kind].toFixed(2)}` : "—";
   };
 
   const roiCell = (roi: number | null) =>
@@ -599,10 +640,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.incr === null ? "—" : Math.round(c.incr).toLocaleString()}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                      {e.funding && e.funding.oi > 0 ? `$${e.funding.oi.toFixed(2)}` : "—"}
+                      {rateCell(e, "oi")}
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
-                      {e.funding && e.funding.scan > 0 ? `$${e.funding.scan.toFixed(2)}` : "—"}
+                      {rateCell(e, "scan")}
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                       {e.funding && e.funding.fixed > 0 ? fmtExact(e.funding.fixed) : "—"}
@@ -643,6 +684,8 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                               customer={e.customer}
                               itemLabel={itemLabel}
                               scopeWk={(u) => itemMeta.get(u)?.wk ?? 0}
+                              rates={new Map((e.item_rates ?? []).map((r) => [r.line_id, r.rate]))}
+                              onRate={(line_id, raw) => setItemRate(e, line_id, raw)}
                             />
                           </>
                         ) : e.upcs?.length ? (
@@ -767,9 +810,11 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
 /** A carried event's drill-down: the FY book's component lines joined to
     their NIQ tie — per-line rate and planned dollars from Telus, plus the
-    crosswalked NIQ item and its weekly base at the event's customer. */
+    crosswalked NIQ item and its weekly base at the event's customer. Lines
+    the carry normalized to a $/unit rate are editable here; edits move the
+    event's spend through the per-item math. */
 function CarriedLines({
-  rows, plan, customer_id, customer, itemLabel, scopeWk,
+  rows, plan, customer_id, customer, itemLabel, scopeWk, rates, onRate,
 }: {
   rows: PromoLine[] | "loading" | undefined;
   plan: PlanPayload;
@@ -777,6 +822,8 @@ function CarriedLines({
   customer: string;
   itemLabel: (u: string) => string;
   scopeWk: (u: string) => number;
+  rates: Map<string, number>;
+  onRate: (line_id: string, raw: string) => void;
 }) {
   if (rows === "loading" || rows === undefined) {
     return <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--ink-3)" }}>Loading lines…</div>;
@@ -788,7 +835,8 @@ function CarriedLines({
       <thead>
         <tr>
           <th>Component</th><th>Item (Telus)</th>
-          <th style={{ textAlign: "right" }}>Rate</th>
+          <th style={{ textAlign: "right" }}>FY rate</th>
+          <th style={{ textAlign: "right" }} title="The rate this plan pays per unit moved — edit it and the event's spend follows">Plan $/unit</th>
           <th style={{ textAlign: "right" }}>Planned</th>
           <th>NIQ tie</th>
           <th style={{ textAlign: "right" }} title="NIQ weekly base run-rate, latest 52 weeks, at this event's customer">Base at {customer}</th>
@@ -798,6 +846,7 @@ function CarriedLines({
         {rows.map((l) => {
           const upcs = plan.telusUpcs[l.item_number] ?? [];
           const wk = upcs.reduce((a, u) => a + itemWeeklyBase(plan, customer_id, u, scopeWk(u)), 0);
+          const rate = rates.get(l.line_id);
           return (
             <tr key={l.line_id}>
               <td style={td}>{l.component_type}</td>
@@ -806,6 +855,19 @@ function CarriedLines({
                 <span style={{ color: "var(--ink-3)", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11 }}> {l.item_number}</span>
               </td>
               <td style={right}>{l.rate_uom === "Lump Sum" && l.rate === 0 ? "lump sum" : `${l.rate} / ${l.rate_uom}`}</td>
+              <td style={right} onClick={(ev) => ev.stopPropagation()}>
+                {rate !== undefined ? (
+                  <input
+                    style={{ ...selStyle, width: 78, padding: "3px 7px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
+                    type="number" step="0.05" min={0}
+                    value={rate}
+                    title="This line's rate in $ per unit — edits recompute the event's spend"
+                    onChange={(ev) => onRate(l.line_id, ev.target.value)}
+                  />
+                ) : (
+                  <span title="No per-unit rate on this line — its planned dollars sit in the event's fixed fees">—</span>
+                )}
+              </td>
               <td style={right}>{fmtMoney(l.planned_amount)}</td>
               <td style={td}>
                 {upcs.length ? (

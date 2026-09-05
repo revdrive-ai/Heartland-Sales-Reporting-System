@@ -47,6 +47,7 @@ export type PlannerData = {
       title: string; customer_id: string; customer: string; brand: string; upcs: string[];
       perf: string; start: string; end: string; planned: number;
       funding?: { oi: number; scan: number; fixed: number }; // normalized from the Telus component lines
+      item_rates?: { line_id: string; item_number: string; kind: "oi" | "scan"; rate: number }[]; // per-line $/unit
     }[];
     scopeActive: boolean;
   };

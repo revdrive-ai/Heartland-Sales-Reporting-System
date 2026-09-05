@@ -257,12 +257,15 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       return { unit: null, perCase: null };
     };
     const promoFunding = new Map<string, { oi: number; scan: number; fixed: number }>();
+    type ItemRate = { line_id: string; item_number: string; kind: "oi" | "scan"; rate: number };
+    const promoItemRates = new Map<string, ItemRate[]>();
     for (const [pid, ls] of linesByPromo) {
       let fixed = 0;
       const agg = { oi: { pw: 0, w: 0 }, scan: { pw: 0, w: 0 } };
+      const rates: ItemRate[] = [];
       for (const l of ls) {
-        const bucket = l.component_type === "Scan" ? "scan"
-          : /^(Off Invoice|Billback)/.test(l.component_type) ? "oi" : null;
+        const bucket = l.component_type === "Scan" ? ("scan" as const)
+          : /^(Off Invoice|Billback)/.test(l.component_type) ? ("oi" as const) : null;
         if (!bucket || l.rate_uom === "Lump Sum" || !(l.rate > 0)) { fixed += l.planned_amount; continue; }
         let perUnit: number | null = null;
         if (l.rate_uom === "Each") perUnit = l.rate;
@@ -272,6 +275,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           else if (l.rate_uom === "Percent" && unit) perUnit = (l.rate / 100) * unit;
         }
         if (perUnit === null || !(perUnit > 0)) { fixed += l.planned_amount; continue; }
+        rates.push({ line_id: l.line_id, item_number: l.item_number, kind: bucket, rate: +perUnit.toFixed(3) });
         const w = l.planned_amount > 0 ? l.planned_amount : 1;
         agg[bucket].pw += perUnit * w;
         agg[bucket].w += w;
@@ -280,6 +284,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       const scan = agg.scan.w > 0 ? +(agg.scan.pw / agg.scan.w).toFixed(3) : 0;
       fixed = Math.round(fixed);
       if (oi > 0 || scan > 0 || fixed > 0) promoFunding.set(pid, { oi, scan, fixed });
+      if (rates.length) promoItemRates.set(pid, rates);
     }
 
     plan = {
@@ -303,6 +308,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         perf: p.performance_type, start: p.start_date, end: p.end_date,
         planned: Math.round(p.planned_amount),
         funding: promoFunding.get(p.promo_id),
+        item_rates: promoItemRates.get(p.promo_id),
       })),
       scopeActive: gscope.active,
     };
