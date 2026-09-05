@@ -72,11 +72,23 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
   planner ROI, plan gross revenue, chart price-change markers, and insights.
   A CSV of the 50 Albertsons items still unpriced has been delivered.
 
+## Shared, held plan state
+
+Planner work — plan events, budgets, planner adjustments, plan-year
+registrations, and price edits — persists **server-side** through
+`/api/state`, so changes hold until Undo carry / Clear plan removes them and
+everyone using the tool sees the same plan. Existing browser-held work lifts
+to the shared store automatically on first load. Backend: Supabase
+(`app_state`, migration `00010`) when `SUPABASE_URL` +
+`SUPABASE_SERVICE_ROLE_KEY` are set; a `data/store/` file store otherwise.
+On the Vercel deployment the Supabase env vars are required for durability —
+until they're set, the tool falls back to per-browser storage there.
+
 ## Open items
 
-- **Supabase provisioning** — migrations `00001`–`00009` are ready; plan
-  registrations, adjustments, events, budgets, and price edits currently
-  persist in browser storage behind the same client-store interface.
+- **Supabase provisioning** — migrations `00001`–`00010` are ready; setting
+  the two env vars on Vercel makes the shared plan state durable in
+  production (see above).
 - **Remaining stub views** — Promo Analysis (workflow step 4) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
   Approvals, Latest Estimate, and Sales Leader View.

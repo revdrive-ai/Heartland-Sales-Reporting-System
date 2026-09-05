@@ -13,8 +13,11 @@
   (`hhAlign`, `hhObj`, `hhWelcomeDone`).
 - **Views never touch data directly** — they import from `lib/repo/` only.
   `lib/repo/index.ts` is server-only (reads `data/nielsen/*.json.gz` via fs); call it from
-  server components and pass props down. `lib/repo/client.ts` holds browser stores
-  (localStorage, mockup key names). When Supabase exists only repo bodies change. Row
+  server components and pass props down. `lib/repo/client.ts` holds the shared stores
+  (plan events, budgets, adjustments, registrations, price edits) — server-side via
+  `/api/state` (`lib/server/appstate.ts`: Supabase when `SUPABASE_URL` +
+  `SUPABASE_SERVICE_ROLE_KEY` are set, else `data/store/` on disk), with localStorage
+  only as offline fallback + one-time legacy lift. When Supabase exists only repo bodies change. Row
   shapes are snake_case (`lib/types/db.ts`) matching `supabase/migrations/*.sql`, authored
   as files ahead of the database — keep all three in lockstep when adding tables.
 - **The Nielsen data is real**: the full ALBSCO NIQ pull (52,524 rows, 13 divisions,

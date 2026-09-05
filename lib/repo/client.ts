@@ -1,32 +1,89 @@
 "use client";
 
-// The data seam — CLIENT SIDE. Browser-held stores, mirroring the reference
-// mockup's localStorage keys, behind the same async seam as lib/repo/index.ts.
-// When Supabase lands these become table reads/writes (and the localStorage
-// keys retire), with no changes outside lib/repo/.
+// The data seam — CLIENT SIDE. These stores now live SERVER-SIDE behind
+// /api/state (lib/server/appstate.ts: Supabase when provisioned, the app's
+// data/store directory otherwise), so planner work holds across visits and
+// is shared by everyone using the tool. The browser keeps a mirror of every
+// document (hhDoc:<key>) purely as an offline fallback, and the original
+// localStorage keys are lifted to the server the first time a document is
+// read — nothing entered before the switch is lost. View components are
+// untouched: every function keeps its signature.
 
 import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
 
-const ALIGN_KEY = "hhAlign"; // same key the mockup uses
+/* ---- shared-document plumbing ---- */
+
+const lsGet = <T>(k: string): T | null => {
+  try {
+    const raw = localStorage.getItem(k);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch { return null; }
+};
+const lsSet = (k: string, v: unknown) => {
+  try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+};
+
+type Fetched<T> = { ok: true; data: T | undefined } | { ok: false };
+
+async function readShared<T>(key: string): Promise<Fetched<T>> {
+  try {
+    const r = await fetch(`/api/state/${encodeURIComponent(key)}`, { cache: "no-store" });
+    if (r.status === 404) return { ok: true, data: undefined };
+    if (!r.ok) return { ok: false };
+    return { ok: true, data: ((await r.json()) as { data: T }).data };
+  } catch { return { ok: false }; }
+}
+
+async function writeShared(key: string, data: unknown): Promise<boolean> {
+  try {
+    const r = await fetch(`/api/state/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ data }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+
+/** Read a shared document. Server first; a missing document is seeded from
+    the browser's legacy copy (one-time lift of pre-switch work); a server
+    that can't answer falls back to the browser mirror. */
+async function loadDoc<T>(key: string, legacy: () => T | null): Promise<T | null> {
+  const res = await readShared<T>(key);
+  if (!res.ok) return lsGet<T>(`hhDoc:${key}`) ?? legacy();
+  if (res.data !== undefined) {
+    lsSet(`hhDoc:${key}`, res.data); // keep the offline mirror fresh
+    return res.data;
+  }
+  const lifted = lsGet<T>(`hhDoc:${key}`) ?? legacy();
+  if (lifted !== null) void writeShared(key, lifted);
+  return lifted;
+}
+
+/** Write a shared document — server plus the browser mirror. */
+async function saveDoc(key: string, data: unknown): Promise<void> {
+  lsSet(`hhDoc:${key}`, data);
+  await writeShared(key, data);
+}
+
+/* ---- alignment key ---- */
+
+const ALIGN_KEY = "hhAlign"; // the mockup's original browser key (legacy lift)
 
 export async function getAlignment(): Promise<{ rows: AlignRow[]; version: number }> {
-  try {
-    const raw = localStorage.getItem(ALIGN_KEY);
-    if (raw) {
-      const stored = JSON.parse(raw) as { v: number; rows: AlignRow[] };
-      return { rows: stored.rows, version: stored.v };
-    }
-  } catch {}
-  return { rows: structuredClone(ALIGN_DEFAULT), version: 1 };
+  const doc = await loadDoc<{ v: number; rows: AlignRow[] }>("align", () =>
+    lsGet<{ v: number; rows: AlignRow[] }>(ALIGN_KEY)
+  );
+  return doc ? { rows: doc.rows, version: doc.v } : { rows: structuredClone(ALIGN_DEFAULT), version: 1 };
 }
 
 export async function saveAlignment(rows: AlignRow[], version: number): Promise<void> {
-  try { localStorage.setItem(ALIGN_KEY, JSON.stringify({ v: version, rows })); } catch {}
+  await saveDoc("align", { v: version, rows });
 }
 
-/* Plan-year registrations — which customers (divisions) have had their plan
-   year opened. Mirrors supabase/migrations/00005_plan_registrations.sql;
-   becomes a table upsert at swap-in time. Shape:
+/* ---- plan-year registrations ----
+   Which customers (divisions) have had their plan year opened. Mirrors
+   supabase/migrations/00005_plan_registrations.sql. Shape:
    { "<year>": { "<market_code>": "<ISO registered_at>" } } */
 
 const PLAN_KEY = "hhPlanReg";
@@ -34,7 +91,7 @@ const PLAN_KEY = "hhPlanReg";
 export type PlanRegistry = Record<string, Record<string, string>>;
 
 export async function getPlanRegistry(): Promise<PlanRegistry> {
-  try { return JSON.parse(localStorage.getItem(PLAN_KEY) ?? "{}") as PlanRegistry; } catch { return {}; }
+  return (await loadDoc<PlanRegistry>("planreg", () => lsGet<PlanRegistry>(PLAN_KEY))) ?? {};
 }
 
 /** Log a customer into a plan year (idempotent — first visit sets the date). */
@@ -42,15 +99,18 @@ export async function registerPlanYear(market_code: string, year: number): Promi
   const reg = await getPlanRegistry();
   const y = String(year);
   reg[y] = reg[y] ?? {};
-  if (!reg[y][market_code]) reg[y][market_code] = new Date().toISOString();
-  try { localStorage.setItem(PLAN_KEY, JSON.stringify(reg)); } catch {}
+  if (!reg[y][market_code]) {
+    reg[y][market_code] = new Date().toISOString();
+    await saveDoc("planreg", reg);
+  }
   return reg;
 }
 
-/* Planner adjustments — per item x customer x plan year, the levers a planner
-   pulls on the projected base: distribution gained/lost, a base price change,
-   or a recent-trend override. pct is the expected % impact on base volume in
-   the effective window. Mirrors supabase/migrations/00006_plan_adjustments.sql. */
+/* ---- planner adjustments ----
+   Per item x customer x plan year, the levers a planner pulls on the
+   projected base. One shared document per customer x year so planners
+   working different scopes never overwrite each other. Mirrors
+   supabase/migrations/00006_plan_adjustments.sql. */
 
 const ADJ_KEY = "hhPlanAdj";
 
@@ -68,32 +128,38 @@ export type PlanAdjustment = {
   created_at: string;
 };
 
-async function readAdjs(): Promise<PlanAdjustment[]> {
-  try { return JSON.parse(localStorage.getItem(ADJ_KEY) ?? "[]") as PlanAdjustment[]; } catch { return []; }
+const adjKey = (market_code: string, plan_year: number) => `adj:${market_code}:${plan_year}`;
+
+async function readAdjs(market_code: string, plan_year: number): Promise<PlanAdjustment[]> {
+  return (
+    (await loadDoc<PlanAdjustment[]>(adjKey(market_code, plan_year), () => {
+      const old = lsGet<PlanAdjustment[]>(ADJ_KEY);
+      const mine = old?.filter((a) => a.market_code === market_code && a.plan_year === plan_year);
+      return mine?.length ? mine : null;
+    })) ?? []
+  );
 }
-const forScope = (all: PlanAdjustment[], market_code: string, plan_year: number) =>
-  all.filter((a) => a.market_code === market_code && a.plan_year === plan_year);
 
 export async function getPlanAdjustments(market_code: string, plan_year: number): Promise<PlanAdjustment[]> {
-  return forScope(await readAdjs(), market_code, plan_year);
+  return readAdjs(market_code, plan_year);
 }
 
 export async function savePlanAdjustment(adj: PlanAdjustment): Promise<PlanAdjustment[]> {
-  const all = await readAdjs();
+  const all = await readAdjs(adj.market_code, adj.plan_year);
   all.push(adj);
-  try { localStorage.setItem(ADJ_KEY, JSON.stringify(all)); } catch {}
-  return forScope(all, adj.market_code, adj.plan_year);
+  await saveDoc(adjKey(adj.market_code, adj.plan_year), all);
+  return all;
 }
 
 export async function deletePlanAdjustment(id: string, market_code: string, plan_year: number): Promise<PlanAdjustment[]> {
-  const all = (await readAdjs()).filter((a) => a.id !== id);
-  try { localStorage.setItem(ADJ_KEY, JSON.stringify(all)); } catch {}
-  return forScope(all, market_code, plan_year);
+  const all = (await readAdjs(market_code, plan_year)).filter((a) => a.id !== id);
+  await saveDoc(adjKey(market_code, plan_year), all);
+  return all;
 }
 
-/* Plan-year promotion events — the forward book the Promotion Planner builds
-   for 2027+ before Telus has it: entered by hand, imported from the CSV
-   template, or carried forward from the prior year's Telus book. Mirrors
+/* ---- plan-year promotion events ----
+   The forward book the Promotion Planner builds for 2027+ before Telus has
+   it. One shared document per plan year. Mirrors
    supabase/migrations/00007_plan_events.sql. */
 
 const EVT_KEY = "hhPlanEvents";
@@ -117,50 +183,60 @@ export type PlanEvent = {
   funding?: { oi: number; scan: number; fixed: number };  // $/unit rates + fixed fees behind spend
 };
 
-async function readEvents(): Promise<PlanEvent[]> {
-  try { return JSON.parse(localStorage.getItem(EVT_KEY) ?? "[]") as PlanEvent[]; } catch { return []; }
+const evtKey = (plan_year: number) => `events:${plan_year}`;
+
+async function readYearEvents(plan_year: number): Promise<PlanEvent[]> {
+  return (
+    (await loadDoc<PlanEvent[]>(evtKey(plan_year), () => {
+      const old = lsGet<PlanEvent[]>(EVT_KEY);
+      const mine = old?.filter((e) => e.plan_year === plan_year);
+      return mine?.length ? mine : null;
+    })) ?? []
+  );
 }
-const yearEvents = (all: PlanEvent[], plan_year: number) => all.filter((e) => e.plan_year === plan_year);
+
+async function writeYearEvents(plan_year: number, evts: PlanEvent[]): Promise<PlanEvent[]> {
+  await saveDoc(evtKey(plan_year), evts);
+  return evts;
+}
 
 export async function getPlanEvents(plan_year: number): Promise<PlanEvent[]> {
-  return yearEvents(await readEvents(), plan_year);
+  return readYearEvents(plan_year);
 }
 
 export async function addPlanEvents(evts: PlanEvent[]): Promise<PlanEvent[]> {
-  const all = await readEvents();
+  const plan_year = evts[0]?.plan_year;
+  if (plan_year === undefined) return [];
+  const all = await readYearEvents(plan_year);
   all.push(...evts);
-  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
-  return yearEvents(all, evts[0]?.plan_year ?? 0);
+  return writeYearEvents(plan_year, all);
 }
 
 export async function updatePlanEvent(id: string, plan_year: number, patch: Partial<PlanEvent>): Promise<PlanEvent[]> {
-  const all = await readEvents();
+  const all = await readYearEvents(plan_year);
   const i = all.findIndex((e) => e.id === id);
   if (i >= 0) all[i] = { ...all[i], ...patch };
-  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
-  return yearEvents(all, plan_year);
+  return writeYearEvents(plan_year, all);
 }
 
 export async function deletePlanEvent(id: string, plan_year: number): Promise<PlanEvent[]> {
-  const all = (await readEvents()).filter((e) => e.id !== id);
-  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
-  return yearEvents(all, plan_year);
+  const all = (await readYearEvents(plan_year)).filter((e) => e.id !== id);
+  return writeYearEvents(plan_year, all);
 }
 
 /** Reset a plan year — all of it, or only the events of one origin
     (e.g. origin "carry" undoes a carry-forward and keeps manual work). */
 export async function clearPlanEvents(plan_year: number, origin?: PlanEvent["origin"]): Promise<PlanEvent[]> {
-  const all = (await readEvents()).filter(
-    (e) => e.plan_year !== plan_year || (origin !== undefined && e.origin !== origin)
+  const all = (await readYearEvents(plan_year)).filter(
+    (e) => origin !== undefined && e.origin !== origin
   );
-  try { localStorage.setItem(EVT_KEY, JSON.stringify(all)); } catch {}
-  return yearEvents(all, plan_year);
+  return writeYearEvents(plan_year, all);
 }
 
-/* Price edits — per-item dated list-price changes entered in the Price List
-   screen: a new unit/case price with an effective date and a note. Overlaid
-   on the workbook-ingested fixture everywhere prices are read client-side.
-   Mirrors rows with source 'manual' in
+/* ---- price edits ----
+   Per-item dated list-price changes entered in the Price List screen,
+   overlaid on the workbook-ingested fixture everywhere prices are read
+   client-side. Mirrors rows with source 'manual' in
    supabase/migrations/00009_price_list.sql. */
 
 const PRICE_KEY = "hhPriceEdits";
@@ -176,39 +252,49 @@ export type PriceEdit = {
   created_at: string;
 };
 
+async function readPriceEdits(): Promise<PriceEdit[]> {
+  return (
+    (await loadDoc<PriceEdit[]>("priceedits", () => {
+      const old = lsGet<PriceEdit[]>(PRICE_KEY);
+      return old?.length ? old : null;
+    })) ?? []
+  );
+}
+
 export async function getPriceEdits(): Promise<PriceEdit[]> {
-  try { return JSON.parse(localStorage.getItem(PRICE_KEY) ?? "[]") as PriceEdit[]; } catch { return []; }
+  return readPriceEdits();
 }
 
 export async function addPriceEdit(e: PriceEdit): Promise<PriceEdit[]> {
-  const all = await getPriceEdits();
+  const all = await readPriceEdits();
   all.push(e);
-  try { localStorage.setItem(PRICE_KEY, JSON.stringify(all)); } catch {}
+  await saveDoc("priceedits", all);
   return all;
 }
 
 export async function deletePriceEdit(id: string): Promise<PriceEdit[]> {
-  const all = (await getPriceEdits()).filter((e) => e.id !== id);
-  try { localStorage.setItem(PRICE_KEY, JSON.stringify(all)); } catch {}
+  const all = (await readPriceEdits()).filter((e) => e.id !== id);
+  await saveDoc("priceedits", all);
   return all;
 }
 
-/* Plan-year trade budget — one number per plan year + scope, editable on the
-   planner's spend bar; defaults to the prior year's booked total. */
+/* ---- plan-year trade budget ----
+   One number per plan year + scope, editable on the planner's spend bar;
+   defaults to the prior year's booked total. One shared document holds the
+   whole map — the values are single numbers, so contention is negligible. */
 
 const BUDGET_KEY = "hhPlanBudget";
 
+async function readBudgets(): Promise<Record<string, number>> {
+  return (await loadDoc<Record<string, number>>("budget", () => lsGet<Record<string, number>>(BUDGET_KEY))) ?? {};
+}
+
 export async function getPlanBudget(key: string): Promise<number | null> {
-  try {
-    const map = JSON.parse(localStorage.getItem(BUDGET_KEY) ?? "{}") as Record<string, number>;
-    return map[key] ?? null;
-  } catch { return null; }
+  return (await readBudgets())[key] ?? null;
 }
 
 export async function setPlanBudget(key: string, value: number): Promise<void> {
-  try {
-    const map = JSON.parse(localStorage.getItem(BUDGET_KEY) ?? "{}") as Record<string, number>;
-    map[key] = value;
-    localStorage.setItem(BUDGET_KEY, JSON.stringify(map));
-  } catch {}
+  const map = await readBudgets();
+  map[key] = value;
+  await saveDoc("budget", map);
 }
