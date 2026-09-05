@@ -95,6 +95,7 @@ const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";
 const LANES_KEY = "hhShowLanes"; // default on
 const INS_KEY = "hhInsightsHide";
+const ENG_KEY = "hhLiftEngineHide";
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -144,6 +145,13 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [engDepth, setEngDepth] = useState("20");
   const [engTactic, setEngTactic] = useState("Feature");
   const [insHide, setInsHide] = useState(false); // key-insights card collapsed
+  const [engHide, setEngHide] = useState(false); // lift engine + predictor collapsed
+  const toggleEng = () => {
+    setEngHide((h) => {
+      try { localStorage.setItem(ENG_KEY, h ? "0" : "1"); } catch {}
+      return !h;
+    });
+  };
   // base-units export dialog
   const [expOpen, setExpOpen] = useState(false);
   const [expGran, setExpGran] = useState<"week" | "month">("week");
@@ -166,6 +174,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       setShowPY(localStorage.getItem(PY_KEY) === "1");
       setShowLanes(localStorage.getItem(LANES_KEY) !== "0");
       setInsHide(localStorage.getItem(INS_KEY) === "1");
+      setEngHide(localStorage.getItem(ENG_KEY) === "1");
     } catch {}
   }, []);
 
@@ -885,7 +894,133 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       )}
 
-      {data.liftEngine && (() => {
+      {data.plan && (
+      <div className="card" style={{ padding: 0, marginTop: 16 }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <b>Planner adjustments — {data.win}</b>
+          <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
+            {marketName} · {data.brand} · distribution, base price and trend levers on the plan base
+          </span>
+        </div>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <select style={selStyle} value={aUpc} onChange={(e) => setAUpc(e.target.value)} title="Which item the adjustment applies to">
+            <option value="ALL">All {data.brand} items</option>
+            {data.items.map((i) => (
+              <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
+            ))}
+          </select>
+          <select style={selStyle} value={aKind} onChange={(e) => setAKind(e.target.value as PlanAdjustment["kind"])}>
+            <option value="distribution">Distribution change</option>
+            <option value="price">Base price change</option>
+            <option value="trend">Trend override</option>
+          </select>
+          <input
+            style={{ ...selStyle, width: 110 }}
+            type="number"
+            step="0.5"
+            placeholder="Impact %"
+            title="Expected % impact on base volume — negative for a loss (e.g. -12 for lost distribution in the largest stores)"
+            value={aPct}
+            onChange={(e) => setAPct(e.target.value)}
+          />
+          <input style={{ ...selStyle, width: 140 }} type="date" value={aFrom} onChange={(e) => setAFrom(e.target.value)} title="Takes effect" />
+          <span style={{ color: "var(--ink-3)", fontSize: 12 }}>→</span>
+          <input style={{ ...selStyle, width: 140 }} type="date" value={aTo} onChange={(e) => setATo(e.target.value)} title="Ends" />
+          <input
+            style={{ ...selStyle, flex: "1 1 200px", minWidth: 160 }}
+            placeholder="Why — e.g. lost distribution in largest stores, price increase in April…"
+            value={aNote}
+            onChange={(e) => setANote(e.target.value)}
+          />
+          <button
+            className="btn"
+            style={{ ...selStyle, cursor: "pointer", opacity: parseFloat(aPct) ? 1 : 0.5 }}
+            onClick={addAdj}
+            disabled={!parseFloat(aPct)}
+          >
+            + Add adjustment
+          </button>
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th><th>Kind</th><th style={{ textAlign: "right" }}>Impact</th>
+                <th>Effective</th><th>Note</th><th>Added</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {brandAdjs.map((a) => {
+                const itemName = a.upc === "ALL" ? `All ${a.brand} items`
+                  : data.items.find((i) => i.upc === a.upc)?.name ?? a.upc;
+                const kindLabel = a.kind === "distribution" ? "Distribution" : a.kind === "price" ? "Base price" : "Trend";
+                const share = a.upc !== "ALL" && data.item === "ALL" ? data.plan!.itemShare[a.upc] ?? 0 : null;
+                return (
+                  <tr key={a.id}>
+                    <td style={{ padding: "9px 14px" }}>
+                      <b>{itemName.length > 44 ? itemName.slice(0, 43) + "…" : itemName}</b>
+                      {share !== null && (
+                        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{(share * 100).toFixed(1)}% of brand base</div>
+                      )}
+                    </td>
+                    <td style={{ padding: "9px 14px" }}>{kindLabel}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: a.pct >= 0 ? "var(--good)" : "var(--bad)" }}>
+                      {a.pct >= 0 ? "+" : "−"}{Math.abs(a.pct)}%
+                    </td>
+                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.from} → {a.to}</td>
+                    <td style={{ padding: "9px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>{a.note || "—"}</td>
+                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontSize: 12 }}>{a.created_at.slice(0, 10)}</td>
+                    <td style={{ padding: "9px 14px" }}>
+                      <span
+                        className="minichip"
+                        style={{ cursor: "pointer" }}
+                        title="Remove this adjustment"
+                        onClick={() => deletePlanAdjustment(a.id, data.mkt, planYear!).then(setAdjs)}
+                      >
+                        ✕
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {brandAdjs.length === 0 && (
+                <tr><td colSpan={7} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
+                  No adjustments yet for {marketName} · {data.brand} in {data.win}. Add one above — e.g. lost
+                  distribution on an item, a coming price increase, or a trend running hotter or colder than the
+                  projection — and the dark <b>Adjusted plan</b> line appears on the chart.
+                </td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="note" style={{ margin: "0", padding: "10px 16px" }}>
+          ◇ Impact is the expected % change to <b>base volume</b> over the effective window. Item-level adjustments
+          are weighted by that item&apos;s share of the brand base when viewing all items; pick the item in the selector
+          above to see its plan adjusted in full. Adjustments are saved per customer × plan year.
+        </div>
+      </div>
+
+      )}
+
+      {data.liftEngine && engHide && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="c-head">
+            <h3>Lift engine &amp; lift predictor</h3>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span className="sub">
+                β {data.liftEngine.beta} · R² {data.liftEngine.r2.toFixed(2)} · {data.liftEngine.n} promo weeks · {scopeName}
+              </span>
+              <div className="chip-row">
+                <span className="minichip" onClick={toggleEng} title="Open the lift-engine scatter and the lift predictor">
+                  ⊕ Show lift engine
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {data.liftEngine && !engHide && (() => {
         const eng = data.liftEngine;
         const maxD = Math.max(...eng.points.map((p) => p.d)) + 4;
         const depth = Math.max(0, Math.min(70, parseFloat(engDepth) || 0));
@@ -896,9 +1031,16 @@ export default function BaseView({ data }: { data: BaseData }) {
             <div className="card">
               <div className="c-head">
                 <h3>Lift engine — depth vs unit lift · {scopeName}</h3>
-                <span className="sub" title="Each dot is one promoted week (NIQ saw ≥ 10 %ACV support): depth = 1 − promoted price ÷ base price, lift = units ÷ base units − 1, both measured from the feed. The dashed line is the through-origin fit lift = β × depth.">
-                  {marketName} · measured promoted weeks ⓘ
-                </span>
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <span className="sub" title="Each dot is one promoted week (NIQ saw ≥ 10 %ACV support): depth = 1 − promoted price ÷ base price, lift = units ÷ base units − 1, both measured from the feed. The dashed line is the through-origin fit lift = β × depth.">
+                    {marketName} · measured promoted weeks ⓘ
+                  </span>
+                  <div className="chip-row">
+                    <span className="minichip on" onClick={toggleEng} title="Collapse the lift engine and the predictor to a one-line header">
+                      ⊖ Hide lift engine
+                    </span>
+                  </div>
+                </div>
               </div>
               <div className="chartbox" style={{ height: 260 }}>
                 <Line
@@ -1022,112 +1164,7 @@ export default function BaseView({ data }: { data: BaseData }) {
         );
       })()}
 
-      {data.plan ? (
-      <div className="card" style={{ padding: 0, marginTop: 16 }}>
-        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-          <b>Planner adjustments — {data.win}</b>
-          <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {marketName} · {data.brand} · distribution, base price and trend levers on the plan base
-          </span>
-        </div>
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <select style={selStyle} value={aUpc} onChange={(e) => setAUpc(e.target.value)} title="Which item the adjustment applies to">
-            <option value="ALL">All {data.brand} items</option>
-            {data.items.map((i) => (
-              <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
-            ))}
-          </select>
-          <select style={selStyle} value={aKind} onChange={(e) => setAKind(e.target.value as PlanAdjustment["kind"])}>
-            <option value="distribution">Distribution change</option>
-            <option value="price">Base price change</option>
-            <option value="trend">Trend override</option>
-          </select>
-          <input
-            style={{ ...selStyle, width: 110 }}
-            type="number"
-            step="0.5"
-            placeholder="Impact %"
-            title="Expected % impact on base volume — negative for a loss (e.g. -12 for lost distribution in the largest stores)"
-            value={aPct}
-            onChange={(e) => setAPct(e.target.value)}
-          />
-          <input style={{ ...selStyle, width: 140 }} type="date" value={aFrom} onChange={(e) => setAFrom(e.target.value)} title="Takes effect" />
-          <span style={{ color: "var(--ink-3)", fontSize: 12 }}>→</span>
-          <input style={{ ...selStyle, width: 140 }} type="date" value={aTo} onChange={(e) => setATo(e.target.value)} title="Ends" />
-          <input
-            style={{ ...selStyle, flex: "1 1 200px", minWidth: 160 }}
-            placeholder="Why — e.g. lost distribution in largest stores, price increase in April…"
-            value={aNote}
-            onChange={(e) => setANote(e.target.value)}
-          />
-          <button
-            className="btn"
-            style={{ ...selStyle, cursor: "pointer", opacity: parseFloat(aPct) ? 1 : 0.5 }}
-            onClick={addAdj}
-            disabled={!parseFloat(aPct)}
-          >
-            + Add adjustment
-          </button>
-        </div>
-        <div style={{ overflowX: "auto" }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th><th>Kind</th><th style={{ textAlign: "right" }}>Impact</th>
-                <th>Effective</th><th>Note</th><th>Added</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {brandAdjs.map((a) => {
-                const itemName = a.upc === "ALL" ? `All ${a.brand} items`
-                  : data.items.find((i) => i.upc === a.upc)?.name ?? a.upc;
-                const kindLabel = a.kind === "distribution" ? "Distribution" : a.kind === "price" ? "Base price" : "Trend";
-                const share = a.upc !== "ALL" && data.item === "ALL" ? data.plan!.itemShare[a.upc] ?? 0 : null;
-                return (
-                  <tr key={a.id}>
-                    <td style={{ padding: "9px 14px" }}>
-                      <b>{itemName.length > 44 ? itemName.slice(0, 43) + "…" : itemName}</b>
-                      {share !== null && (
-                        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{(share * 100).toFixed(1)}% of brand base</div>
-                      )}
-                    </td>
-                    <td style={{ padding: "9px 14px" }}>{kindLabel}</td>
-                    <td style={{ padding: "9px 14px", textAlign: "right", fontWeight: 700, fontVariantNumeric: "tabular-nums", color: a.pct >= 0 ? "var(--good)" : "var(--bad)" }}>
-                      {a.pct >= 0 ? "+" : "−"}{Math.abs(a.pct)}%
-                    </td>
-                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.from} → {a.to}</td>
-                    <td style={{ padding: "9px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>{a.note || "—"}</td>
-                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontSize: 12 }}>{a.created_at.slice(0, 10)}</td>
-                    <td style={{ padding: "9px 14px" }}>
-                      <span
-                        className="minichip"
-                        style={{ cursor: "pointer" }}
-                        title="Remove this adjustment"
-                        onClick={() => deletePlanAdjustment(a.id, data.mkt, planYear!).then(setAdjs)}
-                      >
-                        ✕
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-              {brandAdjs.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
-                  No adjustments yet for {marketName} · {data.brand} in {data.win}. Add one above — e.g. lost
-                  distribution on an item, a coming price increase, or a trend running hotter or colder than the
-                  projection — and the dark <b>Adjusted plan</b> line appears on the chart.
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="note" style={{ margin: "0", padding: "10px 16px" }}>
-          ◇ Impact is the expected % change to <b>base volume</b> over the effective window. Item-level adjustments
-          are weighted by that item&apos;s share of the brand base when viewing all items; pick the item in the selector
-          above to see its plan adjusted in full. Adjustments are saved per customer × plan year.
-        </div>
-      </div>
-      ) : (
+      {!data.plan && (
       <div className="card" style={{ padding: 0, marginTop: 16 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>Promotion windows on this trend</b>
