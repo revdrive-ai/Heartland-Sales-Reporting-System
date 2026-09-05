@@ -94,6 +94,7 @@ const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";
 const LANES_KEY = "hhShowLanes"; // default on
+const INS_KEY = "hhInsightsHide";
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -142,6 +143,13 @@ export default function BaseView({ data }: { data: BaseData }) {
   // lift-engine predictor inputs
   const [engDepth, setEngDepth] = useState("20");
   const [engTactic, setEngTactic] = useState("Feature");
+  const [insHide, setInsHide] = useState(false); // key-insights card collapsed
+  const toggleIns = () => {
+    setInsHide((h) => {
+      try { localStorage.setItem(INS_KEY, h ? "0" : "1"); } catch {}
+      return !h;
+    });
+  };
   const [planReg, setPlanReg] = useState<Record<string, string>>({}); // market → registered_at, for the plan year
 
   const nextPlanYear = data.latestDataYear + 1;
@@ -152,6 +160,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       setSeasHide(localStorage.getItem(SEAS_KEY) === "1");
       setShowPY(localStorage.getItem(PY_KEY) === "1");
       setShowLanes(localStorage.getItem(LANES_KEY) !== "0");
+      setInsHide(localStorage.getItem(INS_KEY) === "1");
     } catch {}
   }, []);
 
@@ -589,55 +598,6 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       </div>
 
-      {data.insights.length > 0 && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="c-head">
-            <h3>Key insights — what might move the plan</h3>
-            <span className="sub">
-              measured shifts, latest 8 weeks vs the same weeks a year ago · ranked by base-volume impact
-            </span>
-          </div>
-          <div>
-            {data.insights.map((ins, i) => {
-              const color = ins.severity === "bad" ? "var(--bad)" : ins.severity === "good" ? "var(--good)" : "var(--accent)";
-              const KIND: Record<string, string> = {
-                distribution: "Distribution", price: "Base price", volume: "Volume",
-                promo: "Promo support", delisted: "Delisted?", listprice: "List price",
-              };
-              const actionable = ins.kind !== "listprice" && ins.kind !== "promo";
-              return (
-                <div key={i} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 2px", borderTop: i ? "1px solid var(--line)" : "none" }}>
-                  <span style={{ color, fontWeight: 900, fontSize: 15, lineHeight: "19px" }}>
-                    {ins.severity === "bad" ? "▼" : ins.severity === "good" ? "▲" : "◇"}
-                  </span>
-                  <div style={{ flex: 1 }}>
-                    <b style={{ fontSize: 13 }}>{ins.title}</b>
-                    <span className="badge" style={{ marginLeft: 8, background: "var(--surface-2)", color: "var(--ink-3)" }}>{KIND[ins.kind]}</span>
-                    <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>{ins.detail}</div>
-                  </div>
-                  {actionable && (
-                    <span
-                      className="minichip"
-                      style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
-                      title={`Open the ${nextPlanYear} plan view — the adjustments card there takes distribution, price and trend corrections per item`}
-                      onClick={() => nav({ win: String(nextPlanYear) })}
-                    >
-                      Adjust in Plan {nextPlanYear} →
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="note" style={{ marginTop: 8 }}>
-            ◇ Flags: distribution moves ≥ 10 %ACV pts, base-price moves ≥ 3%, unexplained base-volume breaks ≥ 20%,
-            promo-support swings ≥ 4 weeks, dated list-price changes near the data edge, and items with year-ago
-            volume but nothing measured in 6 weeks. Small items stay quiet.
-            {data.insightsTotal > data.insights.length && <> Showing the top {data.insights.length} of {data.insightsTotal} by impact.</>}
-          </div>
-        </div>
-      )}
-
       <div className={"grid2" + (seasHide ? " wide1" : "")}>
         <div className="card">
           <div className="c-head">
@@ -847,6 +807,70 @@ export default function BaseView({ data }: { data: BaseData }) {
           </div>
         )}
       </div>
+
+      {data.insights.length > 0 && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="c-head">
+            <h3>Key insights — what might move the plan</h3>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <span className="sub">
+                {insHide
+                  ? `${data.insightsTotal} measured shift${data.insightsTotal === 1 ? "" : "s"} flagged`
+                  : "measured shifts, latest 8 weeks vs the same weeks a year ago · ranked by base-volume impact"}
+              </span>
+              <div className="chip-row">
+                <span
+                  className={"minichip" + (insHide ? "" : " on")}
+                  onClick={toggleIns}
+                  title={insHide ? "Open the key-insights list" : "Collapse the key-insights list — the header keeps the count"}
+                >
+                  {insHide ? "⊕ Show insights" : "⊖ Hide insights"}
+                </span>
+              </div>
+            </div>
+          </div>
+          {!insHide && (<>
+          <div>
+            {data.insights.map((ins, i) => {
+              const color = ins.severity === "bad" ? "var(--bad)" : ins.severity === "good" ? "var(--good)" : "var(--accent)";
+              const KIND: Record<string, string> = {
+                distribution: "Distribution", price: "Base price", volume: "Volume",
+                promo: "Promo support", delisted: "Delisted?", listprice: "List price",
+              };
+              const actionable = ins.kind !== "listprice" && ins.kind !== "promo";
+              return (
+                <div key={i} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 2px", borderTop: i ? "1px solid var(--line)" : "none" }}>
+                  <span style={{ color, fontWeight: 900, fontSize: 15, lineHeight: "19px" }}>
+                    {ins.severity === "bad" ? "▼" : ins.severity === "good" ? "▲" : "◇"}
+                  </span>
+                  <div style={{ flex: 1 }}>
+                    <b style={{ fontSize: 13 }}>{ins.title}</b>
+                    <span className="badge" style={{ marginLeft: 8, background: "var(--surface-2)", color: "var(--ink-3)" }}>{KIND[ins.kind]}</span>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>{ins.detail}</div>
+                  </div>
+                  {actionable && (
+                    <span
+                      className="minichip"
+                      style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
+                      title={`Open the ${nextPlanYear} plan view — the adjustments card there takes distribution, price and trend corrections per item`}
+                      onClick={() => nav({ win: String(nextPlanYear) })}
+                    >
+                      Adjust in Plan {nextPlanYear} →
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="note" style={{ marginTop: 8 }}>
+            ◇ Flags: distribution moves ≥ 10 %ACV pts, base-price moves ≥ 3%, unexplained base-volume breaks ≥ 20%,
+            promo-support swings ≥ 4 weeks, dated list-price changes near the data edge, and items with year-ago
+            volume but nothing measured in 6 weeks. Small items stay quiet.
+            {data.insightsTotal > data.insights.length && <> Showing the top {data.insights.length} of {data.insightsTotal} by impact.</>}
+          </div>
+          </>)}
+        </div>
+      )}
 
       {data.liftEngine && (() => {
         const eng = data.liftEngine;
