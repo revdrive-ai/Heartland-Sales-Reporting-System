@@ -181,6 +181,7 @@ export type PlanEvent = {
   created_at: string;
   upcs?: string[];          // items on the deal (wizard entries); absent = whole brand
   funding?: { oi: number; scan: number; fixed: number };  // $/unit rates + fixed fees behind spend
+  source_promo_id?: string; // carried events: the FY promo behind this row (drill into its Telus lines)
 };
 
 const evtKey = (plan_year: number) => `events:${plan_year}`;

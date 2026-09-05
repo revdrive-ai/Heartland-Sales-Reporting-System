@@ -287,6 +287,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       brandListPrice,
       customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
       copySource: promos.map((p) => ({
+        promo_id: p.promo_id,
         title: p.promo_title, customer_id: p.customer_id, customer: p.customer_name,
         brand: brandFor(p.promo_id),
         upcs: [...(promoUpcs.get(p.promo_id) ?? [])],

@@ -42,6 +42,7 @@ export type PlannerData = {
     brandListPrice: Record<string, number | null>;       // run-rate-weighted brand list price, plan-year start
     customers: { id: string; name: string }[];
     copySource: {
+      promo_id: string;
       title: string; customer_id: string; customer: string; brand: string; upcs: string[];
       perf: string; start: string; end: string; planned: number;
       funding?: { oi: number; scan: number; fixed: number }; // normalized from the Telus component lines

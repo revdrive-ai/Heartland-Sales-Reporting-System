@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Chart } from "react-chartjs-2";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -9,6 +9,7 @@ import {
 } from "@/lib/repo/client";
 import { getPriceEdits } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
+import { LinesTable, usePromoLines } from "./lines";
 import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 
@@ -77,6 +78,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [wizardEdit, setWizardEdit] = useState<PlanEvent | null>(null);
+  // row expansion — carried events drill into their FY promo's Telus lines
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { lines, load: loadLines } = usePromoLines();
+  const toggleRow = (e: PlanEvent) => {
+    const next = openId === e.id ? null : e.id;
+    setOpenId(next);
+    if (next && e.source_promo_id) void loadLines(e.source_promo_id);
+  };
   // browser-local manual price changes, layered over the ingested price list
   const [priceEdits, setPriceEdits] = useState<DatedPrice[]>([]);
   useEffect(() => {
@@ -229,6 +238,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       brand: p.brand, title: p.title, perf: p.perf,
       upcs: p.upcs.length ? p.upcs : undefined, // items via the crosswalk, when known
       funding: p.funding, // O/I + scan rates and fixed fees, normalized from the Telus lines
+      source_promo_id: p.promo_id, // click the row to drill into the FY book's component lines
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
       // scored like an import: the tactic's measured lift, else the brand average
       lift_pct: plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
@@ -550,7 +560,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               {visible.slice(0, limit).map((e) => {
                 const c = calc(e);
                 return (
-                  <tr key={e.id}>
+                  <React.Fragment key={e.id}>
+                  <tr
+                    onClick={() => toggleRow(e)}
+                    style={{ cursor: "pointer", background: openId === e.id ? "var(--surface-2)" : undefined }}
+                    title={e.source_promo_id ? `Click to see the FY${plan.priorYear} component lines behind this event` : "Click to see the items on this event"}
+                  >
                     <td style={{ padding: "9px 14px", minWidth: 200 }}>
                       <b>{e.title}</b>
                       <div
@@ -570,7 +585,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{e.start} → {e.end}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.weeks}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.base === null ? "—" : fmtK(c.base)}</td>
-                    <td style={{ padding: "6px 14px", textAlign: "right" }}>
+                    <td style={{ padding: "6px 14px", textAlign: "right" }} onClick={(ev) => ev.stopPropagation()}>
                       <input
                         style={{ ...selStyle, width: 74, padding: "4px 7px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                         type="number"
@@ -605,13 +620,55 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                       )}
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi)}</td>
-                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }}>
+                    <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }} onClick={(ev) => ev.stopPropagation()}>
                       <span className="minichip" style={{ cursor: "pointer", marginRight: 4 }} title="Edit this event in the wizard"
                         onClick={() => { setWizardEdit(e); setWizardOpen(true); }}>✎</span>
                       <span className="minichip" style={{ cursor: "pointer" }} title="Remove this event from the plan"
                         onClick={() => persistNow(latestEvents.current.filter((x) => x.id !== e.id))}>✕</span>
                     </td>
                   </tr>
+                  {openId === e.id && (
+                    <tr>
+                      <td colSpan={13} style={{ padding: 0, borderBottom: "1px solid var(--line)", background: "var(--surface-2)" }}>
+                        {e.source_promo_id ? (
+                          <>
+                            <div style={{ padding: "10px 16px 2px", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>
+                              FY{plan.priorYear} component lines behind this carried event
+                            </div>
+                            <LinesTable rows={lines[e.source_promo_id]} />
+                          </>
+                        ) : e.upcs?.length ? (
+                          <div style={{ padding: "4px 0 8px" }}>
+                            <div style={{ padding: "10px 16px 2px", fontSize: 11, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--ink-3)" }}>
+                              Items on this deal
+                            </div>
+                            <table style={{ fontSize: 12.5 }}>
+                              <thead><tr><th>Item</th><th>UPC</th><th style={{ textAlign: "right" }}>NIQ base at {e.customer}</th></tr></thead>
+                              <tbody>
+                                {e.upcs.map((u) => {
+                                  const wk = itemWeeklyBase(plan, e.customer_id, u, itemMeta.get(u)?.wk ?? 0);
+                                  return (
+                                    <tr key={u}>
+                                      <td style={{ padding: "7px 14px" }}>{itemLabel(u)}</td>
+                                      <td style={{ padding: "7px 14px", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11, color: "var(--ink-3)" }}>{u}</td>
+                                      <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+                                        {wk > 0 ? `${Math.round(wk).toLocaleString()} u/wk` : "no volume here"}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--ink-3)" }}>
+                            Brand-level event — no item detail on file. Edit it in the wizard (✎) to put items on the deal.
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
               {visible.length === 0 && (
