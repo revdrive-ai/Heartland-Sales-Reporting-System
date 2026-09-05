@@ -63,6 +63,14 @@ export type BaseData = {
     years: { label: string; values: (number | null)[] }[];
   };
   totals: { actual: number; base: number; incremental: number; niqPromoWeeks: number };
+  yoy: {                     // selected weeks vs the same weeks a year earlier
+    actual: number | null;   // % change; null = no year-ago basis
+    base: number | null;
+    incremental: number | null;
+    promoWeeks: number | null;
+    matchedWeeks: number;    // weeks with year-ago data — the comparison basis
+    totalWeeks: number;
+  } | null;                  // null in planning years
 };
 
 const DAY = 86400000;
@@ -91,6 +99,17 @@ const durationDays = (o: PromoOverlay) => (utc(o.end_date) - utc(o.start_date)) 
 
 const fmtNum = (v: number) => (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? Math.round(v / 1e3).toLocaleString() + "K" : String(Math.round(v)));
 const fmtLift = (v: number | null) => (v === null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(0)}%`);
+
+/** % change vs the same weeks a year earlier, colored like the dashboard. */
+function YoYSub({ v, label = "vs same weeks YA" }: { v: number | null | undefined; label?: string }) {
+  if (v === null || v === undefined) return <div className="k-sub flat">no year-ago basis</div>;
+  const up = v >= 0;
+  return (
+    <div className={"k-sub " + (up ? "up" : "down")}>
+      {up ? "▲" : "▼"} {Math.abs(v).toFixed(1)}% {label}
+    </div>
+  );
+}
 
 const YEAR_STYLES = [
   { color: "--ink-3", dash: [5, 4] as number[], width: 1.3 },
@@ -381,6 +400,9 @@ export default function BaseView({ data }: { data: BaseData }) {
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const scopeName = data.itemName ?? data.brand;
   const fmtVal = data.metric === "units" ? (v: number) => fmtNum(v) : fmtMoney;
+  // YoY compares only the weeks with year-ago data — call out partial coverage
+  const yoyLabel = data.yoy && data.yoy.matchedWeeks < data.yoy.totalWeeks
+    ? `vs YA (${data.yoy.matchedWeeks} matched wks)` : "vs same weeks YA";
   const metricLabel = data.metric === "units" ? "units" : data.metric === "dollars" ? "retail dollars" : "gross dollars (list price)";
 
   const opts = useMemo(() => {
@@ -523,11 +545,13 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="kpi">
             <div className="k-top"><span className="k-label">Actual — window total</span></div>
             <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.actual)}</div>
+            {data.yoy && <YoYSub v={data.yoy.actual} label={yoyLabel} />}
             <div className="k-sub flat">{scopeName} · {data.points.length} weeks{data.planningYear ? " · no NIQ data yet" : ""}</div>
           </div>
           <div className="kpi">
             <div className="k-top"><span className="k-label">NIQ modelled base</span></div>
             <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.base)}</div>
+            {data.yoy && <YoYSub v={data.yoy.base} label={yoyLabel} />}
             <div className="k-sub flat">non-promoted expectation</div>
           </div>
           <div className="kpi">
@@ -535,12 +559,14 @@ export default function BaseView({ data }: { data: BaseData }) {
             <div className="k-val" style={{ color: data.totals.incremental >= 0 ? "var(--good)" : "var(--bad)" }}>
               {data.planningYear ? "—" : (data.totals.incremental >= 0 ? "+" : "−") + fmtVal(Math.abs(data.totals.incremental))}
             </div>
+            {data.yoy && <YoYSub v={data.yoy.incremental} label={yoyLabel} />}
             <div className="k-sub flat">{data.planningYear ? "planning view" : `${liftPct >= 0 ? "+" : "−"}${Math.abs(liftPct).toFixed(1)}% lift on base`}</div>
           </div>
         </>)}
         <div className="kpi">
           <div className="k-top"><span className="k-label">Promotion windows</span></div>
           <div className="k-val">{data.overlays.length}</div>
+          {data.yoy && !data.plan && <YoYSub v={data.yoy.promoWeeks} label="NIQ promo wks vs YA" />}
           <div className="k-sub flat">{events.length} events · {alwaysOn.length} always-on · NIQ saw promo support in {data.totals.niqPromoWeeks} wks</div>
         </div>
       </div>

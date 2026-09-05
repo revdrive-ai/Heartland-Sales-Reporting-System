@@ -301,6 +301,37 @@ export default async function Page({
   const totActual = points.reduce((a, p) => a + (p.actual ?? 0), 0);
   const totBase = points.reduce((a, p) => a + (p.base ?? 0), 0);
 
+  /* Year-over-year for the KPI cards: the selected window's weeks against the
+     same weeks a year earlier (364 days keeps Saturdays aligned), compared
+     over the weeks that have year-ago data on file so partial-history windows
+     stay like-for-like. */
+  const weekAcv = new Map<string, number>();
+  for (const r of scoped) {
+    weekAcv.set(r.week_ending, Math.max(weekAcv.get(r.week_ending) ?? 0, r.acv_any_promo ?? 0));
+  }
+  let yoy: BaseData["yoy"] = null;
+  if (!planningYear) {
+    let curA = 0, lyA = 0, curB = 0, lyB = 0, curPW = 0, lyPW = 0, matched = 0;
+    for (const w of weeks) {
+      const ya = yearAgoWeek(w);
+      if (!weekActual.has(ya) && !weekBaseFull.has(ya)) continue;
+      matched++;
+      curA += weekActual.get(w) ?? 0; lyA += weekActual.get(ya) ?? 0;
+      curB += weekBaseFull.get(w) ?? 0; lyB += weekBaseFull.get(ya) ?? 0;
+      if ((weekAcv.get(w) ?? 0) >= 10) curPW++;
+      if ((weekAcv.get(ya) ?? 0) >= 10) lyPW++;
+    }
+    const pctOf = (c: number, l: number) => (l > 0 ? ((c - l) / l) * 100 : null);
+    yoy = {
+      actual: pctOf(curA, lyA),
+      base: pctOf(curB, lyB),
+      incremental: lyA - lyB > 0 ? ((curA - curB - (lyA - lyB)) / (lyA - lyB)) * 100 : null,
+      promoWeeks: pctOf(curPW, lyPW),
+      matchedWeeks: matched,
+      totalWeeks: weeks.length,
+    };
+  }
+
   const data: BaseData = {
     markets: markets.map((m) => ({ code: m.code, name: m.name })),
     brands: OWN_BRANDS,
@@ -331,6 +362,7 @@ export default async function Page({
       incremental: totActual - totBase,
       niqPromoWeeks: points.filter((p) => p.promoAcv >= 10).length,
     },
+    yoy,
   };
 
   return <BaseView data={data} />;
