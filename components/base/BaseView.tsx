@@ -71,6 +71,13 @@ export type BaseData = {
     matchedWeeks: number;    // weeks with year-ago data — the comparison basis
     totalWeeks: number;
   } | null;                  // null in planning years
+  liftEngine: {              // depth vs unit lift over the selection's promoted weeks, full history
+    points: { week: string; d: number; l: number; tactic: string }[];
+    beta: number;            // unit lift % per 1% of price depth (through-origin fit)
+    r2: number;
+    n: number;
+    tactics: { name: string; m: number; n: number; measured: boolean }[]; // multiplier vs β
+  } | null;                  // null when fewer than 3 promoted weeks
 };
 
 const DAY = 86400000;
@@ -124,6 +131,9 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [seasHide, setSeasHide] = useState(false);
   const [showPY, setShowPY] = useState(false);
   const [showLanes, setShowLanes] = useState(true);
+  // lift-engine predictor inputs
+  const [engDepth, setEngDepth] = useState("20");
+  const [engTactic, setEngTactic] = useState("Feature");
   const [planReg, setPlanReg] = useState<Record<string, string>>({}); // market → registered_at, for the plan year
 
   const nextPlanYear = data.latestDataYear + 1;
@@ -780,6 +790,143 @@ export default function BaseView({ data }: { data: BaseData }) {
           </div>
         )}
       </div>
+
+      {data.liftEngine && (() => {
+        const eng = data.liftEngine;
+        const maxD = Math.max(...eng.points.map((p) => p.d)) + 4;
+        const depth = Math.max(0, Math.min(70, parseFloat(engDepth) || 0));
+        const tac = eng.tactics.find((t) => t.name === engTactic) ?? eng.tactics[1];
+        const predicted = eng.beta * depth * tac.m;
+        return (
+          <div className="grid2b" style={{ marginTop: 16 }}>
+            <div className="card">
+              <div className="c-head">
+                <h3>Lift engine — depth vs unit lift · {scopeName}</h3>
+                <span className="sub" title="Each dot is one promoted week (NIQ saw ≥ 10 %ACV support): depth = 1 − promoted price ÷ base price, lift = units ÷ base units − 1, both measured from the feed. The dashed line is the through-origin fit lift = β × depth.">
+                  {marketName} · measured promoted weeks ⓘ
+                </span>
+              </div>
+              <div className="chartbox" style={{ height: 260 }}>
+                <Line
+                  key={"le" + tick + data.mkt + data.brand + data.item}
+                  data={{
+                    datasets: [
+                      {
+                        label: "Promoted weeks",
+                        data: eng.points.map((p) => ({ x: p.d, y: p.l })),
+                        showLine: false,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        borderColor: cssToken("--accent"),
+                        backgroundColor: cssToken("--accent"),
+                      },
+                      {
+                        label: "lift = β × depth",
+                        data: [{ x: 0, y: 0 }, { x: maxD, y: eng.beta * maxD }],
+                        borderColor: cssToken("--warn"),
+                        backgroundColor: cssToken("--warn"),
+                        borderDash: [7, 5],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                      },
+                    ],
+                  }}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: { display: false },
+                      tooltip: {
+                        callbacks: {
+                          label: (c: { datasetIndex: number; dataIndex: number }) => {
+                            if (c.datasetIndex !== 0) return "";
+                            const p = eng.points[c.dataIndex];
+                            return `${p.week} · ${p.tactic} · ${p.d}% depth → +${p.l}% lift`;
+                          },
+                        },
+                      },
+                    },
+                    scales: {
+                      x: {
+                        type: "linear" as const, min: 0, max: maxD,
+                        grid: { display: false },
+                        ticks: { color: cssToken("--ink-3"), font: { size: 10.5 }, callback: (v: unknown) => v + "%" },
+                        title: { display: true, text: "discount depth", color: cssToken("--ink-3"), font: { size: 10.5 } },
+                      },
+                      y: {
+                        grid: { color: cssToken("--line") }, border: { display: false },
+                        ticks: { color: cssToken("--ink-3"), font: { size: 10.5 }, callback: (v: unknown) => (Number(v) >= 0 ? "+" : "") + v + "%" },
+                      },
+                    },
+                  }}
+                />
+              </div>
+              <div className="note">
+                ✦ <b>β = {eng.beta}</b> — each 1% of price depth ≈ +{eng.beta}% unit lift in promoted weeks ·
+                R² {eng.r2.toFixed(2)} · {eng.n} promo weeks (full history). Depth and lift are <b>measured</b> per
+                week from the NIQ feed — promoted vs base price, units vs base units — never inferred.
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="c-head">
+                <h3>Predict a lift for the planner</h3>
+                <span className="sub">lift = β × depth × tactic multiplier</span>
+              </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>Discount depth %</div>
+                  <input style={{ ...selStyle, width: 110 }} type="number" min={0} max={70} value={engDepth} onChange={(e) => setEngDepth(e.target.value)} />
+                </div>
+                <div style={{ flex: 1, minWidth: 170 }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: ".06em", color: "var(--ink-3)", textTransform: "uppercase", marginBottom: 4 }}>Tactic</div>
+                  <select style={{ ...selStyle, width: "100%" }} value={engTactic} onChange={(e) => setEngTactic(e.target.value)}>
+                    {eng.tactics.map((t) => (
+                      <option key={t.name} value={t.name}>
+                        {t.name} — ×{t.m}{t.measured ? ` · ${t.n} reads` : " · default"}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, background: "var(--brand-soft, rgba(245,197,24,.15))", borderRadius: 12, padding: "14px 16px", margin: "12px 0" }}>
+                <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.5px" }}>+{Math.round(predicted)}%</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", lineHeight: 1.45 }}>
+                  unit lift in promoted weeks · β {eng.beta} × {depth}% depth × {tac.m} {tac.name}
+                  {!tac.measured && <span style={{ color: "var(--ink-3)" }}> (default multiplier)</span>}
+                </div>
+              </div>
+              <div className="note" style={{ marginBottom: 10 }}>
+                ✦ Weekly unit lift <b>while promoted</b> — window-level lift in the planner depends on how many weeks
+                of the window run promoted. Multipliers marked with reads are <b>measured from this selection&apos;s own
+                promoted weeks</b> (β per tactic ÷ β); the rest are industry defaults until that tactic runs.
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ fontSize: 12 }}>
+                  <thead>
+                    <tr><th>Nielsen measure</th><th>Status</th><th>Unlocks</th></tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ["$ / Units / Base $ / Base Units", "Base, depth, unit lift"],
+                      ["Base price per unit", "Depth measured rather than inferred"],
+                      ["TDP · %ACV distribution", "Distribution vs promo effects"],
+                      ["Feature / Display / F&D / TPR breakouts", "True lift by tactic — measured multipliers"],
+                      ["EQ volume", "Cross-pack comparisons"],
+                    ].map(([m, u]) => (
+                      <tr key={m}>
+                        <td style={{ padding: "7px 12px", fontWeight: 700 }}>{m}</td>
+                        <td style={{ padding: "7px 12px", color: "var(--good)", fontWeight: 800, whiteSpace: "nowrap" }}>✓ in feed</td>
+                        <td style={{ padding: "7px 12px", color: "var(--ink-2)" }}>{u}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {data.plan ? (
       <div className="card" style={{ padding: 0, marginTop: 16 }}>

@@ -298,6 +298,64 @@ export default async function Page({
     };
   });
 
+  /* Lift engine — depth vs unit lift across the selection's promoted weeks,
+     full history. Depth and lift are measured per week from the feed:
+     depth = 1 − (promoted price ÷ base price), lift = units ÷ base units − 1,
+     both unit-based regardless of the chart metric. Each week is classified
+     by its dominant merch tactic from the ACV breakouts, so the tactic
+     multipliers are measured (β_tactic ÷ β) wherever ≥ 3 reads exist. */
+  type EngWk = { u: number; bu: number; d$: number; bd$: number; acv: number; f: number; disp: number; fd: number; tpr: number };
+  const engWk = new Map<string, EngWk>();
+  for (const r of scoped) {
+    const w = engWk.get(r.week_ending) ?? { u: 0, bu: 0, d$: 0, bd$: 0, acv: 0, f: 0, disp: 0, fd: 0, tpr: 0 };
+    w.u += r.units ?? 0; w.bu += r.base_units ?? 0;
+    w.d$ += r.dollars ?? 0; w.bd$ += r.base_dollars ?? 0;
+    w.acv = Math.max(w.acv, r.acv_any_promo ?? 0);
+    w.f = Math.max(w.f, r.acv_feature ?? 0);
+    w.disp = Math.max(w.disp, r.acv_display ?? 0);
+    w.fd = Math.max(w.fd, r.acv_feat_disp ?? 0);
+    w.tpr = Math.max(w.tpr, r.acv_tpr ?? 0);
+    engWk.set(r.week_ending, w);
+  }
+  const engPts: { week: string; d: number; l: number; tactic: string }[] = [];
+  for (const [week, w] of engWk) {
+    if (w.acv < 10 || w.bu <= 0 || w.u <= 0 || w.bd$ <= 0 || w.d$ <= 0) continue;
+    const depth = (1 - (w.d$ / w.u) / (w.bd$ / w.bu)) * 100;
+    const lift = (w.u / w.bu - 1) * 100;
+    if (depth < 1 || depth > 70 || lift < -60) continue; // noise guards
+    const cand: [string, number][] = [["Feature + Display", w.fd], ["Display", w.disp], ["Feature", w.f], ["TPR", w.tpr]];
+    cand.sort((a, b) => b[1] - a[1]);
+    engPts.push({ week, d: +depth.toFixed(1), l: +lift.toFixed(1), tactic: cand[0][1] >= 5 ? cand[0][0] : "Unclassified" });
+  }
+  let liftEngine: BaseData["liftEngine"] = null;
+  if (engPts.length >= 3) {
+    // regression through the origin: lift(%) = β × depth(%)
+    const fit = (arr: typeof engPts) => {
+      let xy = 0, xx = 0, yy = 0;
+      for (const p of arr) { xy += p.d * p.l; xx += p.d * p.d; yy += p.l * p.l; }
+      const b = xx > 0 ? xy / xx : 0;
+      let ss = 0;
+      for (const p of arr) ss += (p.l - b * p.d) ** 2;
+      return { b, r2: yy > 0 ? Math.max(0, 1 - ss / yy) : 0 };
+    };
+    const all = fit(engPts);
+    const DEFAULT_M: Record<string, number> = { TPR: 0.7, Feature: 1.0, Display: 1.3, "Feature + Display": 1.8 };
+    const tactics = (["TPR", "Feature", "Display", "Feature + Display"] as const).map((t) => {
+      const g = engPts.filter((p) => p.tactic === t);
+      if (g.length >= 3 && all.b > 0) {
+        return { name: t, m: +(fit(g).b / all.b).toFixed(2), n: g.length, measured: true };
+      }
+      return { name: t, m: DEFAULT_M[t], n: g.length, measured: false };
+    });
+    liftEngine = {
+      points: engPts.sort((a, b) => a.d - b.d),
+      beta: +all.b.toFixed(1),
+      r2: +all.r2.toFixed(2),
+      n: engPts.length,
+      tactics,
+    };
+  }
+
   const totActual = points.reduce((a, p) => a + (p.actual ?? 0), 0);
   const totBase = points.reduce((a, p) => a + (p.base ?? 0), 0);
 
@@ -363,6 +421,7 @@ export default async function Page({
       niqPromoWeeks: points.filter((p) => p.promoAcv >= 10).length,
     },
     yoy,
+    liftEngine,
   };
 
   return <BaseView data={data} />;
