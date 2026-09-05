@@ -10,7 +10,7 @@ import {
 } from "@/lib/repo/client";
 import { getPriceEdits } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
-import { eventUnitPrice, eventWeeklyBase, type DatedPrice } from "./planMath";
+import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 
 /* The forward Promotion Planner — a future year (2027+) selected on the
@@ -69,6 +69,8 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   const [events, setEvents] = useState<PlanEvent[]>([]);
   const [brandChip, setBrandChip] = useState("All brands");
+  const [custSel, setCustSel] = useState("");   // "" = all customers
+  const [itemSel, setItemSel] = useState("");   // "" = all items; else a UPC
   const [limit, setLimit] = useState(100);
   const [budget, setBudget] = useState<number>(plan.priorPlannedTotal);
   const [budgetEdit, setBudgetEdit] = useState(false);
@@ -94,12 +96,39 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     getPlanBudget(budgetKey).then((b) => setBudget(b ?? plan.priorPlannedTotal));
   }, [year, budgetKey, plan.priorPlannedTotal]);
 
-  // events visible under the global scope + brand chip
+  // the item catalog behind the item selector: every own-brand item with NIQ
+  // volume in scope, grouped by brand, plus name/brand lookups by UPC
+  const itemCatalog = useMemo(
+    () => Object.entries(plan.brandStats)
+      .map(([brand, st]) => ({ brand, items: st.items }))
+      .filter((g) => g.items.length > 0),
+    [plan.brandStats]
+  );
+  const itemMeta = useMemo(() => {
+    const m = new Map<string, { name: string; brand: string; wk: number }>();
+    for (const g of itemCatalog) for (const i of g.items) m.set(i.upc, { name: i.name, brand: g.brand, wk: i.wk });
+    return m;
+  }, [itemCatalog]);
+  const itemLabel = (u: string) => itemMeta.get(u)?.name ?? u;
+
+  const pickBrandChip = (b: string) => {
+    setBrandChip(b);
+    // an item from another brand can't survive a brand narrowing
+    if (itemSel && b !== "All brands" && b !== "MIXED" && itemMeta.get(itemSel)?.brand !== b) setItemSel("");
+  };
+
+  // events visible under the global scope + the customer / brand / item selectors
   const scopeIds = useMemo(() => new Set(plan.customers.map((c) => c.id)), [plan.customers]);
-  const visible = useMemo(() => events.filter((e) =>
+  const preItem = useMemo(() => events.filter((e) =>
     (!plan.scopeActive || !e.customer_id || scopeIds.has(e.customer_id)) &&
-    (brandChip === "All brands" || e.brand === brandChip)
-  ).sort((a, b) => a.start.localeCompare(b.start)), [events, plan.scopeActive, scopeIds, brandChip]);
+    (brandChip === "All brands" || e.brand === brandChip) &&
+    (!custSel || e.customer_id === custSel)
+  ), [events, plan.scopeActive, scopeIds, brandChip, custSel]);
+  const visible = useMemo(() => preItem.filter((e) =>
+    !itemSel || (e.upcs ?? []).includes(itemSel)
+  ).sort((a, b) => a.start.localeCompare(b.start)), [preItem, itemSel]);
+  // brand-level events (no item detail) an item selection can't match
+  const noDetailHidden = itemSel ? preItem.filter((e) => !(e.upcs ?? []).length).length : 0;
 
   /* Base / incremental / ROI per event: window base = weekly base run-rate ×
      weeks, scored at THIS EVENT'S customer's divisions — its items when the
@@ -337,14 +366,57 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
       <div className="card" style={{ marginBottom: 16, padding: "12px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", color: "var(--ink-3)", textTransform: "uppercase" }}>Brands</span>
+          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: ".06em", color: "var(--ink-3)", textTransform: "uppercase" }}>Plan level</span>
           {["All brands", ...BRAND_CHOICES].map((b) => (
-            <span key={b} className={"minichip" + (brandChip === b ? " on" : "")} onClick={() => setBrandChip(b)} style={{ cursor: "pointer" }}>
+            <span key={b} className={"minichip" + (brandChip === b ? " on" : "")} onClick={() => pickBrandChip(b)} style={{ cursor: "pointer" }}>
               {b === "MIXED" ? "Mixed / carried" : b}
             </span>
           ))}
           <span style={{ color: "var(--line)", margin: "0 6px" }}>|</span>
+          <select
+            style={selStyle}
+            value={custSel}
+            onChange={(e) => setCustSel(e.target.value)}
+            title="Narrow the plan to one customer — spend, guardrails and the monthly read all follow"
+          >
+            <option value="">All customers</option>
+            {plan.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select
+            style={{ ...selStyle, maxWidth: 340 }}
+            value={itemSel}
+            onChange={(e) => setItemSel(e.target.value)}
+            title="Narrow the plan to one item — shows every event carrying that UPC (via the item crosswalk on carried events)"
+          >
+            <option value="">All items</option>
+            {(brandChip === "All brands" || brandChip === "MIXED"
+              ? itemCatalog
+              : itemCatalog.filter((g) => g.brand === brandChip)
+            ).map((g) => (
+              <optgroup key={g.brand} label={g.brand}>
+                {g.items.map((i) => (
+                  <option key={i.upc} value={i.upc}>{i.name.length > 52 ? i.name.slice(0, 51) + "…" : i.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
           <span className="pill">{visible.length} events in scope · {year}</span>
+          {itemSel && (() => {
+            const wk = itemWeeklyBase(plan, custSel, itemSel, itemMeta.get(itemSel)?.wk ?? 0);
+            return (
+              <span className="pill" title={`NIQ weekly base run-rate over the latest 52 weeks — ${custSel ? "at this customer's divisions" : "across the divisions in scope"}`}>
+                {wk > 0
+                  ? `base ${Math.round(wk).toLocaleString()} u/wk${custSel ? " at this customer" : " in scope"}`
+                  : `no NIQ base ${custSel ? "at this customer" : "in scope"}`}
+              </span>
+            );
+          })()}
+          {noDetailHidden > 0 && (
+            <span className="pill" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}
+              title="Brand-level events carry no item list, so an item selection can't match them — clear the item to see them again">
+              {noDetailHidden} brand-level event{noDetailHidden === 1 ? "" : "s"} without item detail hidden
+            </span>
+          )}
         </div>
       </div>
 
@@ -352,7 +424,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="card">
           <div className="c-head">
             <h3>Trade spend vs plan</h3>
-            <span className="sub">follows the brand &amp; scope filters</span>
+            <span className="sub">follows the customer, brand &amp; item selectors</span>
           </div>
           <div style={{ display: "flex", height: 30, borderRadius: 8, overflow: "hidden", fontSize: 11, fontWeight: 800, color: "#fff" }}
             title={over ? `Over-committed by ${fmtMoney(overBy)} of the ${fmtMoney(budget)} fund` : `${fmtMoney(avail)} still available of the ${fmtMoney(budget)} fund`}>
@@ -444,8 +516,17 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                   <tr key={e.id}>
                     <td style={{ padding: "9px 14px", minWidth: 200 }}>
                       <b>{e.title}</b>
-                      <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
-                        {e.brand}{e.origin !== "manual" ? ` · ${e.origin === "carry" ? `carried FY${plan.priorYear}` : "imported"}` : ""}
+                      <div
+                        style={{ fontSize: 11, color: "var(--ink-3)" }}
+                        title={e.upcs?.length ? "Items on the deal:\n" + e.upcs.map((u) => "• " + itemLabel(u)).join("\n") : undefined}
+                      >
+                        {e.brand}
+                        {e.upcs?.length
+                          ? e.upcs.length === 1
+                            ? ` · ${itemLabel(e.upcs[0]).length > 34 ? itemLabel(e.upcs[0]).slice(0, 33) + "…" : itemLabel(e.upcs[0])}`
+                            : ` · ${e.upcs.length} items`
+                          : " · brand level"}
+                        {e.origin !== "manual" ? ` · ${e.origin === "carry" ? `carried FY${plan.priorYear}` : "imported"}` : ""}
                       </div>
                     </td>
                     <td style={{ padding: "9px 14px" }}>{e.customer}<div style={{ fontSize: 11, color: "var(--ink-3)" }}>{e.perf}</div></td>
@@ -487,7 +568,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               })}
               {visible.length === 0 && (
                 <tr><td colSpan={10} style={{ padding: "18px 16px", color: "var(--ink-3)", fontSize: 12.5 }}>
-                  The {year} book is empty{brandChip !== "All brands" ? ` for ${brandChip}` : ""}. Start with
+                  The {year} book is empty
+                  {itemSel ? ` for ${itemLabel(itemSel)}` : brandChip !== "All brands" ? ` for ${brandChip}` : ""}
+                  {custSel ? ` at ${plan.customers.find((c) => c.id === custSel)?.name ?? custSel}` : ""}. Start with
                   <b> ⇄ Carry FY{plan.priorYear} forward</b> to seed it from this scope&apos;s {plan.copySource.length} booked
                   promotions, <b>⬆ Import year plan</b> from the CSV template, or <b>+ New event</b>.
                 </td></tr>
@@ -512,7 +595,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="chartbox" style={{ height: 240 }}>
           <Chart
             type="bar"
-            key={"yoy" + tick + brandChip + visible.length + committed}
+            key={"yoy" + tick + brandChip + custSel + itemSel + visible.length + committed}
             data={{
               labels: MONTHS,
               datasets: [
@@ -542,8 +625,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="note">
           ◇ A red month is funded lighter than the same month of the FY{plan.priorYear} book in this scope — room for
           an event, or a deliberate cut. Amounts spread evenly across each event&apos;s window. Base and lift figures come
-          from the NIQ history for the divisions in scope (brand weekly run-rate × window weeks); item-level planning
-          for a single customer lives in the Base &amp; Lift Lab&apos;s plan view.
+          from the NIQ history at each event&apos;s customer — its items where the crosswalk knows them, else the brand
+          run-rate. The customer, brand and item selectors above narrow the whole page, so the plan reads at any
+          level down to a single UPC; the Base &amp; Lift Lab&apos;s plan view carries the week-by-week deep dive.
         </div>
       </div>
 
@@ -553,6 +637,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           data={data}
           year={year}
           initial={wizardEdit}
+          preset={{
+            customer_id: custSel || undefined,
+            brand: itemSel ? itemMeta.get(itemSel)?.brand
+              : brandChip !== "All brands" && brandChip !== "MIXED" ? brandChip : undefined,
+            upcs: itemSel ? [itemSel] : undefined,
+          }}
           priceEdits={priceEdits}
           onClose={() => { setWizardOpen(false); setWizardEdit(null); }}
           onSubmit={addFromWizard}

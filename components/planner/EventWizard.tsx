@@ -25,12 +25,14 @@ const fmt$ = (v: number) => (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ?
 const fmtD = (iso: string) => new Date(utc(iso)).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
 
 export default function EventWizard({
-  data, year, initial, priceEdits = [], onClose, onSubmit,
+  data, year, initial, preset, priceEdits = [], onClose, onSubmit,
 }: {
   data: PlannerData;
   year: number;
   /** editing an existing event — the wizard opens pre-filled and saves back */
   initial?: PlanEvent | null;
+  /** a new event opens pre-filled from the plan book's customer/brand/item selectors */
+  preset?: { customer_id?: string; brand?: string; upcs?: string[] };
   /** browser-local manual price changes, layered over the ingested list */
   priceEdits?: DatedPrice[];
   onClose: () => void;
@@ -44,9 +46,9 @@ export default function EventWizard({
   const initFunding = initial ? (initial.funding ?? { oi: 0, scan: 0, fixed: initial.spend }) : null;
 
   const [step, setStep] = useState(1);
-  const [cust, setCust] = useState(initial?.customer_id ?? "");
-  const [brand, setBrand] = useState(initial?.brand ?? "");
-  const [upcs, setUpcs] = useState<string[]>(initial?.upcs ?? []);
+  const [cust, setCust] = useState(initial?.customer_id ?? preset?.customer_id ?? "");
+  const [brand, setBrand] = useState(initial?.brand ?? preset?.brand ?? "");
+  const [upcs, setUpcs] = useState<string[]>(initial?.upcs ?? preset?.upcs ?? []);
   const [name, setName] = useState(initial?.title ?? "");
   const [tactic, setTactic] = useState(initial?.perf ?? "");
   const [start, setStart] = useState(initial?.start ?? `${year}-08-01`);
