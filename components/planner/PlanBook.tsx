@@ -5,8 +5,7 @@ import { Chart } from "react-chartjs-2";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import {
-  addPlanEvents, clearPlanEvents, deletePlanEvent, getPlanBudget, getPlanEvents,
-  setPlanBudget, updatePlanEvent, type PlanEvent,
+  getPlanBudget, getPlanEvents, replacePlanEvents, setPlanBudget, type PlanEvent,
 } from "@/lib/repo/client";
 import { getPriceEdits } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
@@ -92,9 +91,38 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const [impMsg, setImpMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    getPlanEvents(year).then(setEvents);
+    getPlanEvents(year).then((es) => { latestEvents.current = es; setEvents(es); });
     getPlanBudget(budgetKey).then((b) => setBudget(b ?? plan.priorPlannedTotal));
   }, [year, budgetKey, plan.priorPlannedTotal]);
+
+  /* Mutations are LOCAL-FIRST: state updates synchronously (so the lift
+     inputs never lag or snap back behind a server round-trip) and the whole
+     year document persists through one serialized queue — writes land in
+     order, last state wins. Lift typing debounces its persist; everything
+     else writes immediately. */
+  const latestEvents = useRef<PlanEvent[]>([]);
+  const persistQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const liftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enqueue = (snap: PlanEvent[]) => {
+    persistQueue.current = persistQueue.current.then(() => replacePlanEvents(year, snap)).catch(() => {});
+  };
+  const persistNow = (next: PlanEvent[]) => {
+    latestEvents.current = next;
+    setEvents(next);
+    if (liftTimer.current) { clearTimeout(liftTimer.current); liftTimer.current = null; }
+    enqueue(next);
+  };
+  const persistSoon = (next: PlanEvent[]) => {
+    latestEvents.current = next;
+    setEvents(next);
+    if (liftTimer.current) clearTimeout(liftTimer.current);
+    liftTimer.current = setTimeout(() => { liftTimer.current = null; enqueue(latestEvents.current); }, 400);
+  };
+  useEffect(() => () => {
+    // navigating away with a lift edit still pending → flush it
+    if (liftTimer.current) { clearTimeout(liftTimer.current); enqueue(latestEvents.current); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // the item catalog behind the item selector: every own-brand item with NIQ
   // volume in scope, grouped by brand, plus name/brand lookups by UPC
@@ -183,12 +211,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     void setPlanBudget(budgetKey, v);
   };
 
-  const addFromWizard = async (e: Omit<PlanEvent, "id" | "created_at">) => {
-    if (wizardEdit) {
-      setEvents(await updatePlanEvent(wizardEdit.id, year, e));
-    } else {
-      setEvents(await addPlanEvents([{ ...e, id: newId(), created_at: new Date().toISOString() }]));
-    }
+  const addFromWizard = (e: Omit<PlanEvent, "id" | "created_at">) => {
+    persistNow(
+      wizardEdit
+        ? latestEvents.current.map((x) => (x.id === wizardEdit.id ? { ...x, ...e } : x))
+        : [...latestEvents.current, { ...e, id: newId(), created_at: new Date().toISOString() }]
+    );
     setWizardOpen(false);
     setWizardEdit(null);
   };
@@ -207,7 +235,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       origin: "carry", created_at: new Date().toISOString(),
     }));
     if (!rows.length) return;
-    setEvents(await addPlanEvents(rows));
+    persistNow([...latestEvents.current, ...rows]);
     setImpMsg(`✓ Carried ${rows.length} events forward from the FY${plan.priorYear} book (windows shifted ${shift} days to keep weekdays).`);
   };
 
@@ -263,7 +291,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           note: g("note"), origin: "import", created_at: new Date().toISOString(),
         });
       });
-      if (rows.length) setEvents(await addPlanEvents(rows));
+      if (rows.length) persistNow([...latestEvents.current, ...rows]);
       setImpMsg(
         `${rows.length ? `✓ Imported ${rows.length} events.` : "No valid rows imported."}` +
         (errs.length ? ` ⚠ ${errs.length} skipped: ${errs.slice(0, 3).join(" · ")}${errs.length > 3 ? " · …" : ""}` : "")
@@ -274,16 +302,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   /* Lift edits move rate-funded spend with them: per-unit funding pays on the
      units moved, so more lift = more units = more trade dollars. Events whose
-     spend is a fixed commitment (carried/imported, no rates) keep it. */
-  const setLift = async (e: PlanEvent, raw: string) => {
+     spend is a fixed commitment (carried/imported, no rates) keep it — and so
+     does an event whose base can't be scored (no NIQ divisions), since a zero
+     base would collapse its spend to just the fixed fees. */
+  const setLift = (e: PlanEvent, raw: string) => {
     const v = parseFloat(raw);
     const lift = isNaN(v) ? null : v;
     const patch: Partial<PlanEvent> = { lift_pct: lift };
     if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
-      const units = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs) * weeksOf(e) * (1 + (lift ?? 0) / 100);
-      patch.spend = Math.round(units * (e.funding.oi + e.funding.scan) + e.funding.fixed);
+      const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
+      if (wkBase > 0) {
+        const units = wkBase * weeksOf(e) * (1 + (lift ?? 0) / 100);
+        patch.spend = Math.round(units * (e.funding.oi + e.funding.scan) + e.funding.fixed);
+      }
     }
-    setEvents(await updatePlanEvent(e.id, year, patch));
+    persistSoon(latestEvents.current.map((x) => (x.id === e.id ? { ...x, ...patch } : x)));
   };
 
   const roiCell = (roi: number | null) =>
@@ -330,8 +363,8 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               className="btn"
               style={{ ...selStyle, cursor: "pointer" }}
               title={`Remove the ${carriedCount} carried-forward events and keep everything entered by hand or imported`}
-              onClick={async () => {
-                setEvents(await clearPlanEvents(year, "carry"));
+              onClick={() => {
+                persistNow(latestEvents.current.filter((e) => e.origin !== "carry"));
                 setImpMsg(`↺ Removed ${carriedCount} carried events — manual and imported events kept.`);
               }}
             >
@@ -343,9 +376,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               className="btn"
               style={{ ...selStyle, cursor: "pointer", color: "var(--bad)" }}
               title={`Clear every ${year} event — carried, imported and manual`}
-              onClick={async () => {
+              onClick={() => {
                 if (!window.confirm(`Clear all ${events.length} events from the ${year} plan? This removes carried, imported and manual events.`)) return;
-                setEvents(await clearPlanEvents(year));
+                persistNow([]);
                 setImpMsg(`✕ Cleared the ${year} plan.`);
               }}
             >
@@ -541,7 +574,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                         value={e.lift_pct ?? ""}
                         placeholder="—"
                         title="Expected % lift over base — edit to override"
-                        onChange={(ev) => void setLift(e, ev.target.value)}
+                        onChange={(ev) => setLift(e, ev.target.value)}
                       />
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{c.incr === null ? "—" : Math.round(c.incr).toLocaleString()}</td>
@@ -561,7 +594,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                       <span className="minichip" style={{ cursor: "pointer", marginRight: 4 }} title="Edit this event in the wizard"
                         onClick={() => { setWizardEdit(e); setWizardOpen(true); }}>✎</span>
                       <span className="minichip" style={{ cursor: "pointer" }} title="Remove this event from the plan"
-                        onClick={() => deletePlanEvent(e.id, year).then(setEvents)}>✕</span>
+                        onClick={() => persistNow(latestEvents.current.filter((x) => x.id !== e.id))}>✕</span>
                     </td>
                   </tr>
                 );

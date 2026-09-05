@@ -204,6 +204,13 @@ export async function getPlanEvents(plan_year: number): Promise<PlanEvent[]> {
   return readYearEvents(plan_year);
 }
 
+/** Replace a plan year's whole event list. The plan book holds the year's
+    document in component state and persists local-first through this, so
+    rapid edits (lift typing) never race server round-trips. */
+export async function replacePlanEvents(plan_year: number, evts: PlanEvent[]): Promise<PlanEvent[]> {
+  return writeYearEvents(plan_year, evts);
+}
+
 export async function addPlanEvents(evts: PlanEvent[]): Promise<PlanEvent[]> {
   const plan_year = evts[0]?.plan_year;
   if (plan_year === undefined) return [];
