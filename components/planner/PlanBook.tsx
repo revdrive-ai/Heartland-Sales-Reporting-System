@@ -10,7 +10,7 @@ import {
 import { getPriceEdits } from "@/lib/repo/client";
 import EventWizard from "./EventWizard";
 import { usePromoLines } from "./lines";
-import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice, type PlanPayload } from "./planMath";
+import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, listPriceAsOf, type DatedPrice, type PlanPayload } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 import type { PromoLine } from "@/lib/types/db";
 
@@ -231,24 +231,50 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     return { planM: planM.map(Math.round), billM: billM.map(Math.round) };
   }, [plan, custSel, brandChip, itemSel, data.meta.snapshot_date]);
 
-  /* month-by-month VOLUME: the plan's volume on deal (base × (1 + lift) at
-     each scored event, spread across its window) vs the prior year's measured
-     NIQ volume — promoted weeks as the like-for-like bars, total as context.
-     "dollars" prices both sides at the dated list price. */
+  /* month-by-month TOTAL VOLUME: the plan's expected total sales — the base
+     run-rate at the selected divisions plus each scored event's incremental —
+     vs the prior year's total measured NIQ volume, with promoted-week volume
+     as the dashed context line. "dollars" prices both sides at the dated
+     list price. */
   const [volMode, setVolMode] = useState<"units" | "dollars">("units");
   const volChart = useMemo(() => {
-    const planM = Array(12).fill(0);
+    const jan1 = `${year}-01-01`;
+    const mkts = custSel ? (plan.custMarkets[custSel] ?? []) : Object.keys(plan.divBrandWk);
+    const brands = brandChip !== "All brands" && brandChip !== "MIXED" ? [brandChip] : Object.keys(plan.brandStats);
+    const daysIn = (m: number) => new Date(Date.UTC(year, m + 1, 0)).getUTCDate();
+
+    // base run-rate by month: the latest-52w weekly base at the selected
+    // divisions (per item when an item is picked), shaped only by month length
+    let wkBaseUnits = 0, wkBaseDollars = 0;
+    for (const mc of mkts) {
+      if (itemSel) {
+        const u = plan.divItemWk[mc]?.[itemSel] ?? 0;
+        const p = listPriceAsOf(plan.prices, itemSel, jan1) ?? 0;
+        wkBaseUnits += u; wkBaseDollars += u * p;
+      } else {
+        for (const b of brands) {
+          const u = plan.divBrandWk[mc]?.[b] ?? 0;
+          const p = plan.brandListPrice[b] ?? plan.brandStats[b]?.price ?? 0;
+          wkBaseUnits += u; wkBaseDollars += u * p;
+        }
+      }
+    }
+    const planM = Array(12).fill(0).map((_, m) => (volMode === "units" ? wkBaseUnits : wkBaseDollars) * (daysIn(m) / 7));
+
+    // plus each scored event's incremental, spread across its window (when an
+    // item is picked, only that item's share of the event's base lifts)
     for (const e of visible) {
       const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
-      if (wkBase <= 0) continue;
-      const units = wkBase * weeksOf(e) * (1 + (e.lift_pct ?? 0) / 100);
+      if (wkBase <= 0 || !e.lift_pct) continue;
+      const share = itemSel ? itemWeeklyBase(plan, e.customer_id, itemSel, 0) / wkBase : 1;
+      if (share <= 0) continue;
+      const incr = wkBase * share * weeksOf(e) * (e.lift_pct / 100);
       const amount = volMode === "units"
-        ? units
-        : units * (eventUnitPrice(plan, priceEdits, e) ?? plan.brandStats[e.brand]?.price ?? 0);
+        ? incr
+        : incr * (eventUnitPrice(plan, priceEdits, e) ?? plan.brandStats[e.brand]?.price ?? 0);
       byMonth(planM, amount, e.start, e.end, year);
     }
-    const mkts = custSel ? (plan.custMarkets[custSel] ?? []) : Object.keys(plan.priorMonthly);
-    const brands = brandChip !== "All brands" && brandChip !== "MIXED" ? [brandChip] : Object.keys(plan.brandStats);
+
     const promo = Array(12).fill(0), total = Array(12).fill(0);
     for (const mc of mkts) {
       for (const b of brands) {
@@ -263,7 +289,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     // the month the prior-year NIQ reads stop — later months have nothing measured
     const edgeMo = plan.dataEdge.startsWith(String(plan.priorYear)) ? +plan.dataEdge.slice(5, 7) - 1 : 11;
     return { planM: planM.map(Math.round), promo: promo.map(Math.round), total: total.map(Math.round), edgeMo };
-  }, [visible, volMode, custSel, brandChip, plan, priceEdits, year]);
+  }, [visible, volMode, custSel, brandChip, itemSel, plan, priceEdits, year]);
 
   const saveBudget = (v: number) => {
     setBudget(v);
@@ -843,7 +869,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
       <div className="card" style={{ marginTop: 16 }}>
         <div className="c-head">
-          <h3>Monthly {volMode === "units" ? "units" : "gross dollars"} — {year} plan vs FY{plan.priorYear} measured</h3>
+          <h3>Monthly {volMode === "units" ? "units" : "gross dollars"} — {year} plan total vs FY{plan.priorYear} actual</h3>
           <span className="sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
             {(["units", "dollars"] as const).map((m) => (
               <span key={m} className={"minichip" + (volMode === m ? " on" : "")} style={{ cursor: "pointer" }} onClick={() => setVolMode(m)}>
@@ -862,23 +888,23 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               datasets: [
                 {
                   type: "bar" as const,
-                  label: `${year} plan — ${volMode === "units" ? "volume" : "gross $"} on deal`,
+                  label: `${year} plan — total ${volMode === "units" ? "units" : "gross $"} (base + lift)`,
                   data: volChart.planM,
                   backgroundColor: volChart.planM.map((v, m) =>
-                    m > volChart.edgeMo ? cssToken("--accent") : v >= volChart.promo[m] ? cssToken("--good") : cssToken("--bad")),
+                    m > volChart.edgeMo ? cssToken("--accent") : v >= volChart.total[m] ? cssToken("--good") : cssToken("--bad")),
                   borderRadius: 5,
                 },
                 {
                   type: "bar" as const,
-                  label: `FY${plan.priorYear} promoted weeks (NIQ, to ${plan.dataEdge})`,
-                  data: volChart.promo,
+                  label: `FY${plan.priorYear} actual total (NIQ, to ${plan.dataEdge})`,
+                  data: volChart.total,
                   backgroundColor: cssToken("--ink-3"),
                   borderRadius: 5,
                 },
                 {
                   type: "line" as const,
-                  label: `FY${plan.priorYear} total volume (NIQ)`,
-                  data: volChart.total,
+                  label: `FY${plan.priorYear} promoted-week volume (NIQ)`,
+                  data: volChart.promo,
                   borderColor: cssToken("--ink-3"),
                   backgroundColor: cssToken("--ink-3"),
                   borderDash: [6, 4],
@@ -892,13 +918,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           />
         </div>
         <div className="note">
-          ◇ Plan bars are <b>{volMode === "units" ? "volume" : "gross revenue"} on deal</b> — each scored event&apos;s
-          base × (1 + lift){volMode === "dollars" ? " × the dated list price" : ""}, spread across its window; events
-          at customers with no NIQ divisions contribute nothing here (their dollars live in the spend chart above).
-          Gray bars are the measured NIQ {volMode === "units" ? "units" : "gross $ (list price)"} in FY
-          {plan.priorYear}&apos;s <b>promoted</b> weeks — the like-for-like read — and the dashed line is all measured
-          volume. NIQ is read through {plan.dataEdge}: later months have no measurement, so plan bars there stay
-          neutral. Prior-year series follow the customer and brand selectors; the item selector narrows plan bars only.
+          ◇ Plan bars are the plan&apos;s expected <b>total</b> {volMode === "units" ? "sales units" : "gross sales $"} —
+          the latest-52-week base run-rate at the selected divisions plus each scored event&apos;s incremental
+          (base × lift across its window){volMode === "dollars" ? ", both at the dated list price" : ""}; events at
+          customers with no NIQ divisions add nothing here (their dollars live in the spend chart above). Gray bars
+          are FY{plan.priorYear}&apos;s <b>actual total</b> NIQ {volMode === "units" ? "units" : "gross $ (list price)"},
+          and the dashed line is the promoted-week slice of it. NIQ is read through {plan.dataEdge}: later months
+          have no measurement, so plan bars there stay neutral. All series follow the customer, brand and item
+          selectors.
         </div>
       </div>
 
