@@ -41,11 +41,15 @@ export type PlannerData = {
     prices: { upc: string; unit_price: number; effective_from: string }[]; // dated list prices
     brandListPrice: Record<string, number | null>;       // run-rate-weighted brand list price, plan-year start
     telusUpcs: Record<string, string[]>;                 // Telus item number → NIQ UPCs (book SKUs only)
+    /** prior-year NIQ volume by month per division × brand: u/g = total units
+        and gross $ (dated list price), pu/pg = the promoted-week slices */
+    priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;
+    dataEdge: string;                                    // latest NIQ week on file
     customers: { id: string; name: string }[];
     copySource: {
       promo_id: string;
       title: string; customer_id: string; customer: string; brand: string; upcs: string[];
-      perf: string; start: string; end: string; planned: number;
+      perf: string; start: string; end: string; planned: number; actual: number;
       funding?: { oi: number; scan: number; fixed: number }; // normalized from the Telus component lines
       item_rates?: { line_id: string; item_number: string; kind: "oi" | "scan"; rate: number }[]; // per-line $/unit
     }[];

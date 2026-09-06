@@ -103,6 +103,27 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
     // score on their own customer's divisions, not the whole scope
     const divBrandWk: Record<string, Record<string, number>> = {};
     const divItemWk: Record<string, Record<string, number>> = {};
+
+    // Dated list prices, hoisted ahead of the facts loop: they price the
+    // prior-year monthly gross series (and later, planner ROI). Per-UPC sorted
+    // effective dates make the per-row lookup cheap.
+    const priceRows = await getPriceList();
+    const upcPrices = new Map<string, { from: string; p: number }[]>();
+    for (const r of priceRows) {
+      if (!r.upc || r.unit_price === null) continue;
+      (upcPrices.get(r.upc) ?? upcPrices.set(r.upc, []).get(r.upc)!).push({ from: r.effective_from, p: r.unit_price });
+    }
+    for (const l of upcPrices.values()) l.sort((a, b) => b.from.localeCompare(a.from));
+    const listAt = (upc: string, date: string) => upcPrices.get(upc)?.find((x) => x.from <= date)?.p ?? null;
+
+    /* Prior-year (book year) NIQ volume by month, per division × brand, for
+       the plan builder's units/dollars chart: total units, gross $ at the
+       dated list price, and the promoted-week (acv_any_promo ≥ 10) slices —
+       the like-for-like read against plan volume on deal. */
+    const zeros = () => Array(12).fill(0) as number[];
+    const priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>> = {};
+    let dataEdge = "";
+    const priorPrefix = `${bookYear}-`;
     for (const brand of OWN_BRANDS) {
       // week → sums across the scoped divisions, plus per-item base totals and
       // per-tactic lift sums measured from the Telus windows on each division
@@ -122,6 +143,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           wk.set(r.week_ending, w);
           mA.set(r.week_ending, (mA.get(r.week_ending) ?? 0) + (r.units ?? 0));
           mB.set(r.week_ending, (mB.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+          if (r.week_ending > dataEdge) dataEdge = r.week_ending;
+          if (r.week_ending.startsWith(priorPrefix)) {
+            const mm = ((priorMonthly[m.code] ??= {})[brand] ??= { u: zeros(), g: zeros(), pu: zeros(), pg: zeros() });
+            const mo = +r.week_ending.slice(5, 7) - 1;
+            const un = r.units ?? 0;
+            const p = listAt(r.upc, r.week_ending) ?? 0;
+            mm.u[mo] += un;
+            mm.g[mo] += un * p;
+            if ((r.acv_any_promo ?? 0) >= 10) { mm.pu[mo] += un; mm.pg[mo] += un * p; }
+          }
         }
         // this division's latest-52w weekly base run-rate, brand and per item
         const mWeeks = [...mB.keys()].sort();
@@ -220,9 +251,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       for (const cid of promoCustomersFor(m.code)) (custMarkets[cid] ??= []).push(m.code);
     }
 
-    // Dated list prices (UPC-resolved) + a run-rate-weighted brand list price
-    // as of the plan year's start — ROI scores on manufacturer gross revenue.
-    const priceRows = await getPriceList();
+    // UPC-resolved dated prices for the client + a run-rate-weighted brand
+    // list price as of the plan year's start — ROI scores on gross revenue.
     const prices = priceRows
       .filter((r) => r.upc && r.unit_price !== null)
       .map((r) => ({ upc: r.upc!, unit_price: r.unit_price!, effective_from: r.effective_from }));
@@ -299,6 +329,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       prices,
       brandListPrice,
       telusUpcs,
+      priorMonthly: Object.fromEntries(Object.entries(priorMonthly).map(([mc, byBrand]) => [
+        mc,
+        Object.fromEntries(Object.entries(byBrand).map(([b, s]) => [
+          b,
+          { u: s.u.map(Math.round), g: s.g.map(Math.round), pu: s.pu.map(Math.round), pg: s.pg.map(Math.round) },
+        ])),
+      ])),
+      dataEdge,
       customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
       copySource: promos.map((p) => ({
         promo_id: p.promo_id,
@@ -307,6 +345,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         upcs: [...(promoUpcs.get(p.promo_id) ?? [])],
         perf: p.performance_type, start: p.start_date, end: p.end_date,
         planned: Math.round(p.planned_amount),
+        actual: Math.round(p.actual_amount),
         funding: promoFunding.get(p.promo_id),
         item_rates: promoItemRates.get(p.promo_id),
       })),
