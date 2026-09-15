@@ -145,12 +145,14 @@ export default async function Page({
   for (const w of weeks) {
     const ly = weekActual.get(yearAgoWeek(w));
     const bly = weekBaseFull.get(yearAgoWeek(w));
+    const b2y = weekBaseFull.get(yearAgoWeek(yearAgoWeek(w))); // 728 days back — two aligned years
     byWeek.set(w, {
       week: w,
       actual: planningYear ? null : 0,
       base: planningYear ? null : 0,
       actualLY: ly === undefined ? null : Math.round(ly),
       baseLY: bly === undefined ? null : Math.round(bly),
+      base2Y: b2y === undefined ? null : Math.round(b2y),
       promoAcv: 0,
     });
   }

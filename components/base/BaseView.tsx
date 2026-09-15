@@ -19,7 +19,7 @@ import type { PromoOverlay } from "@/lib/repo";
    chart's header (hiding it widens the trend to the full row). Event windows
    (≤ 12 weeks) are shaded; always-on programs are listed below. */
 
-export type WeekPoint = { week: string; actual: number | null; base: number | null; actualLY: number | null; baseLY: number | null; promoAcv: number };
+export type WeekPoint = { week: string; actual: number | null; base: number | null; actualLY: number | null; baseLY: number | null; base2Y: number | null; promoAcv: number };
 
 /** A promo overlay plus its lift read: measured over the window's weeks on
     file, and predicted from the matching weeks a year earlier. */
@@ -95,7 +95,8 @@ const EVENT_MAX_DAYS = 84; // ≤ 12 weeks = an event window; longer = always-on
 const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";
-const YB_KEY = "hhShowYB"; // year-ago BASE overlay (the prior year's base model)
+const YB_KEY = "hhShowYB";  // year-ago BASE overlay (the prior year's base model)
+const YB2_KEY = "hhShowYB2"; // two-years-ago BASE overlay
 const LANES_KEY = "hhShowLanes"; // default on
 const INS_KEY = "hhInsightsHide";
 const ENG_KEY = "hhLiftEngineHide";
@@ -150,6 +151,13 @@ export default function BaseView({ data }: { data: BaseData }) {
       return !v;
     });
   };
+  const [showYB2, setShowYB2] = useState(false);
+  const toggleYB2 = () => {
+    setShowYB2((v) => {
+      try { localStorage.setItem(YB2_KEY, v ? "0" : "1"); } catch {}
+      return !v;
+    });
+  };
   const [showLanes, setShowLanes] = useState(true);
   // lift-engine predictor inputs
   const [engDepth, setEngDepth] = useState("20");
@@ -183,6 +191,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       setSeasHide(localStorage.getItem(SEAS_KEY) === "1");
       setShowPY(localStorage.getItem(PY_KEY) === "1");
       setShowYB(localStorage.getItem(YB_KEY) === "1");
+      setShowYB2(localStorage.getItem(YB2_KEY) === "1");
       setShowLanes(localStorage.getItem(LANES_KEY) !== "0");
       setInsHide(localStorage.getItem(INS_KEY) === "1");
       setEngHide(localStorage.getItem(ENG_KEY) === "1");
@@ -696,6 +705,15 @@ export default function BaseView({ data }: { data: BaseData }) {
                 {showYB ? "✓ Year-ago base" : "Year-ago base"}
               </span>
               <span
+                className={"minichip" + (showYB2 ? " on" : "")}
+                onClick={toggleYB2}
+                title={data.plan
+                  ? `Overlay the ${data.plan.sourceYear - 1} base model — two aligned years back, fully measured, so the multi-year base trend reads across the whole plan year`
+                  : "Overlay NIQ's modelled base from two aligned years back — the multi-year base trend"}
+              >
+                {showYB2 ? "✓ Base 2 yrs ago" : "Base 2 yrs ago"}
+              </span>
+              <span
                 className={"minichip" + (showLanes ? " on" : "")}
                 onClick={toggleLanes}
                 title={showLanes ? "Hide the always-on program lanes under the chart" : "Show one lane per always-on program (EDLP etc.) under the chart"}
@@ -714,7 +732,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
             {data.plan ? (
               <Line
-                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "") + (showYB ? "y" : "") + brandAdjs.map((a) => a.id).join(".")}
+                key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "") + (showYB ? "y" : "") + (showYB2 ? "z" : "") + brandAdjs.map((a) => a.id).join(".")}
                 plugins={[bandPlugin]}
                 data={{
                   labels: data.points.map((p) => p.week.slice(5)),
@@ -755,6 +773,18 @@ export default function BaseView({ data }: { data: BaseData }) {
                       pointRadius: 0,
                       pointHoverRadius: 4,
                     }] : []),
+                    ...(showYB2 ? [{
+                      label: `${data.plan.sourceYear - 1} base model`,
+                      data: data.points.map((p) => p.base2Y),
+                      borderColor: "#14b8a6",
+                      backgroundColor: "#14b8a6",
+                      borderDash: [5, 3],
+                      borderWidth: 1.6,
+                      tension: 0.25,
+                      spanGaps: false,
+                      pointRadius: 0,
+                      pointHoverRadius: 4,
+                    }] : []),
                     {
                       label: "Projected base — rest of year",
                       // repeats the last actualized week so the two lines connect
@@ -786,7 +816,7 @@ export default function BaseView({ data }: { data: BaseData }) {
               />
             ) : (
             <Line
-              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + (showYB ? "y" : "") + (showLanes ? bands.lanes.length : 0)}
+              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + (showYB ? "y" : "") + (showYB2 ? "z" : "") + (showLanes ? bands.lanes.length : 0)}
               plugins={[bandPlugin]}
               data={{
                 labels: data.points.map((p) => p.week.slice(5)),
@@ -820,6 +850,18 @@ export default function BaseView({ data }: { data: BaseData }) {
                     backgroundColor: "#8b5cf6",
                     borderDash: [2, 3],
                     borderWidth: 1.8,
+                    tension: 0.25,
+                    spanGaps: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                  }] : []),
+                  ...(showYB2 ? [{
+                    label: "NIQ base — 2 yrs ago",
+                    data: data.points.map((p) => p.base2Y),
+                    borderColor: "#14b8a6",
+                    backgroundColor: "#14b8a6",
+                    borderDash: [5, 3],
+                    borderWidth: 1.6,
                     tension: 0.25,
                     spanGaps: false,
                     pointRadius: 0,
