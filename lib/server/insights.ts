@@ -19,6 +19,9 @@ export type Insight = {
   detail: string;
   impact: number; // |Δ weekly base units| — the ranking key
   upc?: string;   // set on item-level insights — lets the UI target the item
+  /** the item's weekly base, latest 26 weeks vs the same weeks a year ago —
+      the picture behind the flag, for the adjust-popup chart */
+  trend?: { weeks: string[]; cur: (number | null)[]; prior: (number | null)[] };
 };
 
 export function detectInsights(opts: {
@@ -57,6 +60,28 @@ export function detectInsights(opts: {
   }
   const brandWk = [...cur.values()].reduce((a, s) => a + s.bu, 0) / 8;
 
+  // per-item weekly base for the trend popups: last 26 weeks and their
+  // year-ago counterparts, from the same scoped rows
+  const trendWeeks = allWeeks.slice(-26);
+  const trendYA = trendWeeks.map(yearAgoWeek);
+  const wantWeeks = new Set([...trendWeeks, ...trendYA]);
+  const itemWk = new Map<string, Map<string, number>>(); // upc -> week -> base units
+  for (const r of rows) {
+    if (!wantWeeks.has(r.week_ending)) continue;
+    const m = itemWk.get(r.upc) ?? new Map<string, number>();
+    m.set(r.week_ending, (m.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+    itemWk.set(r.upc, m);
+  }
+  const trendOf = (u: string): Insight["trend"] => {
+    const m = itemWk.get(u);
+    if (!m) return undefined;
+    const curT = trendWeeks.map((w) => (m.has(w) ? Math.round(m.get(w)!) : null));
+    const priorT = trendYA.map((w) => (m.has(w) ? Math.round(m.get(w)!) : null));
+    return curT.some((v) => v !== null) || priorT.some((v) => v !== null)
+      ? { weeks: trendWeeks, cur: curT, prior: priorT }
+      : undefined;
+  };
+
   const upcs = new Set([...cur.keys(), ...prior.keys()]);
   for (const u of upcs) {
     const c = cur.get(u) ?? mk(), p = prior.get(u) ?? mk();
@@ -71,7 +96,7 @@ export function detectInsights(opts: {
     // likely delisted: real volume a year ago, none measured in 6 weeks
     if (pw >= 30 && (recent6Units.get(u) ?? 0) === 0) {
       insights.push({
-        kind: "delisted", severity: "bad", impact: pw, upc: u,
+        kind: "delisted", severity: "bad", impact: pw, upc: u, trend: trendOf(u),
         title: `${short(u)} looks delisted`,
         detail: `No measured volume in the last 6 weeks against ~${Math.round(pw)} base units/wk a year ago. If it's gone for good, take it out of the plan — a distribution adjustment of −100% on this item in the plan view.`,
       });
@@ -81,7 +106,7 @@ export function detectInsights(opts: {
     if (cAcv !== null && pAcv !== null && Math.abs(cAcv - pAcv) >= 10) {
       const down = cAcv < pAcv;
       insights.push({
-        kind: "distribution", severity: down ? "bad" : "good", impact, upc: u,
+        kind: "distribution", severity: down ? "bad" : "good", impact, upc: u, trend: trendOf(u),
         title: `Distribution ${down ? "dropped" : "gained"} on ${short(u)}`,
         detail: `%ACV ${down ? "fell" : "rose"} ${Math.round(pAcv)} → ${Math.round(cAcv)} (latest 8 wks vs same wks YA); base is running ${basePct === null ? "n/a" : `${basePct >= 0 ? "+" : ""}${basePct.toFixed(0)}%`} vs YA. The plan projection carries this run-rate forward — ${down ? "volume stays down unless distribution recovers; consider a distribution adjustment" : "the gain is already in the forward base"}.`,
       });
@@ -90,7 +115,7 @@ export function detectInsights(opts: {
     if (pricePct !== null && Math.abs(pricePct) >= 3) {
       const up = pricePct > 0;
       insights.push({
-        kind: "price", severity: basePct !== null && basePct < -5 ? "bad" : "info", impact, upc: u,
+        kind: "price", severity: basePct !== null && basePct < -5 ? "bad" : "info", impact, upc: u, trend: trendOf(u),
         title: `Base price ${up ? "up" : "down"} ${Math.abs(pricePct).toFixed(0)}% on ${short(u)}`,
         detail: `Measured base price moved $${pPrice!.toFixed(2)} → $${cPrice!.toFixed(2)} (latest 8 wks vs YA)${basePct === null ? "" : `, with base volume ${basePct >= 0 ? "+" : ""}${basePct.toFixed(0)}% over the same comparison`}. ${up && basePct !== null && basePct < -5 ? "The volume response is showing — check the elasticity assumption in the plan." : "Watch whether base volume holds at the new price."}`,
       });
@@ -98,7 +123,7 @@ export function detectInsights(opts: {
     }
     if (!explained && basePct !== null && Math.abs(basePct) >= 20) {
       insights.push({
-        kind: "volume", severity: basePct < 0 ? "bad" : "good", impact, upc: u,
+        kind: "volume", severity: basePct < 0 ? "bad" : "good", impact, upc: u, trend: trendOf(u),
         title: `Base volume ${basePct < 0 ? "down" : "up"} ${Math.abs(basePct).toFixed(0)}% on ${short(u)}`,
         detail: `~${Math.round(pw)} → ~${Math.round(cw)} base units/wk (latest 8 wks vs same wks YA) with no distribution or price move to explain it. The projection inherits this level — a trend adjustment in the plan view corrects it if you know better.`,
       });

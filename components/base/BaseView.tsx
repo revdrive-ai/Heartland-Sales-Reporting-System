@@ -78,6 +78,7 @@ export type BaseData = {
     detail: string;
     impact: number;
     upc?: string;            // item-level insights carry their item
+    trend?: { weeks: string[]; cur: (number | null)[]; prior: (number | null)[] }; // 26-wk base, now vs YA
   }[];
   insightsTotal: number;
   liftEngine: {              // depth vs unit lift over the selection's promoted weeks, full history
@@ -225,6 +226,23 @@ export default function BaseView({ data }: { data: BaseData }) {
     prefillAdj(k, u === "ALL" ? undefined : u);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planYear, adjParam, data.mkt]);
+
+  /* the trend popup an insight's "Adjust in Plan" opens: the item's base
+     trend behind the flag, then one click through to the adjustment */
+  type InsightRow = BaseData["insights"][number];
+  const [insModal, setInsModal] = useState<InsightRow | null>(null);
+  const goAdjust = (ins: InsightRow) => {
+    setInsModal(null);
+    if (data.plan) {
+      prefillAdj(ins.kind, ins.upc);
+    } else {
+      const p = new URLSearchParams({
+        mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric,
+        win: String(nextPlanYear), adj: `${ins.kind}:${ins.upc ?? "ALL"}`,
+      });
+      router.push(`/base?${p.toString()}`);
+    }
+  };
 
   const addAdj = async () => {
     const pct = parseFloat(aPct);
@@ -897,20 +915,12 @@ export default function BaseView({ data }: { data: BaseData }) {
                     <span
                       className="minichip"
                       style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
-                      title={data.plan
+                      title={ins.trend
+                        ? "See this item's base trend behind the flag, then set up the adjustment — item and lever pre-filled"
+                        : data.plan
                         ? "Set up this adjustment below — item and lever pre-filled, enter the impact %"
                         : `Open the ${nextPlanYear} plan view with this adjustment set up — item and lever pre-filled, enter the impact %`}
-                      onClick={() => {
-                        if (data.plan) {
-                          prefillAdj(ins.kind, ins.upc);
-                        } else {
-                          const p = new URLSearchParams({
-                            mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric,
-                            win: String(nextPlanYear), adj: `${ins.kind}:${ins.upc ?? "ALL"}`,
-                          });
-                          router.push(`/base?${p.toString()}`);
-                        }
-                      }}
+                      onClick={() => (ins.trend ? setInsModal(ins) : goAdjust(ins))}
                     >
                       Adjust in Plan {planYear ?? nextPlanYear} →
                     </span>
@@ -1325,6 +1335,67 @@ export default function BaseView({ data }: { data: BaseData }) {
           </table>
         </div>
       </div>
+      )}
+
+      {insModal && (
+        <div className="modal open">
+          <div className="box" style={{ width: 640 }}>
+            <div className="m-head">
+              <div>
+                <div className="mt">{insModal.title}</div>
+                <div className="ms">{insModal.detail}</div>
+              </div>
+              <button className="x" onClick={() => setInsModal(null)}>✕</button>
+            </div>
+            <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
+              <div className="chartbox" style={{ height: 230 }}>
+                <Line
+                  data={{
+                    labels: insModal.trend!.weeks.map((w) => w.slice(5)),
+                    datasets: [
+                      {
+                        label: "Base units/wk — latest 26 weeks",
+                        data: insModal.trend!.cur,
+                        borderColor: cssToken("--accent"),
+                        backgroundColor: cssToken("--accent"),
+                        borderWidth: 2.2,
+                        pointRadius: 0,
+                        tension: 0.25,
+                        spanGaps: true,
+                      },
+                      {
+                        label: "Same weeks a year ago",
+                        data: insModal.trend!.prior,
+                        borderColor: cssToken("--ink-3"),
+                        backgroundColor: cssToken("--ink-3"),
+                        borderDash: [6, 4],
+                        borderWidth: 1.6,
+                        pointRadius: 0,
+                        tension: 0.25,
+                        spanGaps: true,
+                      },
+                    ],
+                  }}
+                  options={gridOptions()}
+                />
+              </div>
+              <div className="note" style={{ marginTop: 10 }}>
+                ◇ NIQ weekly <b>base</b> (promo-stripped) units for this item at {marketName}. The flag compares the
+                last 8 weeks of the solid line against the same 8 weeks of the dashed one — the gap on the right side
+                of the chart is the issue the adjustment corrects.
+              </div>
+            </div>
+            <div className="m-foot">
+              <div />
+              <div className="right">
+                <button className="btn ghost" onClick={() => setInsModal(null)}>Close</button>
+                <button className="btn primary" onClick={() => goAdjust(insModal)}>
+                  Set up adjustment in Plan {planYear ?? nextPlanYear} →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {expOpen && (
