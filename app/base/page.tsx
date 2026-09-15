@@ -129,10 +129,13 @@ export default async function Page({
   const scoped = factsAll.filter((r) => item === "ALL" || r.upc === item);
   const facts = planningYear ? [] : scoped.filter((r) => r.week_ending >= from && r.week_ending <= to);
 
-  // full-history weekly actuals for the selection — feeds the year-ago overlay
+  // full-history weekly actuals + modelled base for the selection — feed the
+  // year-ago overlays (base from 364 days back = the prior year's base model)
   const weekActual = new Map<string, number>();
+  const weekBaseFull = new Map<string, number>();
   for (const r of scoped) {
     weekActual.set(r.week_ending, (weekActual.get(r.week_ending) ?? 0) + aVal(r));
+    weekBaseFull.set(r.week_ending, (weekBaseFull.get(r.week_ending) ?? 0) + bVal(r));
   }
   const yearAgoWeek = (w: string) =>
     new Date(Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10)) - 364 * DAY).toISOString().slice(0, 10);
@@ -141,7 +144,15 @@ export default async function Page({
   const byWeek = new Map<string, WeekPoint>();
   for (const w of weeks) {
     const ly = weekActual.get(yearAgoWeek(w));
-    byWeek.set(w, { week: w, actual: planningYear ? null : 0, base: planningYear ? null : 0, actualLY: ly === undefined ? null : Math.round(ly), promoAcv: 0 });
+    const bly = weekBaseFull.get(yearAgoWeek(w));
+    byWeek.set(w, {
+      week: w,
+      actual: planningYear ? null : 0,
+      base: planningYear ? null : 0,
+      actualLY: ly === undefined ? null : Math.round(ly),
+      baseLY: bly === undefined ? null : Math.round(bly),
+      promoAcv: 0,
+    });
   }
   for (const r of facts) {
     const p = byWeek.get(r.week_ending);
@@ -268,10 +279,7 @@ export default async function Page({
      to the selection's all-history promoted-week lift (weeks where NIQ saw
      ≥ 10 %ACV promo support) when there is no year-ago data. */
   const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-  const weekBaseFull = new Map<string, number>(); // full-history base, chosen metric
-  for (const r of scoped) {
-    weekBaseFull.set(r.week_ending, (weekBaseFull.get(r.week_ending) ?? 0) + bVal(r));
-  }
+  // weekBaseFull (full-history base, chosen metric) is built above with weekActual
   const promoWeeks = new Set<string>();
   for (const r of scoped) if ((r.acv_any_promo ?? 0) >= 10) promoWeeks.add(r.week_ending);
   let pA = 0, pB = 0;
