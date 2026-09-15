@@ -41,6 +41,9 @@ export type PlannerData = {
     prices: { upc: string; unit_price: number; effective_from: string }[]; // dated list prices
     brandListPrice: Record<string, number | null>;       // run-rate-weighted brand list price, plan-year start
     telusUpcs: Record<string, string[]>;                 // Telus item number → NIQ UPCs (book SKUs only)
+    /** plan-year monthly base per division × brand, via the seasonality
+        engine: year-ago base carried where measured, shaped projection after */
+    divBrandBaseM: Record<string, Record<string, number[]>>;
     /** prior-year NIQ volume by month per division × brand: u/g = total units
         and gross $ (dated list price), pu/pg = the promoted-week slices */
     priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;

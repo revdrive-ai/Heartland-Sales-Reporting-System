@@ -103,6 +103,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
     // score on their own customer's divisions, not the whole scope
     const divBrandWk: Record<string, Record<string, number>> = {};
     const divItemWk: Record<string, Record<string, number>> = {};
+    // plan-year monthly BASE per division × brand, built the same way as the
+    // Base & Lift plan view: year-ago weekly base carried where measured,
+    // seasonality-shaped run-rate projection for the rest
+    const divBrandBaseM: Record<string, Record<string, number[]>> = {};
 
     // Dated list prices, hoisted ahead of the facts loop: they price the
     // prior-year monthly gross series (and later, planner ROI). Per-UPC sorted
@@ -159,6 +163,38 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         const m52 = mWeeks.slice(-52);
         (divBrandWk[m.code] ??= {})[brand] =
           m52.reduce((a, w) => a + (mB.get(w) ?? 0), 0) / Math.max(m52.length, 1);
+
+        /* Plan-year monthly base through the seasonality engine — the exact
+           construction the Base & Lift plan view uses, at this division ×
+           brand: each plan-year Saturday carries the year-ago week's measured
+           base (364 days back keeps Saturdays aligned); weeks whose source
+           hasn't been measured yet project as the latest-52w average shaped
+           by this division × brand's monthly index over its full history. */
+        {
+          const mTot = Array(12).fill(0), mN = Array(12).fill(0);
+          let gTot = 0, gN = 0;
+          for (const [w, v] of mB) {
+            const mo = +w.slice(5, 7) - 1;
+            mTot[mo] += v; mN[mo] += 1; gTot += v; gN += 1;
+          }
+          const grand = gN > 0 ? gTot / gN : 0;
+          const eng = mTot.map((t, i) => (mN[i] > 0 && grand > 0 ? t / mN[i] / grand : 1));
+          const avg52 = divBrandWk[m.code][brand];
+          const latest = mWeeks[mWeeks.length - 1];
+          const baseM = Array(12).fill(0);
+          if (latest) {
+            // walk to the last Saturday before the plan year, then step through it
+            let t = utcOf(latest) + 364 * DAY;
+            while (new Date(t).getUTCFullYear() < year) t += 7 * DAY;
+            while (new Date(t).getUTCFullYear() >= year) t -= 7 * DAY;
+            for (t += 7 * DAY; new Date(t).getUTCFullYear() === year; t += 7 * DAY) {
+              const mo = new Date(t).getUTCMonth();
+              const src = new Date(t - 364 * DAY).toISOString().slice(0, 10);
+              baseM[mo] += src <= latest ? (mB.get(src) ?? 0) : avg52 * eng[mo];
+            }
+          }
+          (divBrandBaseM[m.code] ??= {})[brand] = baseM.map(Math.round);
+        }
         const c0 = m52[0] ?? "";
         const perUpc = (divItemWk[m.code] ??= {});
         for (const r of facts) {
@@ -329,6 +365,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       prices,
       brandListPrice,
       telusUpcs,
+      divBrandBaseM,
       priorMonthly: Object.fromEntries(Object.entries(priorMonthly).map(([mc, byBrand]) => [
         mc,
         Object.fromEntries(Object.entries(byBrand).map(([b, s]) => [

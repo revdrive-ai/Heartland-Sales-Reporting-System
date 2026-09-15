@@ -231,35 +231,40 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     return { planM: planM.map(Math.round), billM: billM.map(Math.round) };
   }, [plan, custSel, brandChip, itemSel, data.meta.snapshot_date]);
 
-  /* month-by-month TOTAL VOLUME: the plan's expected total sales — the base
-     run-rate at the selected divisions plus each scored event's incremental —
-     vs the prior year's total measured NIQ volume, with promoted-week volume
-     as the dashed context line. "dollars" prices both sides at the dated
-     list price. */
+  /* month-by-month TOTAL VOLUME: the plan's expected total sales — the
+     seasonality-engine base (year-ago base carried where measured, shaped
+     projection after — the same construction as the Base & Lift plan view)
+     plus each scored event's incremental — vs the prior year's total measured
+     NIQ volume, with promoted-week volume as the dashed context line.
+     "dollars" prices both sides at the dated list price. */
   const [volMode, setVolMode] = useState<"units" | "dollars">("units");
   const volChart = useMemo(() => {
     const jan1 = `${year}-01-01`;
     const mkts = custSel ? (plan.custMarkets[custSel] ?? []) : Object.keys(plan.divBrandWk);
     const brands = brandChip !== "All brands" && brandChip !== "MIXED" ? [brandChip] : Object.keys(plan.brandStats);
-    const daysIn = (m: number) => new Date(Date.UTC(year, m + 1, 0)).getUTCDate();
 
-    // base run-rate by month: the latest-52w weekly base at the selected
-    // divisions (per item when an item is picked), shaped only by month length
-    let wkBaseUnits = 0, wkBaseDollars = 0;
+    // the engine base by month at the selected divisions; an item selection
+    // scales its brand's seasonal curve by the item's share of the brand base
+    const planM = Array(12).fill(0);
     for (const mc of mkts) {
       if (itemSel) {
-        const u = plan.divItemWk[mc]?.[itemSel] ?? 0;
-        const p = listPriceAsOf(plan.prices, itemSel, jan1) ?? 0;
-        wkBaseUnits += u; wkBaseDollars += u * p;
+        const b = itemMeta.get(itemSel)?.brand;
+        if (!b) continue;
+        const bw = plan.divBrandWk[mc]?.[b] ?? 0;
+        const share = bw > 0 ? (plan.divItemWk[mc]?.[itemSel] ?? 0) / bw : 0;
+        const baseM = plan.divBrandBaseM[mc]?.[b];
+        if (share <= 0 || !baseM) continue;
+        const p = volMode === "units" ? 1 : listPriceAsOf(plan.prices, itemSel, jan1) ?? 0;
+        for (let i = 0; i < 12; i++) planM[i] += baseM[i] * share * p;
       } else {
         for (const b of brands) {
-          const u = plan.divBrandWk[mc]?.[b] ?? 0;
-          const p = plan.brandListPrice[b] ?? plan.brandStats[b]?.price ?? 0;
-          wkBaseUnits += u; wkBaseDollars += u * p;
+          const baseM = plan.divBrandBaseM[mc]?.[b];
+          if (!baseM) continue;
+          const p = volMode === "units" ? 1 : plan.brandListPrice[b] ?? plan.brandStats[b]?.price ?? 0;
+          for (let i = 0; i < 12; i++) planM[i] += baseM[i] * p;
         }
       }
     }
-    const planM = Array(12).fill(0).map((_, m) => (volMode === "units" ? wkBaseUnits : wkBaseDollars) * (daysIn(m) / 7));
 
     // plus each scored event's incremental, spread across its window (when an
     // item is picked, only that item's share of the event's base lifts)
@@ -289,7 +294,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     // the month the prior-year NIQ reads stop — later months have nothing measured
     const edgeMo = plan.dataEdge.startsWith(String(plan.priorYear)) ? +plan.dataEdge.slice(5, 7) - 1 : 11;
     return { planM: planM.map(Math.round), promo: promo.map(Math.round), total: total.map(Math.round), edgeMo };
-  }, [visible, volMode, custSel, brandChip, itemSel, plan, priceEdits, year]);
+  }, [visible, volMode, custSel, brandChip, itemSel, plan, priceEdits, year, itemMeta]);
 
   const saveBudget = (v: number) => {
     setBudget(v);
@@ -919,9 +924,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
         <div className="note">
           ◇ Plan bars are the plan&apos;s expected <b>total</b> {volMode === "units" ? "sales units" : "gross sales $"} —
-          the latest-52-week base run-rate at the selected divisions plus each scored event&apos;s incremental
-          (base × lift across its window){volMode === "dollars" ? ", both at the dated list price" : ""}; events at
-          customers with no NIQ divisions add nothing here (their dollars live in the spend chart above). Gray bars
+          the <b>seasonality-engine base</b> (the same construction as the Base &amp; Lift plan view: each week carries
+          the year-ago measured base, and weeks not yet measured project as the latest-52-week run-rate shaped by that
+          division × brand&apos;s monthly index) plus each scored event&apos;s incremental (base × lift across its
+          window){volMode === "dollars" ? ", all at the dated list price" : ""}. An item view scales its brand&apos;s
+          seasonal curve by the item&apos;s share of the brand base. Events at customers with no NIQ divisions add
+          nothing here (their dollars live in the spend chart above). Gray bars
           are FY{plan.priorYear}&apos;s <b>actual total</b> NIQ {volMode === "units" ? "units" : "gross $ (list price)"},
           and the dashed line is the promoted-week slice of it. NIQ is read through {plan.dataEdge}: later months
           have no measurement, so plan bars there stay neutral. All series follow the customer, brand and item
