@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import WorkflowStrip from "@/components/WorkflowStrip";
@@ -77,6 +77,7 @@ export type BaseData = {
     title: string;
     detail: string;
     impact: number;
+    upc?: string;            // item-level insights carry their item
   }[];
   insightsTotal: number;
   liftEngine: {              // depth vs unit lift over the selection's promoted weeks, full history
@@ -203,6 +204,28 @@ export default function BaseView({ data }: { data: BaseData }) {
       setAFrom(`${planYear}-01-01`); setATo(`${planYear}-12-31`);
     } else setAdjs([]);
   }, [data.mkt, planYear]);
+  /* "Adjust in Plan →" from a Key insight: pre-fill the adjustment form with
+     the insight's item and the matching lever, and bring the card into view.
+     From a measured window the chip navigates into the plan year carrying an
+     `adj` param; already in a plan year it acts in place. */
+  const adjCard = useRef<HTMLDivElement>(null);
+  const ADJ_KIND: Record<string, PlanAdjustment["kind"]> = {
+    distribution: "distribution", delisted: "distribution", price: "price", volume: "trend",
+  };
+  const prefillAdj = (kind: string, upc?: string) => {
+    setAKind(ADJ_KIND[kind] ?? "trend");
+    setAUpc(upc && data.items.some((i) => i.upc === upc) ? upc : "ALL");
+    setTimeout(() => adjCard.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+  };
+  const searchParams = useSearchParams();
+  const adjParam = searchParams.get("adj");
+  useEffect(() => {
+    if (!planYear || !adjParam) return;
+    const [k, u] = adjParam.split(":");
+    prefillAdj(k, u === "ALL" ? undefined : u);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planYear, adjParam, data.mkt]);
+
   const addAdj = async () => {
     const pct = parseFloat(aPct);
     if (!planYear || !pct || !aFrom || !aTo || aTo < aFrom) return;
@@ -874,10 +897,22 @@ export default function BaseView({ data }: { data: BaseData }) {
                     <span
                       className="minichip"
                       style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
-                      title={`Open the ${nextPlanYear} plan view — the adjustments card there takes distribution, price and trend corrections per item`}
-                      onClick={() => nav({ win: String(nextPlanYear) })}
+                      title={data.plan
+                        ? "Set up this adjustment below — item and lever pre-filled, enter the impact %"
+                        : `Open the ${nextPlanYear} plan view with this adjustment set up — item and lever pre-filled, enter the impact %`}
+                      onClick={() => {
+                        if (data.plan) {
+                          prefillAdj(ins.kind, ins.upc);
+                        } else {
+                          const p = new URLSearchParams({
+                            mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric,
+                            win: String(nextPlanYear), adj: `${ins.kind}:${ins.upc ?? "ALL"}`,
+                          });
+                          router.push(`/base?${p.toString()}`);
+                        }
+                      }}
                     >
-                      Adjust in Plan {nextPlanYear} →
+                      Adjust in Plan {planYear ?? nextPlanYear} →
                     </span>
                   )}
                 </div>
@@ -895,7 +930,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       )}
 
       {data.plan && (
-      <div className="card" style={{ padding: 0, marginTop: 16 }}>
+      <div ref={adjCard} className="card" style={{ padding: 0, marginTop: 16, scrollMarginTop: 12 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>Planner adjustments — {data.win}</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
