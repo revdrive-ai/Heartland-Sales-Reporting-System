@@ -1,6 +1,6 @@
 # Heartland Sales Reporting System — Build Status
 
-_Last updated: 2026-09-05_
+_Last updated: 2026-09-16_
 
 A Next.js/TypeScript rebuild of the heartland-harvest-v3 demo on real data,
 deployed to Vercel from `main`. Every view reads through the repository seam
@@ -86,9 +86,13 @@ until they're set, the tool falls back to per-browser storage there.
 
 ## Open items
 
-- **Supabase provisioning** — migrations `00001`–`00010` are ready; setting
-  the two env vars on Vercel makes the shared plan state durable in
-  production (see above).
+- **Supabase connection** — the project exists; `supabase/README.md` is the
+  runbook: paste `supabase/setup.sql` in the SQL Editor (migrations
+  `00001`–`00011`, RLS locked down), set `SUPABASE_URL` +
+  `SUPABASE_SERVICE_ROLE_KEY` on Vercel and redeploy (shared plan state goes
+  durable), then `scripts/load_supabase.py` upserts all fixture data
+  (~60K rows) into the tables for the coming repo swap-in. CSV/Excel drops
+  stay two-stage: ingest script → fixture → loader.
 - **Remaining stub views** — Promo Analysis (workflow step 4) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
   Approvals, Latest Estimate, and Sales Leader View.
