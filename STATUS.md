@@ -86,7 +86,10 @@ until they're set, the tool falls back to per-browser storage there.
 
 ## Open items
 
-- **Supabase connection** — the project exists; `supabase/README.md` is the
+- **Supabase connection** — the project is **Heartland Sales Reporting POC**
+  (org REVDRIVE.AI INC, ref `bsmeqxypfvtcubytvrpw`,
+  https://bsmeqxypfvtcubytvrpw.supabase.co); its GitHub integration watches
+  this repo's `main` and applies `supabase/migrations/` on push. `supabase/README.md` is the
   runbook: paste `supabase/setup.sql` in the SQL Editor (migrations
   `00001`–`00011`, RLS locked down), set `SUPABASE_URL` +
   `SUPABASE_SERVICE_ROLE_KEY` on Vercel and redeploy (shared plan state goes

@@ -1,5 +1,11 @@
 # Supabase runbook
 
+**Connected project:** Heartland Sales Reporting POC — org REVDRIVE.AI INC,
+ref `bsmeqxypfvtcubytvrpw` (https://bsmeqxypfvtcubytvrpw.supabase.co). Its
+GitHub integration watches this repo's `main` and applies `migrations/` on
+push, so step 1 below happens automatically — don't also paste `setup.sql`.
+The future auto-feed project will be a second, separate Supabase project.
+
 How this app connects to Supabase, how CSV/Excel data gets in, and how the
 future auto-feed project fits. The migrations in `migrations/` are canonical —
 the same schema stands up any number of projects identically, and every schema
