@@ -32,7 +32,7 @@ export async function getState(key: string): Promise<unknown> {
       `${supabase.url}/rest/v1/app_state?key=eq.${encodeURIComponent(key)}&select=data`,
       { headers: sbHeaders(supabase.key), cache: "no-store" }
     );
-    if (!r.ok) throw new Error(`app_state read failed: ${r.status}`);
+    if (!r.ok) throw new Error(`app_state read failed: ${r.status} ${(await r.text()).slice(0, 120)}`);
     const rows = (await r.json()) as { data: unknown }[];
     return rows[0]?.data;
   }
@@ -56,7 +56,7 @@ export async function setState(key: string, data: unknown): Promise<void> {
       },
       body: JSON.stringify({ key, data, updated_at: new Date().toISOString() }),
     });
-    if (!r.ok) throw new Error(`app_state write failed: ${r.status}`);
+    if (!r.ok) throw new Error(`app_state write failed: ${r.status} ${(await r.text()).slice(0, 120)}`);
     return;
   }
   await fs.mkdir(FILE_DIR, { recursive: true });

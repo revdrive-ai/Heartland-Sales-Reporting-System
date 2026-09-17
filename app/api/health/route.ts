@@ -17,9 +17,11 @@ export async function GET() {
       { backend, writable: back?.at === stamp, checked_at: stamp },
       { headers: { "cache-control": "no-store" } }
     );
-  } catch {
+  } catch (e) {
+    // surface only the status-code shaped message from the backend, no URLs/keys
+    const msg = e instanceof Error ? e.message.slice(0, 80) : "unknown";
     return NextResponse.json(
-      { backend, writable: false },
+      { backend, writable: false, reason: msg },
       { status: 200, headers: { "cache-control": "no-store" } }
     );
   }
