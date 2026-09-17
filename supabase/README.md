@@ -2,8 +2,9 @@
 
 **Connected project:** Heartland Sales Reporting POC — org REVDRIVE.AI INC,
 ref `bsmeqxypfvtcubytvrpw` (https://bsmeqxypfvtcubytvrpw.supabase.co). Its
-GitHub integration watches this repo's `main` and applies `migrations/` on
-push, so step 1 below happens automatically — don't also paste `setup.sql`.
+GitHub integration watches this repo's `main`; in practice it applied only
+part of the schema, so run step 1's `setup.sql` paste as well — it is
+idempotent and simply fills in whatever the integration missed.
 The future auto-feed project will be a second, separate Supabase project.
 
 How this app connects to Supabase, how CSV/Excel data gets in, and how the
@@ -15,12 +16,15 @@ change is a new migration file, never a dashboard edit.
 
 1. In the Supabase dashboard open **SQL Editor → New query**.
 2. Paste the whole of [`setup.sql`](./setup.sql) (the generated concatenation
-   of migrations 00001–00011) and **Run**. Run it **once, on a fresh
-   project** — 00003 seeds rows, so a second full run errors harmlessly on
-   duplicate keys.
-3. Sanity check: **Table Editor** should list ~20 tables (`markets`, `items`,
-   `nielsen_weekly`, `promotions`, `promo_lines`, `price_list`, `app_state`, …)
-   and `market_promo_customers` should already hold 14 seeded rows.
+   of migrations 00001–00011) and **Run**. It is **idempotent**: safe on a
+   fresh project and equally safe where part of the schema already exists —
+   existing tables, indexes, policies, and seed rows are left alone and only
+   what's missing is created. It ends with a PostgREST schema-cache reload so
+   the API sees new tables immediately.
+3. Sanity check: **Table Editor** should list 22 tables (`markets`, `items`,
+   `nielsen_weekly`, `promotions`, `promo_lines`, `price_list`, `app_state`, …),
+   `markets` should hold the 13 seeded divisions, and
+   `market_promo_customers` 25 seeded mapping rows.
 
 RLS is enabled on every table with no anon policies (migration 00011): the
 public/anon key can read nothing. The app talks to Supabase only through the

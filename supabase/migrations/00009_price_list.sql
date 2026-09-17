@@ -6,7 +6,7 @@
 -- workbook ingests append dated versions, and per-item UI edits insert rows
 -- with source 'manual' (held in localStorage hhPriceEdits until swap-in).
 
-create table public.price_list (
+create table if not exists public.price_list (
   fg             text not null,              -- Heartland FG# / item number
   effective_from date not null,
   upc_core       text,                       -- normalized NIQ UPC ('' when TBD)
@@ -25,12 +25,14 @@ create table public.price_list (
   primary key (fg, effective_from)
 );
 
-create index price_list_upc on public.price_list (upc_core);
-create index price_list_effective on public.price_list (effective_from);
+create index if not exists price_list_upc on public.price_list (upc_core);
+create index if not exists price_list_effective on public.price_list (effective_from);
 
 comment on table public.price_list is
   'Dated list prices per item — the pricing basis every analysis ties back to; versioned so price-change effects can be measured.';
 
 alter table public.price_list enable row level security;
+drop policy if exists "authenticated read" on public.price_list;
 create policy "authenticated read" on public.price_list for select to authenticated using (true);
+drop policy if exists "authenticated write" on public.price_list;
 create policy "authenticated write" on public.price_list for insert to authenticated with check (true);

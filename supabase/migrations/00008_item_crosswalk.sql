@@ -6,7 +6,7 @@
 -- digits only, leading zeros stripped (the Heartland tab's trailing check
 -- digit dropped) — public.items.upc stripped of leading zeros equals it.
 
-create table public.item_crosswalk (
+create table if not exists public.item_crosswalk (
   item_number   text not null,               -- Telus SKU (promo_lines.item_number)
   upc_core      text not null,               -- normalized NIQ UPC
   brand         text not null,
@@ -15,12 +15,12 @@ create table public.item_crosswalk (
   primary key (item_number, upc_core)
 );
 
-create index item_crosswalk_upc on public.item_crosswalk (upc_core);
+create index if not exists item_crosswalk_upc on public.item_crosswalk (upc_core);
 
 comment on table public.item_crosswalk is
   'Telus/Heartland item numbers joined to NIQ UPCs — lets promotion lines score against NIQ item volume.';
 
-create table public.niq_item_attributes (
+create table if not exists public.niq_item_attributes (
   upc_core     text primary key,
   item         text not null,                -- NIQ item description
   brand        text not null,                -- NIQ BRAND SHORT
@@ -40,5 +40,7 @@ comment on table public.niq_item_attributes is
 
 alter table public.item_crosswalk enable row level security;
 alter table public.niq_item_attributes enable row level security;
+drop policy if exists "authenticated read" on public.item_crosswalk;
 create policy "authenticated read" on public.item_crosswalk for select to authenticated using (true);
+drop policy if exists "authenticated read" on public.niq_item_attributes;
 create policy "authenticated read" on public.niq_item_attributes for select to authenticated using (true);

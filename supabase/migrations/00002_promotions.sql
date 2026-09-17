@@ -4,7 +4,7 @@
 -- line that disappears from a later export (flag removed_at_source), and
 -- record every export's snapshot date for auditable, replayable loads.
 
-create table public.promo_import_batches (
+create table if not exists public.promo_import_batches (
   id            uuid primary key default gen_random_uuid(),
   source_file   text not null,
   snapshot_date date not null,       -- from the Telus export filename (MMDDYYYY)
@@ -17,7 +17,7 @@ create table public.promo_import_batches (
   created_at    timestamptz not null default now()
 );
 
-create table public.promotions (
+create table if not exists public.promotions (
   promo_id          text primary key,          -- Telus 'Promo ID Base' (PRG-#######)
   promo_title       text not null,
   fiscal_year       integer not null,
@@ -42,14 +42,14 @@ create table public.promotions (
   constraint promo_window check (end_date >= start_date)
 );
 
-create index promotions_customer on public.promotions (customer_id);
-create index promotions_status on public.promotions (promo_status);
-create index promotions_window on public.promotions (start_date, end_date);
+create index if not exists promotions_customer on public.promotions (customer_id);
+create index if not exists promotions_status on public.promotions (promo_status);
+create index if not exists promotions_window on public.promotions (start_date, end_date);
 
 comment on table public.promotions is
   'Promotion headers from the Telus export — who, what, when, status. The money lives on promo_lines; header rollups are computed, never stored.';
 
-create table public.promo_lines (
+create table if not exists public.promo_lines (
   line_id           text primary key,          -- promo_id | component_type | item_number
   promo_id          text not null references public.promotions (promo_id),
   component_type    text not null check (component_type in
@@ -69,8 +69,8 @@ create table public.promo_lines (
   updated_at        timestamptz not null default now()
 );
 
-create index promo_lines_promo on public.promo_lines (promo_id);
-create index promo_lines_brand on public.promo_lines (brand);
+create index if not exists promo_lines_promo on public.promo_lines (promo_id);
+create index if not exists promo_lines_brand on public.promo_lines (brand);
 
 comment on table public.promo_lines is
   'One component + item under a promotion — rates, planned $, actual spend. A line missing from a later export is flagged removed_at_source, never deleted.';
@@ -82,6 +82,9 @@ alter table public.promo_import_batches enable row level security;
 alter table public.promotions           enable row level security;
 alter table public.promo_lines          enable row level security;
 
+drop policy if exists "authenticated read" on public.promo_import_batches;
 create policy "authenticated read" on public.promo_import_batches for select to authenticated using (true);
+drop policy if exists "authenticated read" on public.promotions;
 create policy "authenticated read" on public.promotions           for select to authenticated using (true);
+drop policy if exists "authenticated read" on public.promo_lines;
 create policy "authenticated read" on public.promo_lines          for select to authenticated using (true);

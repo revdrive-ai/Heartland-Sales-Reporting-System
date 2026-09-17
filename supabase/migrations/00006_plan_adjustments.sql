@@ -6,7 +6,7 @@
 -- % impact on base volume inside the effective window. Held in localStorage
 -- (hhPlanAdj, lib/repo/client.ts) until swap-in; seed from it if wanted.
 
-create table public.plan_adjustments (
+create table if not exists public.plan_adjustments (
   id             text primary key,
   market_code    text not null references public.markets (code),
   plan_year      int  not null check (plan_year between 2024 and 2100),
@@ -22,12 +22,15 @@ create table public.plan_adjustments (
   check (effective_to >= effective_from)
 );
 
-create index plan_adjustments_scope on public.plan_adjustments (market_code, plan_year, brand);
+create index if not exists plan_adjustments_scope on public.plan_adjustments (market_code, plan_year, brand);
 
 comment on table public.plan_adjustments is
   'Planner base-volume adjustments (distribution / price / trend) applied to plan-year projections in the Base & Lift Lab.';
 
 alter table public.plan_adjustments enable row level security;
+drop policy if exists "authenticated read" on public.plan_adjustments;
 create policy "authenticated read" on public.plan_adjustments for select to authenticated using (true);
+drop policy if exists "authenticated write" on public.plan_adjustments;
 create policy "authenticated write" on public.plan_adjustments for insert to authenticated with check (true);
+drop policy if exists "authenticated delete" on public.plan_adjustments;
 create policy "authenticated delete" on public.plan_adjustments for delete to authenticated using (true);
