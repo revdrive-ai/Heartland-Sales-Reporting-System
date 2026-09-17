@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { PlanEvent } from "@/lib/repo/client";
 import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, type DatedPrice } from "./planMath";
+import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import type { PlannerData } from "./PlannerView";
 
 /* The new-event wizard from the reference mockup, on real data: three steps
@@ -64,7 +65,9 @@ export default function EventWizard({
   // per-tactic measured lift (FY windows joined to NIQ); brand average when a
   // tactic has no measured windows yet
   const tacticRead = (t: string) => st?.tactics?.[t] ?? null;
-  const defFor = (t: string) => tacticRead(t)?.lift ?? st?.avgLift ?? null;
+  // funding vehicles (EDLP, Slotting) default to 0 — no incremental volume by
+  // definition; typing a lift still overrides
+  const defFor = (t: string) => (isNonPerformance(t) ? 0 : tacticRead(t)?.lift ?? st?.avgLift ?? null);
   const liftDef = tactic ? defFor(tactic) : null;
   const overridden = lift !== null && liftDef !== null && lift !== liftDef;
 
@@ -316,7 +319,9 @@ export default function EventWizard({
                   <input type="text" value={notes} placeholder="Anything the approver should know" onChange={(e) => setNotes(e.target.value)} />
                 </div>
                 <div className="hint">
-                  {calc.spend > 0 && calc.roi !== null
+                  {isNonPerformance(tactic) && (lift ?? 0) === 0
+                    ? "◇ Funding vehicle at 0% lift — no incremental claim, so the ROI guardrail doesn't apply."
+                    : calc.spend > 0 && calc.roi !== null
                     ? calc.roi >= ROI_GUARDRAIL
                       ? "✓ Plan clears the guardrail."
                       : `⚠ Plans under ${ROI_GUARDRAIL}× land flagged in the guardrail count.`
@@ -341,7 +346,12 @@ export default function EventWizard({
               {railRow("Total spend", calc.spend ? "$" + Math.round(calc.spend).toLocaleString() : "—", !calc.spend)}
               {railRow("Base source", `NIQ latest 52 wks${data.scopeLabel ? ` · ${data.scopeLabel}` : ""}`, false)}
             </div>
-            {calc.roi !== null ? (
+            {isNonPerformance(tactic) && (lift ?? 0) === 0 ? (
+              <div className="rail-roi">
+                <div className="val" style={{ color: "var(--ink-3)" }}>—×</div>
+                <div className="expl" style={{ color: "var(--ink-3)" }}>Funding vehicle — guardrail exempt at 0% lift</div>
+              </div>
+            ) : calc.roi !== null ? (
               <div className={"rail-roi " + (calc.roi >= ROI_GUARDRAIL ? "ok" : "bad")}>
                 <div className="val">{calc.roi.toFixed(1)}×</div>
                 <div className="expl">

@@ -8,6 +8,7 @@ import {
   getPlanBudget, getPlanEvents, replacePlanEvents, setPlanBudget, type PlanEvent,
 } from "@/lib/repo/client";
 import { getPriceEdits } from "@/lib/repo/client";
+import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
 import { usePromoLines } from "./lines";
 import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, listPriceAsOf, type DatedPrice, type PlanPayload } from "./planMath";
@@ -197,12 +198,19 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const pct = budget > 0 ? Math.min(100, (committed / budget) * 100) : 0;
   const inPct = over ? (budget / committed) * 100 : 0;
 
+  // funding vehicles (EDLP, Slotting) at 0% lift make no incremental claim, so
+  // the ROI guardrail doesn't apply to them; a manual lift override re-arms it
+  const roiExempt = (e: PlanEvent) => isNonPerformance(e.perf) && (e.lift_pct ?? 0) === 0;
+
   const guards = visible.reduce(
     (g, e) => {
-      const c = calc(e);
-      if (c.roi === null) g.low++;
-      else if (c.roi < ROI_GUARDRAIL) g.below++;
-      else g.clear++;
+      if (roiExempt(e)) g.clear++;
+      else {
+        const c = calc(e);
+        if (c.roi === null) g.low++;
+        else if (c.roi < ROI_GUARDRAIL) g.below++;
+        else g.clear++;
+      }
       return g;
     },
     { below: 0, low: 0, clear: 0 }
@@ -323,8 +331,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       item_rates: p.item_rates, // per-deal-line $/unit rates — editable in the drill-down
       source_promo_id: p.promo_id, // click the row to drill into the FY book's component lines
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
-      // scored like an import: the tactic's measured lift, else the brand average
-      lift_pct: plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
+      // scored like an import: the tactic's measured lift, else the brand
+      // average — except funding vehicles (EDLP, Slotting), which carry no
+      // incremental volume by definition; the lift cell stays editable
+      lift_pct: isNonPerformance(p.perf)
+        ? 0
+        : plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
       note: `carried from FY${plan.priorYear}`,
       origin: "carry", created_at: new Date().toISOString(),
     }));
@@ -380,8 +392,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           customer_id: cust.id, customer: cust.name, brand,
           title: g("title") || "Imported event", perf,
           start, end, spend: Math.round(spend),
-          // blank lift → the measured lift for that tactic, else the brand average
-          lift_pct: isNaN(lift) ? (bs?.tactics?.[perf]?.lift ?? bs?.avgLift ?? null) : lift,
+          // blank lift → the measured lift for that tactic, else the brand
+          // average; funding vehicles (EDLP, Slotting) default to 0 instead —
+          // an explicit lift_pct in the CSV still wins
+          lift_pct: isNaN(lift) ? (isNonPerformance(perf) ? 0 : bs?.tactics?.[perf]?.lift ?? bs?.avgLift ?? null) : lift,
           note: g("note"), origin: "import", created_at: new Date().toISOString(),
         });
       });
@@ -453,8 +467,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     return e.funding && e.funding[kind] > 0 ? `$${e.funding[kind].toFixed(2)}` : "—";
   };
 
-  const roiCell = (roi: number | null) =>
-    roi === null
+  const roiCell = (roi: number | null, exempt = false) =>
+    exempt
+      ? <span style={{ color: "var(--ink-3)", fontWeight: 700 }} title="Funding vehicle (EDLP/Slotting) at 0% lift — no incremental claim, so the ROI guardrail doesn't apply. Set a lift to score it.">funding</span>
+      : roi === null
       ? <span style={{ color: "var(--warn)", fontWeight: 700 }} title="Not scored: no lift set, no spend, or this customer has no NIQ divisions in scope to score a base from">n/a</span>
       : <span style={{ fontWeight: 800, color: roi >= ROI_GUARDRAIL ? "var(--good)" : "var(--bad)" }}
           title={roi >= ROI_GUARDRAIL ? `Clears the ${ROI_GUARDRAIL}× guardrail` : `Below the ${ROI_GUARDRAIL}× guardrail`}>
@@ -650,7 +666,8 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             ◇ Lift pre-fills from <b>measured lift by tactic</b> — each FY{plan.priorYear} window of that type in
             scope, actual vs NIQ base — falling back to the brand average
             ({BRAND_CHOICES.slice(0, 3).map((b) => `${b} +${plan.brandStats[b]?.avgLift ?? 0}%`).join(" · ")}) for
-            tactics with no reads yet. Override any cell where you know better.
+            tactics with no reads yet. <b>EDLP and Slotting pre-fill 0%</b>: they are funding vehicles, not in-store
+            performance — EDLP&apos;s effect is already inside the base. Override any cell where you know better.
           </div>
         </div>
       </div>
@@ -742,7 +759,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                         <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}>committed total</div>
                       )}
                     </td>
-                    <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi)}</td>
+                    <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi, roiExempt(e))}</td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap" }} onClick={(ev) => ev.stopPropagation()}>
                       <span className="minichip" style={{ cursor: "pointer", marginRight: 4 }} title="Edit this event in the wizard"
                         onClick={() => { setWizardEdit(e); setWizardOpen(true); }}>✎</span>
