@@ -65,6 +65,16 @@ shows.
 The views still read the repo fixtures today; loading the tables now means the
 seam can swap to Supabase reads view by view with the data already in place.
 
+**In the app (no terminal):** open the deployed site → **Integrations** →
+**Load data to Supabase** → *Load all*. The button runs server-side on Vercel
+where the credentials already live, walks the tables in FK order with visible
+progress, and each table has its own *Load* button for single-table reloads
+after a data drop. (`/api/admin/load`, backed by `lib/server/supaload.ts` —
+keep its table registry in step with `scripts/load_supabase.py`.)
+
+**Or from a terminal** (same result, useful for a project the app isn't
+pointed at, e.g. standing up the future auto-feed project):
+
 ```bash
 export SUPABASE_URL=https://<project-ref>.supabase.co
 export SUPABASE_SERVICE_ROLE_KEY=...
@@ -90,6 +100,8 @@ audit trail between them.
 
 Commit the fixture change and push — the deployed app picks the new data up on
 the Vercel build, and the Supabase tables carry the same rows for the swap-in.
+The `load_supabase.py --only …` step can equally be the matching table's
+*Load* button on the Integrations screen once the deploy lands.
 
 ## 5 · What comes next (in order)
 

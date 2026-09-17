@@ -88,14 +88,16 @@ until they're set, the tool falls back to per-browser storage there.
 
 - **Supabase connection** — the project is **Heartland Sales Reporting POC**
   (org REVDRIVE.AI INC, ref `bsmeqxypfvtcubytvrpw`,
-  https://bsmeqxypfvtcubytvrpw.supabase.co); its GitHub integration watches
-  this repo's `main` and applies `supabase/migrations/` (00001–00011, RLS
-  locked down) on push — no manual `setup.sql` paste. Remaining: install the
-  Vercel integration (syncs `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`) and
-  redeploy → shared plan state goes durable; then `scripts/load_supabase.py`
-  upserts all fixture data (~60K rows) for the coming repo swap-in. CSV/Excel
-  drops stay two-stage: ingest script → fixture → loader
-  (`supabase/README.md` is the full runbook).
+  https://bsmeqxypfvtcubytvrpw.supabase.co). The Vercel integration is
+  installed (env vars synced); the schema stands up with one idempotent
+  `supabase/setup.sql` paste in the SQL Editor (safe over any partial state).
+  The **Integrations screen** shows backend health and carries the one-click
+  data loader (`/api/admin/load` + `lib/server/supaload.ts`, the in-app twin
+  of `scripts/load_supabase.py`): *Load all* upserts every fixture table
+  (~60K rows) server-side on Vercel, with per-table reload buttons for
+  ongoing CSV/Excel drops. Remaining: run `setup.sql` once (health goes
+  `writable: true`), press *Load all*, then swap the repo reads to Supabase
+  view by view (`supabase/README.md` is the full runbook).
 - **Remaining stub views** — Promo Analysis (workflow step 4) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
   Approvals, Latest Estimate, and Sales Leader View.
