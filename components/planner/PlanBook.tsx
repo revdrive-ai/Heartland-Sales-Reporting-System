@@ -32,6 +32,14 @@ const selStyle: React.CSSProperties = {
   borderRadius: 9, padding: "7px 10px",
 };
 
+// compact filter controls inside the events table's header cells
+const thSel: React.CSSProperties = {
+  font: "inherit", fontSize: 11, fontWeight: 600, color: "var(--ink-2)",
+  background: "var(--surface)", border: "1px solid var(--line)",
+  borderRadius: 7, padding: "3px 6px", marginTop: 5, display: "block",
+  maxWidth: 150, textTransform: "none", letterSpacing: 0,
+};
+
 const utc = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
 const weeksOf = (e: PlanEvent) => Math.max(1, Math.round((utc(e.end) - utc(e.start)) / DAY / 7));
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -215,6 +223,37 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     },
     { below: 0, low: 0, clear: 0 }
   );
+
+  /* header filters on the events table (table only — the budget bar, guardrail
+     counts and charts stay on the full scope) + card expand/collapse */
+  const [efText, setEfText] = useState("");
+  const [efBrand, setEfBrand] = useState("all");
+  const [efCust, setEfCust] = useState("all");
+  const [efPerf, setEfPerf] = useState("all");
+  const [efRoi, setEfRoi] = useState("all");
+  const [evOpen, setEvOpen] = useState(true);
+  useEffect(() => { try { setEvOpen(localStorage.getItem("hhPlanEventsOpen") !== "0"); } catch {} }, []);
+  const toggleEvOpen = () => setEvOpen((o) => { try { localStorage.setItem("hhPlanEventsOpen", o ? "0" : "1"); } catch {} return !o; });
+  useEffect(() => { setEfText(""); setEfBrand("all"); setEfCust("all"); setEfPerf("all"); setEfRoi("all"); },
+    [year, custSel, itemSel, brandChip]);
+  const efBrandOpts = useMemo(() => [...new Set(visible.map((e) => e.brand))].sort(), [visible]);
+  const efCustOpts = useMemo(() => [...new Set(visible.map((e) => e.customer))].sort(), [visible]);
+  const efPerfOpts = useMemo(() => [...new Set(visible.map((e) => e.perf))].sort(), [visible]);
+  const efOn = efText !== "" || efBrand !== "all" || efCust !== "all" || efPerf !== "all" || efRoi !== "all";
+  const clearEf = () => { setEfText(""); setEfBrand("all"); setEfCust("all"); setEfPerf("all"); setEfRoi("all"); };
+  const roiState = (e: PlanEvent) => {
+    if (roiExempt(e)) return "funding";
+    const r = calc(e).roi;
+    return r === null ? "na" : r < ROI_GUARDRAIL ? "below" : "clear";
+  };
+  const tableRows = useMemo(() => visible.filter((e) =>
+    (efText === "" || `${e.title} ${e.brand} ${e.note ?? ""}`.toLowerCase().includes(efText.toLowerCase())) &&
+    (efBrand === "all" || e.brand === efBrand) &&
+    (efCust === "all" || e.customer === efCust) &&
+    (efPerf === "all" || e.perf === efPerf) &&
+    (efRoi === "all" || roiState(e) === efRoi)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [visible, efText, efBrand, efCust, efPerf, efRoi, plan, priceEdits]);
 
   /* month-by-month: this plan's spend vs the prior-year book (scoped) */
   const planByMonth = useMemo(() => {
@@ -673,17 +712,54 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       </div>
 
       <div className="card" style={{ padding: 0, marginTop: 16 }}>
-        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ padding: "14px 16px", borderBottom: evOpen ? "1px solid var(--line)" : "none", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <b>{year} events</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {visible.length} events · {fmtExact(committed)} committed · click a lift cell to override
+            {efOn ? `${tableRows.length} of ${visible.length} events shown` : `${visible.length} events`} · {fmtExact(committed)} committed · click a lift cell to override
           </span>
+          {efOn && (
+            <span className="minichip" style={{ cursor: "pointer" }} onClick={clearEf} title="Reset all header filters">
+              ✕ Clear filters
+            </span>
+          )}
+          <button
+            className="btn ghost"
+            style={{ marginLeft: "auto", padding: "4px 10px", fontSize: 11.5 }}
+            onClick={toggleEvOpen}
+            title={evOpen ? "Collapse this section" : "Expand this section"}
+          >
+            {evOpen ? "▾ Collapse" : "▸ Expand"}
+          </button>
         </div>
+        {evOpen && (<>
         <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
               <tr>
-                <th>Brand / Event</th><th>Customer</th><th>Window</th>
+                <th>
+                  Brand / Event
+                  <span style={{ display: "flex", gap: 5 }}>
+                    <input style={{ ...thSel, width: 110 }} placeholder="Search…" value={efText} onChange={(e) => setEfText(e.target.value)} />
+                    <select style={thSel} value={efBrand} onChange={(e) => setEfBrand(e.target.value)}>
+                      <option value="all">All brands</option>
+                      {efBrandOpts.map((b) => <option key={b}>{b}</option>)}
+                    </select>
+                  </span>
+                </th>
+                <th>
+                  Customer
+                  <span style={{ display: "flex", gap: 5 }}>
+                    <select style={{ ...thSel, maxWidth: 130 }} value={efCust} onChange={(e) => setEfCust(e.target.value)}>
+                      <option value="all">All ({efCustOpts.length})</option>
+                      {efCustOpts.map((c) => <option key={c} value={c}>{c.length > 24 ? c.slice(0, 23) + "…" : c}</option>)}
+                    </select>
+                    <select style={thSel} value={efPerf} onChange={(e) => setEfPerf(e.target.value)}>
+                      <option value="all">All tactics</option>
+                      {efPerfOpts.map((t) => <option key={t}>{t}</option>)}
+                    </select>
+                  </span>
+                </th>
+                <th>Window</th>
                 <th style={{ textAlign: "right" }} title="Weeks in the window">Wks</th>
                 <th style={{ textAlign: "right" }} title="Brand weekly base run-rate in scope × weeks (NIQ, latest 52 weeks)">Base units</th>
                 <th style={{ textAlign: "right" }} title="Expected % lift over base — click to override">Pred. lift</th>
@@ -692,12 +768,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                 <th style={{ textAlign: "right" }} title="Scan rate ($/unit) — paid per unit scanned at the promo price">Scan</th>
                 <th style={{ textAlign: "right" }} title="Fixed fees ($) — display, ad, or slotting">Fixed</th>
                 <th style={{ textAlign: "right" }}>Spend</th>
-                <th style={{ textAlign: "right" }} title={`Incremental retail $ ÷ trade spend — guardrail ${ROI_GUARDRAIL}×`}>ROI</th>
+                <th style={{ textAlign: "right" }} title={`Incremental retail $ ÷ trade spend — guardrail ${ROI_GUARDRAIL}×`}>
+                  ROI
+                  <select style={{ ...thSel, marginLeft: "auto" }} value={efRoi} onChange={(e) => setEfRoi(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="clear">Cleared</option>
+                    <option value="below">Below</option>
+                    <option value="funding">Funding</option>
+                    <option value="na">n/a</option>
+                  </select>
+                </th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {visible.slice(0, limit).map((e) => {
+              {tableRows.slice(0, limit).map((e) => {
                 const c = calc(e);
                 return (
                   <React.Fragment key={e.id}>
@@ -820,6 +905,11 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                   </React.Fragment>
                 );
               })}
+              {visible.length > 0 && tableRows.length === 0 && (
+                <tr><td colSpan={13} style={{ padding: "18px 16px", color: "var(--ink-3)", fontSize: 12.5 }}>
+                  No events match the header filters — <span style={{ cursor: "pointer", textDecoration: "underline" }} onClick={clearEf}>clear them</span>.
+                </td></tr>
+              )}
               {visible.length === 0 && (
                 <tr><td colSpan={13} style={{ padding: "18px 16px", color: "var(--ink-3)", fontSize: 12.5 }}>
                   The {year} book is empty
@@ -832,13 +922,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             </tbody>
           </table>
         </div>
-        {visible.length > limit && (
+        {tableRows.length > limit && (
           <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}>
             <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => setLimit((l) => l + 300)}>
-              Show more — {visible.length - limit} remaining
+              Show more — {tableRows.length - limit} remaining
             </button>
           </div>
         )}
+        </>)}
       </div>
 
       <div className="card" style={{ marginTop: 16 }}>
