@@ -370,7 +370,7 @@ export async function getPromoMeta(): Promise<PromoMeta> {
    The division ←→ customer mapping lives in lib/data/albertsonsPromoMap.ts
    (mirrored by supabase/migrations/00003). */
 
-import { ALBERTSONS_CORPORATE, normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
+import { ALBERTSONS_CORPORATE, MARKET_DIST_SPLIT, normBrand, promoAppliesTo, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 
 export type PromoOverlay = {
   promo_id: string;
@@ -417,23 +417,38 @@ export async function getPromoOverlays(f: PromoOverlayFilter): Promise<PromoOver
   return promos()
     .filter((p) => {
       if (!customers.has(p.customer_id)) return false;
+      // Dist Name splits shared planners (Safeway Mountain West → Denver/IMW)
+      if (!promoAppliesTo(f.market_code, p)) return false;
       if (f.to && p.start_date > f.to) return false;
       if (f.from && p.end_date < f.from) return false;
       if (wantBrand && !(brands.get(p.promo_id)?.has(wantBrand) ?? false)) return false;
       return true;
     })
-    .map((p) => ({
-      promo_id: p.promo_id,
-      promo_title: p.promo_title,
-      promo_status: p.promo_status,
-      performance_type: p.performance_type,
-      customer_name: p.customer_name,
-      corporate: p.customer_id === ALBERTSONS_CORPORATE,
-      start_date: p.start_date,
-      end_date: p.end_date,
-      planned_amount: p.planned_amount,
-      actual_amount: p.actual_amount,
-      brands: [...(brands.get(p.promo_id) ?? [])],
-    }))
+    .map((p) => {
+      // a promo booked to several dists (Safeway Mountain West → Denver + IMW)
+      // shows only this division's share of the money, not the double-counted total
+      let planned = p.planned_amount, actual = p.actual_amount;
+      const split = MARKET_DIST_SPLIT[f.market_code];
+      if (split && p.customer_id === split.customer_id && (p.dist_names?.length ?? 0) > 1) {
+        const own = promoLines().filter((l) => l.promo_id === p.promo_id && l.dist_name === split.dist_name);
+        if (own.length) {
+          planned = own.reduce((a, l) => a + l.planned_amount, 0);
+          actual = own.reduce((a, l) => a + l.actual_amount, 0);
+        }
+      }
+      return {
+        promo_id: p.promo_id,
+        promo_title: p.promo_title,
+        promo_status: p.promo_status,
+        performance_type: p.performance_type,
+        customer_name: p.customer_name,
+        corporate: p.customer_id === ALBERTSONS_CORPORATE,
+        start_date: p.start_date,
+        end_date: p.end_date,
+        planned_amount: planned,
+        actual_amount: actual,
+        brands: [...(brands.get(p.promo_id) ?? [])],
+      };
+    })
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
 }

@@ -74,6 +74,10 @@ export type Promotion = {
   planner_template: string;  // traceability back to Telus
   start_date: string;        // ISO date
   end_date: string;          // ISO date, >= start_date
+  /** Distributor/ship-to names from the export's Dist Name column — the
+      alignment key to customer-crosswalk accounts. Usually one; the Safeway
+      Mountain West planner splits into Safeway Denver + Safeway IMW. */
+  dist_names?: string[];
   line_count: number;
   planned_amount: number;
   actual_amount: number;
@@ -91,6 +95,7 @@ export type PromoLine = {
   rate_uom: "Case" | "Each" | "Percent" | "Lump Sum";
   planned_amount: number;
   actual_amount: number;
+  dist_name?: string | null; // distributor/ship-to (Dist Name), where exported
 };
 
 /** The Valid Values tab — controlled vocabulary for every enum field. */

@@ -94,7 +94,8 @@ audit trail between them.
 | Data | Drop the file, then run | Then |
 | --- | --- | --- |
 | NIQ weekly pull (CSV) | `scripts/ingest_albsco.py` → `data/nielsen/*.json.gz` | `load_supabase.py --only nielsen_weekly,items,markets` |
-| Telus promo export | `scripts/ingest_promos.py` → `data/promos/*.json.gz` | `load_supabase.py --only promotions,promo_lines` |
+| Telus promo export (raw, with Dist Name) | `scripts/ingest_promos_raw.py` → `data/promos/*.json.gz` | `load_supabase.py --only promotions,promo_lines` |
+| Telus promo import template (legacy transformed shape) | `scripts/ingest_promos.py` → `data/promos/*.json.gz` | `load_supabase.py --only promotions,promo_lines` |
 | Item crosswalk workbook | `scripts/ingest_item_crosswalk.py` → `lib/fixtures/item-crosswalk.json` | `load_supabase.py --only item_crosswalk,niq_item_attributes` |
 | Price list workbook | `scripts/ingest_price_list.py --effective YYYY-MM-DD` → `lib/fixtures/price-list.json` | `load_supabase.py --only price_list` |
 

@@ -1,5 +1,5 @@
 -- ============================================================================
--- ONE-PASTE SETUP — generated concatenation of supabase/migrations/00001..00011
+-- ONE-PASTE SETUP — generated concatenation of supabase/migrations/00001..00012
 -- Paste this whole file into the Supabase SQL Editor and Run. Idempotent:
 -- safe on a fresh project AND on one where part of the schema already exists —
 -- existing tables/indexes/policies/seed rows are left alone, missing ones are
@@ -635,6 +635,20 @@ alter table public.item_crosswalk            enable row level security;
 alter table public.niq_item_attributes       enable row level security;
 alter table public.price_list                enable row level security;
 alter table public.app_state                 enable row level security;
+
+-- Dist Name from the raw Telus retail-promotions export: the distributor /
+-- ship-to each component line bills through. It is the alignment key to the
+-- customer crosswalk (59 of 64 values match customer_crosswalk.customer_name
+-- exactly) and splits the shared Safeway Mountain West planner (000-1000203)
+-- into Safeway Denver and Safeway IMW — the two NIQ divisions it covers.
+
+alter table public.promo_lines add column if not exists dist_name text;
+comment on column public.promo_lines.dist_name is
+  'Telus export Dist Name — distributor/ship-to for this line; aligns to customer_crosswalk.customer_name and splits shared planners by division.';
+
+alter table public.promotions add column if not exists dist_names text[];
+comment on column public.promotions.dist_names is
+  'Distinct Dist Names across the promotion''s lines (usually one; Safeway Mountain West promos carry Denver and/or IMW).';
 
 -- Tell PostgREST to pick up the new tables immediately (clears PGRST205
 -- "table not found in schema cache" without waiting for the cache to refresh).

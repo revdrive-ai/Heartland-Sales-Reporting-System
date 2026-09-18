@@ -29,6 +29,29 @@ export function promoCustomersFor(market_code: string): string[] {
   return [...(MARKET_PROMO_CUSTOMERS[market_code] ?? []), ALBERTSONS_CORPORATE];
 }
 
+/** Divisions that share one Telus customer but split by the export's Dist
+    Name: Safeway Mountain West (000-1000203) books Denver and Intermountain
+    promotions on one planner, and the Dist Name column says which division
+    each promotion belongs to. A promo at the shared customer overlays one of
+    these divisions only when its dist_names include the division's name;
+    promos with no dist data (older fixtures) keep the old both-divisions
+    behavior. */
+export const MARKET_DIST_SPLIT: Record<string, { customer_id: string; dist_name: string }> = {
+  "ALB-DENVER": { customer_id: "000-1000203", dist_name: "Safeway Denver" },
+  "ALB-INTMTN": { customer_id: "000-1000203", dist_name: "Safeway IMW" },
+};
+
+/** True when this promo belongs on this division's trend, dist-aware. */
+export function promoAppliesTo(
+  market_code: string,
+  p: { customer_id: string; dist_names?: string[] }
+): boolean {
+  const split = MARKET_DIST_SPLIT[market_code];
+  if (!split || p.customer_id !== split.customer_id) return true;
+  if (!p.dist_names || p.dist_names.length === 0) return true;
+  return p.dist_names.includes(split.dist_name);
+}
+
 /** NIQ brands are UPPERCASE ("SLIMFAST"); Telus line brands are title case
     ("SlimFast"). Compare on letters/digits only. */
 export function normBrand(s: string): string {

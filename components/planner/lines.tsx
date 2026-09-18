@@ -35,11 +35,14 @@ export function LinesTable({ rows }: { rows: PromoLine[] | "loading" | undefined
   if (rows === "loading" || rows === undefined) {
     return <div style={{ padding: "12px 16px", fontSize: 12.5, color: "var(--ink-3)" }}>Loading lines…</div>;
   }
+  // show the Dist column only when it distinguishes anything on this promo
+  const showDist = new Set(rows.map((l) => l.dist_name ?? "")).size > 1;
   return (
     <table style={{ fontSize: 12.5 }}>
       <thead>
         <tr>
           <th>Component</th><th>Brand</th><th>Item</th>
+          {showDist && <th title="Dist Name — the distributor/ship-to this line bills through">Dist</th>}
           <th style={{ textAlign: "right" }}>Rate</th>
           <th style={{ textAlign: "right" }}>Planned</th>
           <th style={{ textAlign: "right" }}>Actual</th>
@@ -54,6 +57,7 @@ export function LinesTable({ rows }: { rows: PromoLine[] | "loading" | undefined
               {l.item_description ?? "—"}
               <span style={{ color: "var(--ink-3)", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11 }}> {l.item_number}</span>
             </td>
+            {showDist && <td style={{ padding: "7px 14px", whiteSpace: "nowrap" }}>{l.dist_name ?? "—"}</td>}
             <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
               {l.rate_uom === "Lump Sum" && l.rate === 0 ? "lump sum" : `${l.rate} / ${l.rate_uom}`}
             </td>
