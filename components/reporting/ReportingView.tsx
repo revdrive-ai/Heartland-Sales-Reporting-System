@@ -13,6 +13,10 @@ import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/char
 export type ReportingData = {
   markets: { code: string; name: string }[];
   ownBrands: string[];
+  /** own items with volume in the window — the item dropdown (empty in plan mode) */
+  items: { upc: string; name: string; brand: string }[];
+  item: string;                          // "ALL" or a UPC
+  itemName: string | null;
   mkt: string;
   brand: string;
   win: 13 | 26 | 52;
@@ -77,8 +81,14 @@ export default function ReportingView({ data }: { data: ReportingData }) {
   const tick = useThemeTick();
   const router = useRouter();
 
-  const nav = (patch: Partial<Record<"mkt" | "brand" | "win" | "m", string>>) => {
-    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, win: String(data.win), m: data.metric, ...patch });
+  const nav = (patch: Partial<Record<"mkt" | "brand" | "win" | "m" | "item", string>>) => {
+    // changing brand or window resets the item scope unless the patch sets it
+    const item = patch.brand !== undefined || patch.win !== undefined ? "ALL" : data.item;
+    const p = new URLSearchParams({
+      mkt: data.mkt, brand: data.brand,
+      win: data.plan ? String(data.plan.year) : data.fy ? String(data.fy.year) : String(data.win),
+      m: data.metric, item, ...patch,
+    });
     router.push(`/reporting?${p.toString()}`);
   };
   const gross = data.metric === "gross";
@@ -95,7 +105,8 @@ export default function ReportingView({ data }: { data: ReportingData }) {
   };
 
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
-  const brandName = data.brand === "ALL" ? "all own brands" : data.brand;
+  const brandName = data.itemName ?? (data.brand === "ALL" ? "all own brands" : data.brand);
+  const itemBrands = [...new Set(data.items.map((i) => i.brand))];
   const fyYear = data.fy?.year ?? data.years[0] - 1; // the data-edge year, for the selector
 
   const opts = useMemo(() => {
@@ -142,6 +153,23 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <option value="ALL">All own brands</option>
           {data.ownBrands.map((b) => <option key={b}>{b}</option>)}
         </select>
+        {!data.plan && (
+          <select
+            style={{ ...selStyle, maxWidth: 320 }}
+            value={data.item}
+            onChange={(e) => nav({ item: e.target.value })}
+            title="Narrow the whole dashboard to a single item — items with volume in the window"
+          >
+            <option value="ALL">{data.brand === "ALL" ? "All items" : `All ${data.brand} items`} ({data.items.length})</option>
+            {itemBrands.map((b) => (
+              <optgroup key={b} label={b}>
+                {data.items.filter((i) => i.brand === b).map((i) => (
+                  <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
         <select
           style={selStyle}
           value={data.plan ? String(data.plan.year) : data.fy ? String(data.fy.year) : String(data.win)}
@@ -201,6 +229,8 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             <div className="k-val">{data.kpis.share === null ? "—" : data.kpis.share.toFixed(1) + "%"}</div>
             {gross
               ? <span className="k-sub flat">no list price for the competitive set — share reads on retail</span>
+              : data.item !== "ALL"
+              ? <span className="k-sub flat">the measured set isn&apos;t mapped per item — share reads at all-items scope</span>
               : data.brand === "ALL"
               ? <YoY v={data.kpis.sharePts} suffix=" pts YoY" />
               : <span className="k-sub flat">share reads at all-own-brands scope</span>}

@@ -24,15 +24,18 @@ export type FyWeek = {
   priorU: number;
 };
 
-/** The FY weekly series for one division × brand; null when no facts exist. */
+/** The FY weekly series for one division × brand (optionally one item);
+    null when no facts exist. */
 export async function fyWeeklySeries(
   code: string,
   brand: string,
   fyWeeks: string[],
   allWeeks: string[],
-  latestWeek: string
+  latestWeek: string,
+  upc?: string
 ): Promise<FyWeek[] | null> {
-  const facts = await getWeeklyFacts({ market_code: code, brand });
+  let facts = await getWeeklyFacts({ market_code: code, brand });
+  if (upc) facts = facts.filter((r) => r.upc === upc);
   if (!facts.length) return null;
 
   const wA$ = new Map<string, number>(), wAU = new Map<string, number>();
