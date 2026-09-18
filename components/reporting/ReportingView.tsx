@@ -29,6 +29,15 @@ export type ReportingData = {
   insightsTotal: number;
   years: number[];                       // plan years looking forward (2027, 2028, …)
   plan: { year: number; priorYear: number; matchedWeeks: number; gross: number | null } | null;
+  /** FY forecast mode — the data-edge year to calendar year-end: measured
+      actuals through the edge, then year-ago-carried base × expected Telus
+      window lift (same construction as the Base & Lift forecast). */
+  fy: {
+    year: number; priorYear: number;
+    forecastFromIdx: number;             // first forecast index in weeks/series
+    measuredWeeks: number; forecastWeeks: number;
+    measured: number;                    // dollars measured to date
+  } | null;
   windowLabel: string;
   weeks: string[];
   seriesTY: number[];
@@ -87,6 +96,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const brandName = data.brand === "ALL" ? "all own brands" : data.brand;
+  const fyYear = data.fy?.year ?? data.years[0] - 1; // the data-edge year, for the selector
 
   const opts = useMemo(() => {
     const o = gridOptions();
@@ -101,13 +111,18 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
       <div className="pagehead">
         <div>
-          <div className="crumb">Trade Workflow · Step 3{data.plan ? " · Plan year" : ""}</div>
-          <h1>Sales Dashboard{data.plan ? ` — ${data.plan.year} plan` : ""}</h1>
+          <div className="crumb">Trade Workflow · Step 3{data.plan ? " · Plan year" : data.fy ? " · FY forecast" : ""}</div>
+          <h1>Sales Dashboard{data.plan ? ` — ${data.plan.year} plan` : data.fy ? ` — FY${data.fy.year} forecast` : ""}</h1>
           <p>
             {data.plan ? (
               <>The {data.plan.year} plan base for {brandName} at {scopeName} — the {data.plan.priorYear} actual base
               carried in as far as it has actualized ({data.plan.matchedWeeks} weeks), the rest projected by each
               division&apos;s seasonality — read against prior-year actual sales.</>
+            ) : data.fy ? (
+              <>FY{data.fy.year} for {brandName} at {scopeName} — measured retail through the NIQ data edge
+              ({data.fy.measuredWeeks} weeks), then a forecast to year-end: the year-ago base carried forward × the
+              expected lift of the Telus windows still open. Read against {data.fy.priorYear} actuals on the same
+              aligned weeks.</>
             ) : (
               <>Measured retail for {brandName} at {scopeName} — NIQ weekly data, last {data.win} weeks against the
               same weeks a year earlier. The competitive set shows up as share, never in the headline.</>
@@ -129,16 +144,17 @@ export default function ReportingView({ data }: { data: ReportingData }) {
         </select>
         <select
           style={selStyle}
-          value={data.plan ? String(data.plan.year) : String(data.win)}
+          value={data.plan ? String(data.plan.year) : data.fy ? String(data.fy.year) : String(data.win)}
           onChange={(e) => nav({ win: e.target.value })}
-          title="Measured windows, or a forward plan year compared to the prior year"
+          title="Measured windows, the current fiscal year with a forecast to year-end, or a forward plan year"
         >
           <option value="13">Last 13 weeks</option>
           <option value="26">Last 26 weeks</option>
           <option value="52">Last 52 weeks</option>
+          <option value={String(fyYear)}>FY{fyYear} — actuals + forecast</option>
           {data.years.map((y) => <option key={y} value={String(y)}>Plan {y} vs prior year</option>)}
         </select>
-        {!data.plan && (
+        {!data.plan && !data.fy && (
           <select
             style={selStyle}
             value={data.metric}
@@ -153,25 +169,31 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">{data.plan ? "Plan base dollars — full year" : gross ? "Gross dollars (list)" : "Retail dollars"}</span></div>
+          <div className="k-top"><span className="k-label">{data.plan ? "Plan base dollars — full year" : data.fy ? `FY${data.fy.year} dollars — full year (fcst)` : gross ? "Gross dollars (list)" : "Retail dollars"}</span></div>
           <div className="k-val">{fmtMoney(data.kpis.dollars)}</div>
-          <YoY v={data.kpis.dollarsYoY} suffix={data.plan ? "% vs latest 52 wks sold" : "% YoY"} />
+          <YoY v={data.kpis.dollarsYoY} suffix={data.plan ? "% vs latest 52 wks sold" : data.fy ? `% vs ${data.fy.priorYear}` : "% YoY"} />
         </div>
         <div className="kpi">
-          <div className="k-top"><span className="k-label">{data.plan ? "Plan base units" : "Units"}</span></div>
+          <div className="k-top"><span className="k-label">{data.plan ? "Plan base units" : data.fy ? `FY${data.fy.year} units (fcst)` : "Units"}</span></div>
           <div className="k-val">{fmtUnits(data.kpis.units)}</div>
-          <YoY v={data.kpis.unitsYoY} suffix={data.plan ? "% vs latest 52 wks" : "% YoY"} />
+          <YoY v={data.kpis.unitsYoY} suffix={data.plan ? "% vs latest 52 wks" : data.fy ? `% vs ${data.fy.priorYear}` : "% YoY"} />
         </div>
         <div className="kpi">
           <div className="k-top"><span className="k-label">{gross ? "Avg list price / unit" : "Avg price / unit"}</span></div>
           <div className="k-val">{data.kpis.price === null ? "—" : "$" + data.kpis.price.toFixed(2)}</div>
-          <YoY v={data.kpis.priceYoY} suffix={data.plan ? "% vs latest 52 wks" : "% YoY"} />
+          <YoY v={data.kpis.priceYoY} suffix={data.plan ? "% vs latest 52 wks" : data.fy ? `% vs ${data.fy.priorYear}` : "% YoY"} />
         </div>
         {data.plan ? (
           <div className="kpi">
             <div className="k-top"><span className="k-label">Plan gross revenue (list)</span></div>
             <div className="k-val">{data.plan.gross === null ? "—" : fmtMoney(data.plan.gross)}</div>
             <div className="k-sub flat">plan units × dated list price per brand, effective {data.plan.year}-01-01</div>
+          </div>
+        ) : data.fy ? (
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Measured to date</span></div>
+            <div className="k-val">{fmtMoney(data.fy.measured)}</div>
+            <div className="k-sub flat">{data.fy.measuredWeeks} wks measured · {data.fy.forecastWeeks} wks forecast to year-end</div>
           </div>
         ) : (
           <div className="kpi">
@@ -189,22 +211,34 @@ export default function ReportingView({ data }: { data: ReportingData }) {
       <div className="card" style={{ marginBottom: 16 }}>
         <b>{data.plan
           ? `Weekly base dollars — ${data.plan.year} plan vs ${data.plan.priorYear} actuals`
+          : data.fy
+          ? `Weekly retail dollars — FY${data.fy.year} actuals + forecast vs ${data.fy.priorYear} actuals`
           : `Weekly ${dollarsWord} — this year vs same weeks last year`}</b>
         <div className="chartbox" style={{ height: 300, marginTop: 12 }}>
           <Line
-            key={"t" + tick + data.mkt + data.brand + data.win + (data.plan?.year ?? "")}
+            key={"t" + tick + data.mkt + data.brand + data.win + (data.plan?.year ?? "") + (data.fy?.year ?? "")}
             data={{
               labels: data.weeks.map((w) => w.slice(5)),
               datasets: [
                 {
-                  label: data.plan ? `${data.plan.year} plan base` : "This year",
-                  data: data.seriesTY,
+                  label: data.plan ? `${data.plan.year} plan base` : data.fy ? `FY${data.fy.year} actuals` : "This year",
+                  // in FY mode the solid line stops at the data edge; the dashed forecast takes over
+                  data: data.fy ? data.seriesTY.map((v, i) => (i < data.fy!.forecastFromIdx ? v : null)) : data.seriesTY,
                   borderColor: cssToken("--accent"),
                   backgroundColor: cssToken("--accent"),
                   borderWidth: 2, tension: 0.25, pointRadius: 0, pointHoverRadius: 4,
+                  spanGaps: false,
                 },
+                ...(data.fy ? [{
+                  label: "Forecast",
+                  data: data.seriesTY.map((v, i) => (i >= data.fy!.forecastFromIdx - 1 ? v : null)),
+                  borderColor: cssToken("--accent"),
+                  backgroundColor: cssToken("--accent"),
+                  borderDash: [4, 3], borderWidth: 2, tension: 0.25, pointRadius: 0, pointHoverRadius: 4,
+                  spanGaps: false,
+                }] : []),
                 {
-                  label: data.plan ? `${data.plan.priorYear} actuals` : "Year ago",
+                  label: data.plan ? `${data.plan.priorYear} actuals` : data.fy ? `${data.fy.priorYear} actuals` : "Year ago",
                   data: data.seriesLY,
                   borderColor: cssToken("--ink-3"),
                   backgroundColor: cssToken("--ink-3"),
@@ -221,6 +255,11 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             ? <>◇ The plan line is base only (no promo lift): {data.plan.priorYear} actual base for its measured weeks,
               seasonality-shaped projection after. The dashed line is what actually sold in the matching weeks a year
               earlier — it stops where {data.plan.priorYear} data ends and fills in as weeks land.</>
+            : data.fy
+            ? <>◇ Solid = measured NIQ retail through the data edge. Dashed = the <b>forecast to year-end</b>: each
+              week&apos;s year-ago NIQ base carried forward × the expected lift of the Telus performance windows still
+              open at that division × brand (EDLP/Slotting fund price, so they add no lift). Same construction as the
+              Base &amp; Lift Total-year view; both firm up as NIQ weeks land.</>
             : <>◇ Year-ago is the identical NIQ weeks shifted 52 — holiday weeks line up with holiday weeks.
               {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}
               {data.grossCoverage.priced} of {data.grossCoverage.total} items in this scope are priced; unpriced
@@ -230,17 +269,17 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
       <div className="grid2b">
         <div className="card">
-          <b>{data.plan ? `Portfolio by brand — ${data.plan.year} plan vs latest 52 measured weeks` : "Portfolio by brand — this year vs year ago"}</b>
+          <b>{data.plan ? `Portfolio by brand — ${data.plan.year} plan vs latest 52 measured weeks` : data.fy ? `Portfolio by brand — FY${data.fy.year} forecast vs ${data.fy.priorYear} actuals` : "Portfolio by brand — this year vs year ago"}</b>
           <div className="chartbox" style={{ marginTop: 12, height: 46 + data.brandRows.length * 44 }}>
             <Bar
               key={"b" + tick + data.mkt + data.win}
               data={{
                 labels: data.brandRows.map((b) => b.name),
                 datasets: [
-                  { label: data.plan ? `${data.plan.year} plan` : "This year", data: data.brandRows.map((b) => b.ty),
+                  { label: data.plan ? `${data.plan.year} plan` : data.fy ? `FY${data.fy.year} fcst` : "This year", data: data.brandRows.map((b) => b.ty),
                     backgroundColor: data.brandRows.map((b) => b.name === "Competitive set" ? cssToken("--ink-3") : cssToken("--accent")),
                     borderRadius: 5 },
-                  { label: data.plan ? "Latest 52 wks actual" : "Year ago", data: data.brandRows.map((b) => b.ly),
+                  { label: data.plan ? "Latest 52 wks actual" : data.fy ? `${data.fy.priorYear} actual` : "Year ago", data: data.brandRows.map((b) => b.ly),
                     backgroundColor: cssToken("--line"), borderRadius: 5 },
                 ],
               }}
@@ -250,20 +289,22 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <div className="note">
             {data.plan
               ? <>◇ Full-year plan base per brand against the most recent complete 52 weeks of measured sales.</>
+              : data.fy
+              ? <>◇ Full-year FY{data.fy.year} (measured + forecast) per brand against {data.fy.priorYear} actuals on the same aligned weeks.</>
               : <>◇ The brand cut always spans every own brand; the grey competitive row is context for the share number.</>}
           </div>
         </div>
 
         <div className="card">
-          <b>{data.groupKind === "division" ? "Sales by division" : "Sales by category"}{data.plan ? ` — ${data.plan.year} plan vs latest 52 measured weeks` : " — this year vs year ago"}</b>
+          <b>{data.groupKind === "division" ? "Sales by division" : "Sales by category"}{data.plan ? ` — ${data.plan.year} plan vs latest 52 measured weeks` : data.fy ? ` — FY${data.fy.year} forecast vs ${data.fy.priorYear} actuals` : " — this year vs year ago"}</b>
           <div className="chartbox" style={{ marginTop: 12, height: 46 + data.groupRows.length * (data.groupKind === "division" ? 30 : 44) }}>
             <Bar
               key={"g" + tick + data.mkt + data.brand + data.win}
               data={{
                 labels: data.groupRows.map((g) => g.name.replace("Albertsons ", "")),
                 datasets: [
-                  { label: data.plan ? `${data.plan.year} plan` : "This year", data: data.groupRows.map((g) => g.ty), backgroundColor: cssToken("--accent"), borderRadius: 5 },
-                  { label: data.plan ? "Latest 52 wks actual" : "Year ago", data: data.groupRows.map((g) => g.ly), backgroundColor: cssToken("--line"), borderRadius: 5 },
+                  { label: data.plan ? `${data.plan.year} plan` : data.fy ? `FY${data.fy.year} fcst` : "This year", data: data.groupRows.map((g) => g.ty), backgroundColor: cssToken("--accent"), borderRadius: 5 },
+                  { label: data.plan ? "Latest 52 wks actual" : data.fy ? `${data.fy.priorYear} actual` : "Year ago", data: data.groupRows.map((g) => g.ly), backgroundColor: cssToken("--line"), borderRadius: 5 },
                 ],
               }}
               options={hOpts}
@@ -272,6 +313,8 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <div className="note">
             {data.plan
               ? "◇ Full-year plan base per division against its most recent 52 measured weeks."
+              : data.fy
+              ? `◇ Full-year FY${data.fy.year} (measured + forecast) per division against ${data.fy.priorYear} actuals on the same aligned weeks.`
               : data.groupKind === "division"
               ? "◇ Pick a division above to swap this cut for categories within it."
               : "◇ Categories within this division; choose All divisions for the division cut."}
@@ -348,6 +391,15 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             ◇ This dashboard plans at brand × division altitude. For item-level plan curves and adjustments
             (distribution, price, trend) open the <b>Base &amp; Lift Lab</b> and pick Total year {data.plan.year}; the
             promotional book for {data.plan.year} builds in the <b>Promotion Planner</b>&apos;s plan mode.
+          </div>
+        </div>
+      ) : data.fy ? (
+        <div className="card" style={{ marginTop: 16 }}>
+          <b>Item-level forecast</b>
+          <div className="note" style={{ marginTop: 8 }}>
+            ◇ This view forecasts at brand × division altitude. For the item-level version of the same forecast open
+            the <b>Base &amp; Lift Lab</b>, pick a division and item, and choose Total year {data.fy.year} — the dashed
+            weeks there use the identical construction.
           </div>
         </div>
       ) : (
