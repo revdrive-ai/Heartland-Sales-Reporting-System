@@ -20,8 +20,9 @@ export const NAV: NavGroup[] = [
       { view: "base", label: "Base & Lift Lab", icon: "trend", tag: "1", title: "Base & Lift Lab — step 1 of the loop" },
       { view: "planner", label: "Promotion Planner", icon: "calendar", tag: "2", title: "Promotion Planner — step 2 of the loop" },
       { view: "reporting", label: "Sales Dashboard", icon: "chart", tag: "3", title: "Sales Dashboard — step 3 of the loop" },
-      { view: "analysis", label: "Promo Analysis", icon: "search", tag: "4", title: "Promo Analysis — step 4 of the loop" },
-      { view: "deductions", label: "Deduction Center", icon: "receipt", badge: "50", title: "Deduction Center — AI review queue" },
+      { view: "forecast", label: "Monthly Forecast Review", icon: "clock", tag: "4", title: "Monthly Forecast Review — step 4 of the loop" },
+      { view: "analysis", label: "Promo Analysis", icon: "search", tag: "5", title: "Promo Analysis — step 5 of the loop" },
+      { view: "deductions", label: "Deduction Center", icon: "receipt", tag: "6", badge: "50", title: "Deduction Center — step 6, AI review queue" },
     ],
   },
   {
@@ -68,11 +69,12 @@ export function groupFor(view: string): string {
   return NAV.find((g) => g.items.some((i) => i.view === view))?.heading ?? "";
 }
 
-/* The five-step trade workflow strip shown on the workflow views. */
+/* The six-step trade workflow strip shown on the workflow views. */
 export const WORKFLOW: [string, string][] = [
   ["base", "Model the base"],
   ["planner", "Plan promotions"],
   ["reporting", "Track the business"],
+  ["forecast", "Monthly Forecast Review"],
   ["analysis", "Measure & learn"],
   ["deductions", "Reconcile spend"],
 ];

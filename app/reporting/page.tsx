@@ -1,5 +1,5 @@
-import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets, listWeekEndings, priceAsOf } from "@/lib/repo";
-import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
+import { getPriceList, getWeeklyFacts, listItems, listMarkets, listWeekEndings, priceAsOf } from "@/lib/repo";
+import { fyWeeklySeries } from "@/lib/server/fyForecast";
 import { getScope } from "@/lib/server/scope";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
@@ -295,7 +295,6 @@ async function renderForecastYear({
 }) {
   const fyWeeks = saturdaysOfYear(fyYear);
   const nW = fyWeeks.length;
-  const last52 = allWeeks.slice(-52);
   const marketName = new Map(markets.map((m) => [m.code, m.name]));
   const forecastFromIdx = fyWeeks.findIndex((w) => w > latestWeek); // first forecast week
 
@@ -308,77 +307,19 @@ async function renderForecastYear({
 
   for (const code of marketList) {
     for (const b of ownBrands) {
-      const facts = await getWeeklyFacts({ market_code: code, brand: b });
-      if (!facts.length) continue;
-      const wA$ = new Map<string, number>(), wAU = new Map<string, number>();
-      const wB$ = new Map<string, number>(), wBU = new Map<string, number>();
-      const wAcv = new Map<string, number>();
-      for (const r of facts) {
-        wA$.set(r.week_ending, (wA$.get(r.week_ending) ?? 0) + (r.dollars ?? 0));
-        wAU.set(r.week_ending, (wAU.get(r.week_ending) ?? 0) + (r.units ?? 0));
-        wB$.set(r.week_ending, (wB$.get(r.week_ending) ?? 0) + (r.base_dollars ?? r.dollars ?? 0));
-        wBU.set(r.week_ending, (wBU.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
-        wAcv.set(r.week_ending, Math.max(wAcv.get(r.week_ending) ?? 0, r.acv_any_promo ?? 0));
-      }
-      // seasonality engine + latest-52 run rate, for source weeks never measured
-      const monthTot = Array(12).fill(0), monthN = Array(12).fill(0);
-      let grandSum = 0;
-      for (const [w, v] of wBU) {
-        monthTot[+w.slice(5, 7) - 1] += v; monthN[+w.slice(5, 7) - 1] += 1; grandSum += v;
-      }
-      const grandAvg = grandSum / Math.max(wBU.size, 1);
-      const engine = monthTot.map((t, m) => (monthN[m] > 0 && grandAvg > 0 ? t / monthN[m] / grandAvg : 1));
-      const avg52$ = last52.reduce((a, w) => a + (wB$.get(w) ?? 0), 0) / Math.max(last52.length, 1);
-      const avg52U = last52.reduce((a, w) => a + (wBU.get(w) ?? 0), 0) / Math.max(last52.length, 1);
-
-      // expected lift per Telus window — year-ago actual vs base over the
-      // shifted window (units), promoted-week average as the fallback
-      let pA = 0, pB = 0;
-      for (const [w, acv] of wAcv) {
-        if (acv >= 10) { pA += wAU.get(w) ?? 0; pB += wBU.get(w) ?? 0; }
-      }
-      const fallbackLift = pB > 0 ? (pA - pB) / pB : 0;
-      const liftOver = (sISO: string, eISO: string) => {
-        const s = utcOf(sISO), e = utcOf(eISO);
-        let a = 0, bb = 0;
-        for (const w of allWeeks) {
-          const wt = utcOf(w);
-          if (s <= wt && e >= wt - 6 * DAY) { a += wAU.get(w) ?? 0; bb += wBU.get(w) ?? 0; }
-        }
-        return bb > 0 ? (a - bb) / bb : null;
-      };
-      const windows = (await getPromoOverlays({ market_code: code, brand: b }))
-        .filter((o) => !isNonPerformance(o.performance_type))
-        .map((o) => ({
-          s: utcOf(o.start_date), e: utcOf(o.end_date),
-          lift: liftOver(yearAgoWeek(o.start_date), yearAgoWeek(o.end_date)) ?? fallbackLift,
-        }));
-
+      const series = await fyWeeklySeries(code, b, fyWeeks, allWeeks, latestWeek);
+      if (!series) continue;
       const inBrandScope = brand === "ALL" || b === brand;
       let brandFy = 0, brandPrior = 0, divFy = 0, divPrior = 0;
-      fyWeeks.forEach((w, i) => {
-        const src = yearAgoWeek(w);
-        let ty$: number, tyU: number;
-        if (w <= latestWeek) {
-          ty$ = wA$.get(w) ?? 0; tyU = wAU.get(w) ?? 0;
-          if (inBrandScope) tot.measured$ += ty$;
-        } else {
-          const m = +w.slice(5, 7) - 1;
-          const base$ = src <= latestWeek ? (wB$.get(src) ?? 0) : avg52$ * engine[m];
-          const baseU = src <= latestWeek ? (wBU.get(src) ?? 0) : avg52U * engine[m];
-          const wt = utcOf(w);
-          let lift = 0;
-          for (const o of windows) if (o.s <= wt && o.e >= wt - 6 * DAY) lift = Math.max(lift, o.lift);
-          ty$ = base$ * (1 + lift); tyU = baseU * (1 + lift);
-        }
-        const prior$ = wA$.get(src) ?? 0;
-        brandFy += ty$; brandPrior += prior$;
+      series.forEach((s, i) => {
+        brandFy += s.ty$; brandPrior += s.prior$;
         if (!inBrandScope) return;
-        divFy += ty$; divPrior += prior$;
-        series$[i] += ty$;
-        tot.fy$ += ty$; tot.fyU += tyU;
-        tot.prior$ += prior$; tot.priorU += wAU.get(src) ?? 0;
-        if (wA$.has(src)) { priorSum[i] += prior$; priorHas[i] = true; }
+        if (s.measured) tot.measured$ += s.ty$;
+        divFy += s.ty$; divPrior += s.prior$;
+        series$[i] += s.ty$;
+        tot.fy$ += s.ty$; tot.fyU += s.tyU;
+        tot.prior$ += s.prior$; tot.priorU += s.priorU;
+        priorSum[i] += s.prior$; priorHas[i] = true; // prior year is fully measured
       });
       const bb2 = byBrandF.get(b) ?? { fy: 0, prior: 0 };
       bb2.fy += brandFy; bb2.prior += brandPrior;

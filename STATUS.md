@@ -60,8 +60,18 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
 ## Sales Dashboard
 
 - Real KPIs by division and brand, gross-dollar basis, a plan-year selector
-  comparing Plan 2027/2028 to the latest measured year, and a Key insights
-  section with deep links into the Base & Lift Lab.
+  comparing Plan 2027/2028 to the latest measured year, an FY2026
+  actuals + forecast mode (measured through the NIQ edge, then year-ago base
+  × expected Telus window lift to year-end), and a Key insights section with
+  deep links into the Base & Lift Lab.
+
+## Monthly Forecast Review (workflow step 4)
+
+- The FY forecast by calendar month vs prior-year actuals: status per month
+  (actual / landing / forecast), Δ$ and Δ%, full-year totals, and a brand
+  cut. Same construction as the dashboard FY mode and the Base & Lift
+  Total-year view (shared `lib/server/fyForecast.ts`). Promo Analysis is now
+  step 5 and Deduction Center step 6.
 
 ## Data & Integrations
 
