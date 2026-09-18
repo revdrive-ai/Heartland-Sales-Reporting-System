@@ -1,10 +1,12 @@
 {
+  "source_file": "Retail_Promotions_08212026_2_1.xlsx",
   "snapshot_date": "2026-08-21",
-  "source": "Retail_Promotions_08212026_2_1.xlsx",
+  "fiscal_year": 2026,
   "promotions": 1197,
-  "lines": 5076,
+  "promo_lines": 5076,
   "planned_total": 51793466.65,
   "actual_total": 15303398.73,
+  "promos_without_lines": 0,
   "dist_names": [
     "Ahold",
     "Amazon CA Vendor Central",

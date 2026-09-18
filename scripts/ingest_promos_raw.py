@@ -153,13 +153,17 @@ def main() -> None:
         json.dump(promotions, f)
     with gzip.open(OUT / "promo-lines.json.gz", "wt") as f:
         json.dump(lines, f)
+    # keep every field the previous meta carried — the app reads fiscal_year
+    # (planner year selector) and snapshot_date at minimum
     meta = {
+        "source_file": RAW.name,
         "snapshot_date": SNAPSHOT_DATE,
-        "source": RAW.name,
+        "fiscal_year": min(p["fiscal_year"] for p in promotions),
         "promotions": len(promotions),
-        "lines": len(lines),
+        "promo_lines": len(lines),
         "planned_total": round(sum(p["planned_amount"] for p in promotions), 2),
         "actual_total": round(sum(p["actual_amount"] for p in promotions), 2),
+        "promos_without_lines": 0,  # every promo in the raw export arrives as lines
         "dist_names": sorted({d for p in promotions for d in p["dist_names"]}),
     }
     (OUT / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
