@@ -4,6 +4,7 @@ import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
 import type { NielsenWeeklyRow } from "@/lib/types/db";
+import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 
 /* Base & Lift Lab — the Nielsen weekly trend (actual vs NIQ base) for one
    division × brand (or a single item), with the Telus promotion windows
@@ -107,6 +108,18 @@ export default async function Page({
       planningYear = true;
     }
   }
+  // The data-edge year runs to calendar year-end: weeks past the edge carry a
+  // FORECAST — year-ago-carried NIQ base (engine-shaped where unmeasured) ×
+  // the expected lift of the Telus windows still open — so "Total year 2026"
+  // reads plan-to-go, not just the measured rolling weeks.
+  let forecastFrom: string | null = null;
+  if (!planningYear && /^\d{4}$/.test(win)) {
+    const future = saturdaysOfYear(+win).filter((w) => w > latestWeek);
+    if (weeks.length > 0 && future.length > 0) {
+      weeks = [...weeks, ...future];
+      forecastFrom = future[0];
+    }
+  }
   const from = weeks[0];
   const to = weeks[weeks.length - 1];
 
@@ -146,10 +159,11 @@ export default async function Page({
     const ly = weekActual.get(yearAgoWeek(w));
     const bly = weekBaseFull.get(yearAgoWeek(w));
     const b2y = weekBaseFull.get(yearAgoWeek(yearAgoWeek(w))); // 728 days back — two aligned years
+    const unmeasured = planningYear || (forecastFrom !== null && w > latestWeek);
     byWeek.set(w, {
       week: w,
-      actual: planningYear ? null : 0,
-      base: planningYear ? null : 0,
+      actual: unmeasured ? null : 0,
+      base: unmeasured ? null : 0,
       actualLY: ly === undefined ? null : Math.round(ly),
       baseLY: bly === undefined ? null : Math.round(bly),
       base2Y: b2y === undefined ? null : Math.round(b2y),
@@ -309,6 +323,41 @@ export default async function Page({
     };
   });
 
+  /* Forecast the weeks past the data edge (data-edge year only): base carries
+     the year-ago NIQ base (364 days back is fully measured for these weeks;
+     engine-shaped run-rate where it isn't), and forecast actuals apply the
+     expected lift of whichever Telus performance window covers the week — the
+     same predicted lift the windows table shows. Funding vehicles (EDLP,
+     Slotting) carry no lift; overlapping windows take the strongest read. */
+  let forecast: { weeks: number; from: string } | null = null;
+  if (forecastFrom !== null) {
+    const last52 = allWeeks.slice(-52);
+    const avg52 = last52.reduce((a, w) => a + (weekBaseFull.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+    let n = 0;
+    for (const p of points) {
+      if (p.week <= latestWeek) continue;
+      n++;
+      const src = yearAgoWeek(p.week);
+      const baseFc = src <= latestWeek
+        ? (weekBaseFull.get(src) ?? 0)
+        : avg52 * (engine[+p.week.slice(5, 7) - 1] ?? 1);
+      const wt = utcOf(p.week);
+      let lift = 0;
+      for (const o of overlayRows) {
+        if (isNonPerformance(o.performance_type) || o.pred_lift === null) continue;
+        if (utcOf(o.start_date) <= wt && utcOf(o.end_date) >= wt - 6 * DAY) {
+          lift = Math.max(lift, o.pred_lift);
+        }
+      }
+      p.baseFc = Math.round(baseFc);
+      p.actualFc = Math.round(baseFc * (1 + lift));
+    }
+    // bridge: the dashed forecast lines take off from the last measured week
+    const edge = points.find((p) => p.week === latestWeek);
+    if (edge) { edge.baseFc = edge.base; edge.actualFc = edge.actual; }
+    forecast = { weeks: n, from: forecastFrom };
+  }
+
   /* Lift engine — depth vs unit lift across the selection's promoted weeks,
      full history. Depth and lift are measured per week from the feed:
      depth = 1 − (promoted price ÷ base price), lift = units ÷ base units − 1,
@@ -391,6 +440,7 @@ export default async function Page({
   if (!planningYear) {
     let curA = 0, lyA = 0, curB = 0, lyB = 0, curPW = 0, lyPW = 0, matched = 0;
     for (const w of weeks) {
+      if (w > latestWeek) continue; // forecast weeks have no actuals to compare
       const ya = yearAgoWeek(w);
       if (!weekActual.has(ya) && !weekBaseFull.has(ya)) continue;
       matched++;
@@ -425,6 +475,7 @@ export default async function Page({
     latestDataYear,
     planningYear,
     plan,
+    forecast,
     points,
     overlays: overlayRows,
     priceMarks,

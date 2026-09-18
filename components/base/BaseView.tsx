@@ -19,7 +19,13 @@ import type { PromoOverlay } from "@/lib/repo";
    chart's header (hiding it widens the trend to the full row). Event windows
    (≤ 12 weeks) are shaded; always-on programs are listed below. */
 
-export type WeekPoint = { week: string; actual: number | null; base: number | null; actualLY: number | null; baseLY: number | null; base2Y: number | null; promoAcv: number };
+export type WeekPoint = {
+  week: string; actual: number | null; base: number | null;
+  actualLY: number | null; baseLY: number | null; base2Y: number | null; promoAcv: number;
+  /** data-edge-year weeks past the edge: forecast base and forecast actuals
+      (base × expected lift of the open Telus performance windows) */
+  baseFc?: number | null; actualFc?: number | null;
+};
 
 /** A promo overlay plus its lift read: measured over the window's weeks on
     file, and predicted from the matching weeks a year earlier. */
@@ -45,6 +51,7 @@ export type BaseData = {
   years: number[];           // total-year choices (2024 → future, in perpetuity)
   latestDataYear: number;
   planningYear: boolean;     // a future year with no NIQ weeks on file yet
+  forecast: null | { weeks: number; from: string }; // data-edge year: weeks forecast past the edge
   plan: null | {             // the plan-year series (future years only)
     sourceYear: number;                 // the year the actualized base carries from
     actualized: (number | null)[];      // actual NIQ base, matching weeks a year back
@@ -497,6 +504,11 @@ export default function BaseView({ data }: { data: BaseData }) {
   }), [bands, showLanes, priceMarks, data.points.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const liftPct = data.totals.base > 0 ? (data.totals.incremental / data.totals.base) * 100 : 0;
+  // forecast-to-go: forecast actuals on the unmeasured weeks only (the bridge
+  // point on the last measured week duplicates a measured value — skip it)
+  const fcToGo = data.forecast
+    ? data.points.reduce((a, p) => a + (p.actual === null ? (p.actualFc ?? 0) : 0), 0)
+    : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const scopeName = data.itemName ?? data.brand;
   const fmtVal = data.metric === "units" ? (v: number) => fmtNum(v) : fmtMoney;
@@ -654,7 +666,11 @@ export default function BaseView({ data }: { data: BaseData }) {
             <div className="k-top"><span className="k-label">Actual — window total</span></div>
             <div className="k-val">{data.planningYear ? "—" : fmtVal(data.totals.actual)}</div>
             {data.yoy && <YoYSub v={data.yoy.actual} label={yoyLabel} />}
-            <div className="k-sub flat">{scopeName} · {data.points.length} weeks{data.planningYear ? " · no NIQ data yet" : ""}</div>
+            <div className="k-sub flat">
+              {scopeName} · {data.forecast
+                ? `${data.points.length - data.forecast.weeks} measured wks · full-year forecast ${fmtVal(data.totals.actual + fcToGo)}`
+                : `${data.points.length} weeks${data.planningYear ? " · no NIQ data yet" : ""}`}
+            </div>
           </div>
           <div className="kpi">
             <div className="k-top"><span className="k-label">NIQ modelled base</span></div>
@@ -878,6 +894,29 @@ export default function BaseView({ data }: { data: BaseData }) {
                     pointRadius: 0,
                     pointHoverRadius: 4,
                   },
+                  ...(data.forecast ? [{
+                    label: "Forecast actuals",
+                    data: data.points.map((p) => p.actualFc ?? null),
+                    borderColor: cssToken("--accent"),
+                    backgroundColor: cssToken("--accent"),
+                    borderDash: [4, 3],
+                    borderWidth: 2,
+                    tension: 0.25,
+                    spanGaps: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                  }, {
+                    label: "Forecast base",
+                    data: data.points.map((p) => p.baseFc ?? null),
+                    borderColor: cssToken("--warn"),
+                    backgroundColor: cssToken("--warn"),
+                    borderDash: [2, 3],
+                    borderWidth: 1.8,
+                    tension: 0.25,
+                    spanGaps: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                  }] : []),
                 ],
               }}
               options={opts}
@@ -899,6 +938,10 @@ export default function BaseView({ data }: { data: BaseData }) {
                 <b> always-on programs</b> (EDLP etc.), one per program, showing exactly when each runs and when it
                 doesn&apos;t{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
                 line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).
+                {data.forecast && <> The <b>{data.forecast.weeks} weeks from {data.forecast.from}</b> are past the NIQ
+                data edge and show a <b>forecast</b>: dashed base carries the year-ago NIQ base, and dashed forecast
+                actuals apply the expected lift of each Telus window still open (the windows table&apos;s predicted
+                lift; EDLP/Slotting fund price, so they add no lift). Both firm up as NIQ weeks land.</>}
                 {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}
                 {data.grossCoverage.priced} of {data.grossCoverage.total} item{data.grossCoverage.total === 1 ? "" : "s"} in
                 this selection {data.grossCoverage.priced === 1 && data.grossCoverage.total === 1 ? "is" : "are"} priced;
