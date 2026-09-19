@@ -2,6 +2,8 @@ import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listA
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
+import { getState } from "@/lib/server/appstate";
+import type { DistAddition, DistVerification } from "@/lib/repo/client";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
 
 /* Promotion Planner — the first rebuilt view, running on the real Telus
@@ -128,6 +130,24 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
     const zeros = () => Array(12).fill(0) as number[];
     const priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>> = {};
     let dataEdge = "";
+
+    /* Distribution verification (per customer division × plan year, shared
+       docs from the Base & Lift verify flow): items marked "no volume" drop
+       out of the plan bases — the engine chart, the brand run-rate events
+       score on, and the per-item bases — and verified additions ride in on
+       their proxy's run-rate (× %) from their first week, plus the load-in. */
+    const dvByMkt: Record<string, { out: Set<string>; adds: DistAddition[] }> = {};
+    let dvVerified = 0, dvOut = 0, dvAdded = 0;
+    for (const m of markets) {
+      const d = (await getState(`distver:${m.code}:${year}`).catch(() => undefined)) as DistVerification | undefined;
+      if (!d) continue;
+      const out = new Set(Object.entries(d.decisions ?? {}).filter(([, x]) => x === "out").map(([u]) => u));
+      if (!out.size && !(d.additions ?? []).length && !d.verified_at) continue;
+      dvByMkt[m.code] = { out, adds: d.additions ?? [] };
+      if (d.verified_at) dvVerified++;
+      dvOut += out.size;
+      dvAdded += (d.additions ?? []).length;
+    }
     const priorPrefix = `${bookYear}-`;
     for (const brand of OWN_BRANDS) {
       // week → sums across the scoped divisions, plus per-item base totals and
@@ -137,8 +157,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
       const tacticAgg = new Map<string, { a: number; b: number; n: number }>(); // perf type → actual/base sums, windows read
       for (const m of markets) {
         const facts = await getWeeklyFacts({ market_code: m.code, brand });
+        const dv = dvByMkt[m.code];
+        const addsHere = dv?.adds.filter((a) => a.brand === brand) ?? [];
         const mA = new Map<string, number>(); // this division's weekly actual units
         const mB = new Map<string, number>(); // …and NIQ base units
+        const mBx = new Map<string, number>(); // …the slice from "no volume" items
+        const mProxy = new Map<string, Map<string, number>>(); // addition proxies' weekly base
         for (const r of facts) {
           const w = wk.get(r.week_ending) ?? { bu: 0, bd: 0, au: 0, promo: false };
           w.bu += r.base_units ?? r.units ?? 0;
@@ -148,6 +172,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           wk.set(r.week_ending, w);
           mA.set(r.week_ending, (mA.get(r.week_ending) ?? 0) + (r.units ?? 0));
           mB.set(r.week_ending, (mB.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+          if (dv?.out.has(r.upc)) {
+            mBx.set(r.week_ending, (mBx.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+          }
+          if (addsHere.some((a) => a.proxy_upc === r.upc)) {
+            const pm = mProxy.get(r.upc) ?? mProxy.set(r.upc, new Map()).get(r.upc)!;
+            pm.set(r.week_ending, (pm.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+          }
           if (r.week_ending > dataEdge) dataEdge = r.week_ending;
           if (r.week_ending.startsWith(priorPrefix)) {
             const mm = ((priorMonthly[m.code] ??= {})[brand] ??= { u: zeros(), g: zeros(), pu: zeros(), pg: zeros() });
@@ -182,6 +213,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           const eng = mTot.map((t, i) => (mN[i] > 0 && grand > 0 ? t / mN[i] / grand : 1));
           const avg52 = divBrandWk[m.code][brand];
           const latest = mWeeks[mWeeks.length - 1];
+          // distribution verification at this division: excluded items' run
+          // rate leaves, additions arrive on their proxy's run rate
+          const exclAvg52 = m52.reduce((a, w) => a + (mBx.get(w) ?? 0), 0) / Math.max(m52.length, 1);
+          const proxyAvg52 = new Map<string, number>();
+          for (const [u, pm] of mProxy) {
+            proxyAvg52.set(u, m52.reduce((a, w) => a + (pm.get(w) ?? 0), 0) / Math.max(m52.length, 1));
+          }
           const baseM = Array(12).fill(0);
           if (latest) {
             // walk to the last Saturday before the plan year, then step through it
@@ -191,10 +229,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
             for (t += 7 * DAY; new Date(t).getUTCFullYear() === year; t += 7 * DAY) {
               const mo = new Date(t).getUTCMonth();
               const src = new Date(t - 364 * DAY).toISOString().slice(0, 10);
-              baseM[mo] += src <= latest ? (mB.get(src) ?? 0) : avg52 * eng[mo];
+              let v = src <= latest ? (mB.get(src) ?? 0) : avg52 * eng[mo];
+              v -= src <= latest ? (mBx.get(src) ?? 0) : exclAvg52 * eng[mo];
+              const wIso = new Date(t).toISOString().slice(0, 10);
+              for (const a of addsHere) {
+                if (wIso >= a.first_week) v += (proxyAvg52.get(a.proxy_upc) ?? 0) * (a.proxy_pct / 100) * eng[mo];
+                if (a.loadin_units > 0 && wIso >= a.loadin_date && utcOf(wIso) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+                  v += a.loadin_units; // one-time pipeline fill in this week
+                }
+              }
+              baseM[mo] += Math.max(0, v);
             }
           }
           (divBrandBaseM[m.code] ??= {})[brand] = baseM.map(Math.round);
+          // events at this division score on the verified run rate
+          divBrandWk[m.code][brand] = Math.max(0, avg52 - exclAvg52)
+            + addsHere.reduce((a, x) => a + (proxyAvg52.get(x.proxy_upc) ?? 0) * (x.proxy_pct / 100), 0);
         }
         const c0 = m52[0] ?? "";
         const perUpc = (divItemWk[m.code] ??= {});
@@ -202,6 +252,13 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
           if (r.week_ending < c0) continue;
           const v = r.base_units ?? r.units ?? 0;
           if (v > 0) perUpc[r.upc] = (perUpc[r.upc] ?? 0) + v / Math.max(m52.length, 1);
+        }
+        if (dv) {
+          for (const u of dv.out) delete perUpc[u]; // no volume → events can't score on it here
+          for (const a of addsHere) {
+            const pw = (perUpc[a.proxy_upc] ?? 0) * (a.proxy_pct / 100);
+            if (pw > 0) perUpc[a.upc] = Math.max(perUpc[a.upc] ?? 0, pw); // launch item scores on its proxy
+          }
         }
 
         // measured lift per Telus window at this division, grouped by tactic
@@ -378,6 +435,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ y
         ])),
       ])),
       dataEdge,
+      distVer: { verified: dvVerified, customers: markets.length, excluded: dvOut, added: dvAdded },
       customers: customers.map((c) => ({ id: c.customer_id, name: c.customer_name })),
       copySource: promos.map((p) => ({
         promo_id: p.promo_id,

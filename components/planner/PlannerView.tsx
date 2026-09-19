@@ -48,6 +48,8 @@ export type PlannerData = {
         and gross $ (dated list price), pu/pg = the promoted-week slices */
     priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;
     dataEdge: string;                                    // latest NIQ week on file
+    /** distribution verification rollup (per-division docs from Base & Lift) */
+    distVer: { verified: number; customers: number; excluded: number; added: number };
     customers: { id: string; name: string }[];
     copySource: {
       promo_id: string;

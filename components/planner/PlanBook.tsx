@@ -623,6 +623,17 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             ))}
           </select>
           <span className="pill">{visible.length} events in scope · {year}</span>
+          {plan.distVer.verified > 0 ? (
+            <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
+              title={`Distribution verified at ${plan.distVer.verified} of ${plan.distVer.customers} divisions (in Base & Lift's plan year): ${plan.distVer.excluded} item${plan.distVer.excluded === 1 ? "" : "s"} carry no volume, ${plan.distVer.added} added on a proxy — event bases and the volume chart reflect it`}>
+              ✓ distribution: {plan.distVer.verified}/{plan.distVer.customers} divisions · {plan.distVer.excluded} out · {plan.distVer.added} added
+            </span>
+          ) : (
+            <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+              title={`No division has been through distribution verification for ${year} yet — plan bases carry every item from last year. Verify in the Base & Lift Lab's Total year ${year} view.`}>
+              ⚠ distribution unverified
+            </span>
+          )}
           {itemSel && (() => {
             const wk = itemWeeklyBase(plan, custSel, itemSel, itemMeta.get(itemSel)?.wk ?? 0);
             return (

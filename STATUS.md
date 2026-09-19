@@ -38,7 +38,9 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
   volume + purchase date. Excluded items drop out of the carried base and
   projection; additions ride the proxy's weekly shape plus the load-in spike.
   Carry-by-default with a visible unverified pill; decisions are shared
-  (`distver:<customer>:<year>`).
+  (`distver:<customer>:<year>`) and flow into the Promotion Planner: excluded
+  items leave the event-scoring bases and the volume chart, additions score
+  on their proxy, and the plan builder shows the verification rollup pill.
 - **Planner adjustments** directly under the insights in plan years:
   distribution / base-price / trend levers by item per customer, drawing an
   adjusted-plan line on the chart.
