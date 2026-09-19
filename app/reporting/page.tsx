@@ -1,6 +1,7 @@
 import { getPriceList, getWeeklyFacts, listItems, listMarkets, listWeekEndings, priceAsOf } from "@/lib/repo";
 import { fyWeeklySeries } from "@/lib/server/fyForecast";
 import { getScope } from "@/lib/server/scope";
+import { getMode } from "@/lib/server/mode";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import ReportingView, { type ReportingData } from "@/components/reporting/ReportingView";
@@ -34,7 +35,7 @@ export default async function Page({
 }: {
   searchParams: Promise<{ mkt?: string; brand?: string; win?: string; m?: string; item?: string }>;
 }) {
-  const [allMarkets, items, gscope] = await Promise.all([listMarkets(), listItems(), getScope()]);
+  const [allMarkets, items, gscope, mode] = await Promise.all([listMarkets(), listItems(), getScope(), getMode()]);
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
   if (gscope.active && markets.length === 0) {
     return (
@@ -53,6 +54,8 @@ export default async function Page({
   const itemSel = items.some((i) => i.upc === sp.item && i.is_own && (brand === "ALL" || i.brand === brand))
     ? sp.item! : "ALL";
   const win = (WINDOWS as readonly number[]).includes(Number(sp.win)) ? (Number(sp.win) as 13 | 26 | 52) : 52;
+  // the working mode (top bar) decides the year: LE → FY forecast mode on the
+  // data-edge year, Plan → the forward plan year, Analyze → rolling windows
   // dollars basis: NIQ retail, or gross = units × the dated list price in force
   const gross = sp.m === "gross";
 
@@ -66,7 +69,7 @@ export default async function Page({
   // plan years looking forward — 2027, 2028, … in perpetuity
   const years: number[] = [];
   for (let y = latestDataYear + 1; y <= Math.max(latestDataYear, new Date().getUTCFullYear()) + 2; y++) years.push(y);
-  const planYear = /^\d{4}$/.test(sp.win ?? "") && years.includes(+sp.win!) ? +sp.win! : null;
+  const planYear = mode.kind === "plan" && years.includes(mode.planYear) ? mode.planYear : null;
 
   if (planYear) {
     return renderPlanYear({
@@ -74,7 +77,7 @@ export default async function Page({
       ownBrands, mkt, brand, gscope, items,
     });
   }
-  if (sp.win === String(latestDataYear)) {
+  if (mode.kind === "le") {
     return renderForecastYear({
       fyYear: latestDataYear, years, markets, marketList: scopeMarkets, allWeeks, latestWeek,
       ownBrands, mkt, brand, gscope, items, itemSel,

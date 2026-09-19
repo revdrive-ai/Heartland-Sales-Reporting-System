@@ -150,16 +150,9 @@ export default function PlannerView({ data }: { data: PlannerData }) {
         </div>
         <div className="actions">
           {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
-          <select
-            style={selStyle}
-            value={String(data.year)}
-            onChange={(e) => { window.location.href = `/planner?yr=${e.target.value}`; }}
-            title="FY2026 monitors the booked Telus plan; a future year opens the plan builder"
-          >
-            {data.years.map((y) => (
-              <option key={y} value={String(y)}>{y === data.meta.fiscal_year ? `FY${y} (Telus book)` : `Plan ${y}`}</option>
-            ))}
-          </select>
+          <span className="pill" title="FY monitor of the booked Telus plan — switch Working on to Plan in the top bar to build next year">
+            FY{data.year} · Telus book
+          </span>
           <span className="pill">Source: Telus export · {data.meta.snapshot_date}</span>
         </div>
       </div>

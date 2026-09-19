@@ -27,6 +27,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .fchip .lbl{opacity:.6;font-weight:600}
 .fchip svg{width:13px;height:13px;opacity:.5}
 .topbar .right{margin-left:auto;display:flex;align-items:center;gap:12px}
+/* working-mode switch: Analyze · LE · Plan — the one year decision */
+.modeswitch{display:flex;align-items:center;gap:8px;margin-left:6px;white-space:nowrap}
+.modeswitch .lbl{font-size:12px;font-weight:600;opacity:.6}
+.modeseg{display:flex;align-items:center;gap:2px;background:rgba(0,0,0,.09);border-radius:10px;padding:3px}
+.modeseg button{border:0;background:transparent;color:inherit;font:inherit;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:8px;cursor:pointer;opacity:.7;white-space:nowrap}
+.modeseg button:hover{opacity:1}
+.modeseg button.cur{background:var(--surface);color:var(--ink);opacity:1;box-shadow:0 1px 2px rgba(0,0,0,.14)}
+.modeseg .modeyear{border:0;background:var(--surface);color:var(--ink);font:inherit;font-size:12px;font-weight:700;padding:4px 6px;border-radius:8px;margin-left:2px;cursor:pointer}
+/* keep the whole top bar on one line on laptop widths */
+@media (max-width:1750px){.modeswitch .lbl{display:none}.topbar{gap:12px}.fchip{padding:6px 9px}.topbar .filters{gap:8px}}
+@media (max-width:1600px){.brand small{display:none}.modeseg button{padding:5px 9px}}
 .ask{display:flex;align-items:center;gap:8px;background:var(--ink);color:#fff;border:none;padding:9px 15px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
 .ask .spark{font-size:14px}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13px}
@@ -429,5 +440,6 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   .navitem .tag,.navitem .badge{display:none}
   .sidefoot{display:none}
   .topbar .filters{display:none}
+  .modeswitch .lbl{display:none}
   .main{padding:18px 14px 60px}
 }

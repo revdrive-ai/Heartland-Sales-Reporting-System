@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import type { ModeKind } from "@/lib/mode";
 import { useRouter } from "next/navigation";
 import { Bar } from "react-chartjs-2";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -45,7 +46,7 @@ const STATUS: Record<string, { label: string; bg: string; fg: string; title: str
   forecast: { label: "forecast", bg: "var(--surface-2)", fg: "var(--ink-3)", title: "Past the NIQ data edge — year-ago base × expected Telus window lift" },
 };
 
-export default function ForecastView({ data }: { data: ForecastData }) {
+export default function ForecastView({ data, mode, planYear }: { data: ForecastData; mode: ModeKind; planYear: number }) {
   const tick = useThemeTick();
   const router = useRouter();
   const nav = (patch: Partial<Record<"mkt" | "brand", string>>) => {
@@ -74,7 +75,13 @@ export default function ForecastView({ data }: { data: ForecastData }) {
           </p>
         </div>
         <div className="actions">
-          <span className="pill">NIQ data edge · {data.latestWeek}</span>
+          {mode === "plan" && (
+            <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+              title={`The monthly review reads actuals against the forecast, so it lives in the in-flight year — Plan ${planYear} has no measured months yet`}>
+              Plan — FY{planYear} · showing the in-flight FY{data.fyYear}
+            </span>
+          )}
+          <span className="pill">{mode === "le" ? `LE — FY${data.fyYear} · ` : ""}NIQ data edge · {data.latestWeek}</span>
         </div>
       </div>
 

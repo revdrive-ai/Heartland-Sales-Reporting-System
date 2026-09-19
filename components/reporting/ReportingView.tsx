@@ -106,7 +106,6 @@ export default function ReportingView({ data }: { data: ReportingData }) {
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const brandName = data.itemName ?? (data.brand === "ALL" ? "all own brands" : data.brand);
   const itemBrands = [...new Set(data.items.map((i) => i.brand))];
-  const fyYear = data.fy?.year ?? data.years[0] - 1; // the data-edge year, for the selector
 
   const opts = useMemo(() => {
     const o = gridOptions();
@@ -167,18 +166,22 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             ))}
           </select>
         )}
-        <select
-          style={selStyle}
-          value={data.plan ? String(data.plan.year) : data.fy ? String(data.fy.year) : String(data.win)}
-          onChange={(e) => nav({ win: e.target.value })}
-          title="Measured windows, the current fiscal year with a forecast to year-end, or a forward plan year"
-        >
-          <option value="13">Last 13 weeks</option>
-          <option value="26">Last 26 weeks</option>
-          <option value="52">Last 52 weeks</option>
-          <option value={String(fyYear)}>FY{fyYear} — actuals + forecast</option>
-          {data.years.map((y) => <option key={y} value={String(y)}>Plan {y} vs prior year</option>)}
-        </select>
+        {!data.plan && !data.fy ? (
+          <select
+            style={selStyle}
+            value={String(data.win)}
+            onChange={(e) => nav({ win: e.target.value })}
+            title="Measured rolling window — the in-flight year and plan years are chosen in the top bar (Working on)"
+          >
+            <option value="13">Last 13 weeks</option>
+            <option value="26">Last 26 weeks</option>
+            <option value="52">Last 52 weeks</option>
+          </select>
+        ) : (
+          <span className="pill" title="The year comes from the top bar — switch Working on to change it">
+            {data.plan ? `Plan — FY${data.plan.year}` : `LE — FY${data.fy!.year}`}
+          </span>
+        )}
         {!data.plan && !data.fy && (
           <select
             style={selStyle}

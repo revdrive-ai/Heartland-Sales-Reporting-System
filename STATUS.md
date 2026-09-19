@@ -17,6 +17,20 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
 | Item crosswalk workbook | 209 Telus item # ↔ NIQ UPC pairs · 403 NIQ item attribute rows |
 | Price list workbook | 213 dated list-price records, initial list effective 2026-01-01 |
 
+## Working mode — Analyze · LE · Plan
+
+One decision, made once in the top bar ("Working on"), decides which year
+every workflow tab opens in: **Analyze** (measured history — rolling
+windows and prior total years), **LE — FY<data-edge year>** (the in-flight
+year: actuals + forecast to year-end, LE adjustments, monthly Latest
+Estimates), **Plan — FY<next>** (the forward year: distribution
+verification, plan adjustments, the plan builder, Plan of Record sign-off;
+a small year picker offers the second forward year). The preference lives
+in the `hh-mode` cookie beside the customer scope (`lib/mode.ts`,
+`lib/server/mode.ts`, `components/ModeSwitch.tsx`); the per-page year
+selectors are gone, and a stale `?win=`/`?yr=` in a link can't override the
+top bar. Card and button titles inherit the mode word.
+
 ## Base & Lift Lab
 
 - Weekly base/actual trend with promo bands and lanes, seasonality engine,
@@ -24,7 +38,7 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
   last 52 weeks for the selected customer × brand.
 - Metric selector: units, retail dollars, or gross dollars at list price.
   The four KPI cards show % change vs year-ago for the selected timeframe.
-- **Plan years (2027/2028):** the actualized 2026 base carries in as a blue
+- **Plan mode (2027/2028):** the actualized 2026 base carries in as a blue
   line, the seasonality-shaped projection continues in orange, year-ago
   actuals overlay on demand, and each customer's plan registration is logged.
 - **Key insights** (collapsible): ACV drops, base-price moves, unexplained

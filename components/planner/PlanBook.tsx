@@ -529,11 +529,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
         <div className="actions">
           {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
-          <select style={selStyle} value={String(year)} onChange={(e) => { window.location.href = `/planner?yr=${e.target.value}`; }}>
-            {data.years.map((y) => (
-              <option key={y} value={String(y)}>{y === data.meta.fiscal_year ? `FY${y} (Telus book)` : `Plan ${y}`}</option>
-            ))}
-          </select>
+          <span className="pill" title="The plan year comes from the top bar — Working on: Plan">Plan — FY{year}</span>
           <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={tmplDl} title="Download the year-plan CSV template — fill it out and bring it back through Import">
             ⬇ CSV template
           </button>

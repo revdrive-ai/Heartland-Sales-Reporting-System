@@ -1,5 +1,6 @@
 import { listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
+import { getMode } from "@/lib/server/mode";
 import { fyWeeklySeries } from "@/lib/server/fyForecast";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import ForecastView, { type ForecastData } from "@/components/forecast/ForecastView";
@@ -28,7 +29,7 @@ export default async function Page({
 }: {
   searchParams: Promise<{ mkt?: string; brand?: string }>;
 }) {
-  const [allMarkets, items, gscope] = await Promise.all([listMarkets(), listItems(), getScope()]);
+  const [allMarkets, items, gscope, mode] = await Promise.all([listMarkets(), listItems(), getScope(), getMode()]);
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
   if (gscope.active && markets.length === 0) {
     return (
@@ -104,5 +105,5 @@ export default async function Page({
       .sort((a, b) => b.fy - a.fy),
   };
 
-  return <ForecastView data={data} />;
+  return <ForecastView data={data} mode={mode.kind} planYear={mode.planYear} />;
 }

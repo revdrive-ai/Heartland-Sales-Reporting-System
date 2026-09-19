@@ -2,6 +2,7 @@ import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listA
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
+import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
 import type { DistAddition, DistVerification } from "@/lib/repo/client";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
@@ -34,17 +35,17 @@ function allocateByMonth(totalByMonth: number[], amount: number, startISO: strin
 
 const OWN_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ yr?: string }> }) {
-  const sp = await searchParams;
-  const [allPromos, allCustomers, meta, enums, gscope] = await Promise.all([
-    listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(), getScope(),
+export default async function Page() {
+  const [allPromos, allCustomers, meta, enums, gscope, mode] = await Promise.all([
+    listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(), getScope(), getMode(),
   ]);
 
-  // Year: the Telus book year monitors actuals; future years open the plan builder.
+  // Year: the working mode (top bar) decides — Plan mode opens the plan
+  // builder on its forward year; Analyze and LE monitor the Telus book year.
   const bookYear = meta.fiscal_year;
   const years: number[] = [];
   for (let y = bookYear; y <= Math.max(bookYear, new Date().getUTCFullYear()) + 2; y++) years.push(y);
-  const year = /^\d{4}$/.test(sp.yr ?? "") && years.includes(+sp.yr!) ? +sp.yr! : bookYear;
+  const year = mode.kind === "plan" && years.includes(mode.planYear) ? mode.planYear : bookYear;
   const inScope = new Set(gscope.telusCustomerIds);
   const promos = gscope.active ? allPromos.filter((p) => inScope.has(p.customer_id)) : allPromos;
   const customers = gscope.active ? allCustomers.filter((c) => inScope.has(c.customer_id)) : allCustomers;

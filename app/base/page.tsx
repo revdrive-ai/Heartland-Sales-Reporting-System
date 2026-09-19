@@ -1,5 +1,6 @@
 import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
+import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
 import type { DistVerification } from "@/lib/repo/client";
 import { detectInsights } from "@/lib/server/insights";
@@ -38,7 +39,7 @@ export default async function Page({
   searchParams: Promise<{ mkt?: string; brand?: string; item?: string; metric?: string; win?: string }>;
 }) {
   const sp = await searchParams;
-  const [allMarkets, gscope, allItems] = await Promise.all([listMarkets(), getScope(), listItems()]);
+  const [allMarkets, gscope, allItems, mode] = await Promise.all([listMarkets(), getScope(), listItems(), getMode()]);
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
   if (gscope.active && markets.length === 0) {
     return (
@@ -87,9 +88,14 @@ export default async function Page({
   const years: number[] = [];
   for (let y = FIRST_PLAN_YEAR; y <= Math.max(latestDataYear, currentYear) + 2; y++) years.push(y);
 
-  // Timeframe: rolling (4w/13w/26w/52w), year-to-date, or a total year.
-  const rawWin = sp.win ?? "52w";
-  const win = ROLLING[rawWin] || rawWin === "ytd" || (/^\d{4}$/.test(rawWin) && years.includes(+rawWin))
+  // Timeframe. The working mode (top bar) decides the year: LE mode is the
+  // data-edge year to year-end, Plan mode the forward plan year; Analyze
+  // mode keeps the rolling windows, year-to-date and prior total years.
+  const rawWin = mode.kind === "le" ? String(latestDataYear)
+    : mode.kind === "plan" ? String(mode.planYear)
+    : (sp.win ?? "52w");
+  const win = ROLLING[rawWin] || rawWin === "ytd"
+    || (/^\d{4}$/.test(rawWin) && years.includes(+rawWin) && (mode.kind !== "analyze" || +rawWin < latestDataYear))
     ? rawWin : "52w";
 
   let weeks: string[];
@@ -564,6 +570,7 @@ export default async function Page({
     winLabel,
     years,
     latestDataYear,
+    mode: mode.kind,
     planningYear,
     plan,
     distVer,

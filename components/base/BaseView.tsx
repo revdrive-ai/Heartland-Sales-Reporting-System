@@ -10,6 +10,7 @@ import {
   registerPlanYear, saveDistVerification, savePlanAdjustment,
   type DistAddition, type DistVerification, type PlanAdjustment,
 } from "@/lib/repo/client";
+import { writeModeCookie, type ModeKind } from "@/lib/mode";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
 
@@ -50,6 +51,7 @@ export type BaseData = {
   winLabel: string;
   years: number[];           // total-year choices (2024 → future, in perpetuity)
   latestDataYear: number;
+  mode: ModeKind;            // the top-bar working mode that chose this year
   planningYear: boolean;     // a future year with no NIQ weeks on file yet
   /** distribution verification (plan years): the source-year item inventory
       with distribution health, plus the shared doc's summary for the pill */
@@ -407,11 +409,13 @@ export default function BaseView({ data }: { data: BaseData }) {
     if (data.plan) {
       prefillAdj(ins.kind, ins.upc);
     } else {
+      writeModeCookie({ kind: "plan", planYear: nextPlanYear });
       const p = new URLSearchParams({
         mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric,
         win: String(nextPlanYear), adj: `${ins.kind}:${ins.upc ?? "ALL"}`,
       });
       router.push(`/base?${p.toString()}`);
+      router.refresh();
     }
   };
 
@@ -756,14 +760,17 @@ export default function BaseView({ data }: { data: BaseData }) {
               style={{ ...selStyle, cursor: "pointer" }}
               title={`Open the ${nextPlanYear} plan for ${marketName}: ${data.latestDataYear} actual base carried in as far as the year has actualized, the rest projected — and log this customer as registered for ${nextPlanYear}.`}
               onClick={() => {
-                registerPlanYear(data.mkt, nextPlanYear).then(() => nav({ win: String(nextPlanYear) }));
+                writeModeCookie({ kind: "plan", planYear: nextPlanYear });
+                registerPlanYear(data.mkt, nextPlanYear).then(() => { nav({ win: String(nextPlanYear) }); router.refresh(); });
               }}
             >
               ▸ Plan {nextPlanYear}
             </button>
           )}
           {data.forecast && snapPill}
-          <span className="pill">{data.winLabel} · {data.points[0]?.week} → {data.points.at(-1)?.week}</span>
+          {data.mode === "analyze" && (
+            <span className="pill">{data.winLabel} · {data.points[0]?.week} → {data.points.at(-1)?.week}</span>
+          )}
         </div>
       </div>
 
@@ -795,6 +802,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           <option value="dollars">Dollars — retail (NIQ)</option>
           <option value="gross">Dollars — list price (gross)</option>
         </select>
+        {data.mode === "analyze" && (<>
         <select
           style={selStyle}
           value={["4w", "13w", "26w", "52w", "ytd"].includes(data.win) ? data.win : ""}
@@ -811,13 +819,19 @@ export default function BaseView({ data }: { data: BaseData }) {
           style={selStyle}
           value={/^\d{4}$/.test(data.win) ? data.win : ""}
           onChange={(e) => nav({ win: e.target.value || "52w" })}
-          title="Total calendar year — future years open as planning views"
+          title="A prior total calendar year — the in-flight year and plan years are chosen in the top bar (Working on)"
         >
           <option value="">Rolling window</option>
-          {data.years.map((y) => (
-            <option key={y} value={String(y)}>Total year {y}{y > data.latestDataYear ? " (plan)" : ""}</option>
+          {data.years.filter((y) => y < data.latestDataYear).map((y) => (
+            <option key={y} value={String(y)}>Total year {y}</option>
           ))}
         </select>
+        </>)}
+        {data.mode !== "analyze" && (
+          <span className="pill" title="The year comes from the top bar — switch Working on to change it">
+            {data.mode === "le" ? `LE — FY${data.win}` : `Plan — FY${data.win}`} · {data.points[0]?.week} → {data.points.at(-1)?.week}
+          </span>
+        )}
       </div>
 
       <div className="kpis">
