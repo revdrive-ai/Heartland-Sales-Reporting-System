@@ -69,12 +69,3 @@ export function groupFor(view: string): string {
   return NAV.find((g) => g.items.some((i) => i.view === view))?.heading ?? "";
 }
 
-/* The six-step trade workflow strip shown on the workflow views. */
-export const WORKFLOW: [string, string][] = [
-  ["base", "Model the base"],
-  ["planner", "Plan promotions"],
-  ["reporting", "Track the business"],
-  ["forecast", "Monthly Forecast Review"],
-  ["analysis", "Measure & learn"],
-  ["deductions", "Reconcile spend"],
-];

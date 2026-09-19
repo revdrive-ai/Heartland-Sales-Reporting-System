@@ -1,4 +1,4 @@
-import WorkflowStrip from "./WorkflowStrip";
+
 
 /* Shown when the global customer scope resolves to no data for a view —
    e.g. a parent account whose NIQ trading areas aren't loaded yet. */
@@ -9,7 +9,6 @@ export default function ScopeEmpty({
 }) {
   return (
     <div className="view active">
-      <WorkflowStrip current={current} />
       <div className="pagehead">
         <div>
           <div className="crumb">{crumb}</div>

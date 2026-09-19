@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Bar } from "react-chartjs-2";
-import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import { LinesTable, STATUS_STYLE, usePromoLines } from "./lines";
 import PromoCalendar from "./PromoCalendar";
@@ -139,7 +138,6 @@ export default function PlannerView({ data }: { data: PlannerData }) {
 
   return (
     <div className="view active">
-      <WorkflowStrip current="planner" />
 
       <div className="pagehead">
         <div>

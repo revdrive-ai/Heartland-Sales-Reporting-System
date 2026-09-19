@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
-import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import {
   deletePlanAdjustment, getDistVerification, getPlanAdjustments, getPlanRegistry, getPriceEdits,
@@ -626,7 +625,6 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   return (
     <div className="view active">
-      <WorkflowStrip current="base" />
 
       <div className="pagehead">
         <div>

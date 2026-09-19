@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bar, Line } from "react-chartjs-2";
-import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 
 /* Sales Dashboard, draft 1 on the real NIQ pull. Headline = own brands in
@@ -118,7 +117,6 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
   return (
     <div className="view active">
-      <WorkflowStrip current="reporting" />
 
       <div className="pagehead">
         <div>

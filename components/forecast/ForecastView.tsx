@@ -3,7 +3,6 @@
 import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Bar } from "react-chartjs-2";
-import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 
 /* Monthly Forecast Review — the FY forecast by calendar month vs prior-year
@@ -64,7 +63,6 @@ export default function ForecastView({ data }: { data: ForecastData }) {
 
   return (
     <div className="view active">
-      <WorkflowStrip current="forecast" />
 
       <div className="pagehead">
         <div>

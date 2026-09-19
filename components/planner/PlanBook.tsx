@@ -2,7 +2,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Chart } from "react-chartjs-2";
-import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import {
   getPlanBudget, getPlanEvents, replacePlanEvents, setPlanBudget, type PlanEvent,
@@ -518,7 +517,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   return (
     <div className="view active">
-      <WorkflowStrip current="planner" />
 
       <div className="pagehead">
         <div>
