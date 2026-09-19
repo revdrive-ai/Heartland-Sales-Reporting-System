@@ -296,8 +296,26 @@ export default function BaseView({ data }: { data: BaseData }) {
   };
   const dvDecide = (upc: string, d: "in" | "out") =>
     setDvDoc((s) => (s ? { ...s, decisions: { ...s.decisions, [upc]: d } } : s));
-  const dvRemoveAdd = (id: string) =>
-    setDvDoc((s) => (s ? { ...s, additions: s.additions.filter((a) => a.id !== id) } : s));
+
+  // the add-item flow is standalone (its own header pill): it loads the shared
+  // doc itself and persists on every change, no outer Save step
+  const openDvAdd = async () => {
+    if (!data.distVer) return;
+    setDvDoc(await getDistVerification(data.mkt, data.distVer.year));
+    setDvAddOpen(true);
+  };
+  const dvPersist = async (next: DistVerification) => {
+    if (!data.distVer) return;
+    setDvDoc(next);
+    setDvSaving(true);
+    await saveDistVerification(data.mkt, data.distVer.year, next);
+    setDvSaving(false);
+    router.refresh(); // plan series recomputes server-side
+  };
+  const dvRemoveAdd = (id: string) => {
+    if (!dvDoc) return;
+    void dvPersist({ ...dvDoc, additions: dvDoc.additions.filter((a) => a.id !== id) });
+  };
   const dvSave = async () => {
     if (!dvDoc || !data.distVer) return;
     setDvSaving(true);
@@ -306,7 +324,7 @@ export default function BaseView({ data }: { data: BaseData }) {
     setDvOpen(false);
     router.refresh(); // the plan series recomputes server-side
   };
-  const dvAddItem = () => {
+  const dvAddItem = async () => {
     if (!dvDoc || !dvNew || !dvProxy || !dvFirst) return;
     const add: DistAddition = {
       id: newId(),
@@ -317,8 +335,7 @@ export default function BaseView({ data }: { data: BaseData }) {
       loadin_units: Math.max(0, parseFloat(dvLoadU) || 0),
       loadin_date: dvLoadD || dvFirst,
     };
-    setDvDoc((s) => (s ? { ...s, additions: [...s.additions, add] } : s));
-    setDvAddOpen(false);
+    await dvPersist({ ...dvDoc, additions: [...dvDoc.additions, add] });
     setDvNew(null); setDvSearch(""); setDvProxy(""); setDvPct("100"); setDvFirst(""); setDvLoadU(""); setDvLoadD("");
   };
   const goAdjust = (ins: InsightRow) => {
@@ -638,6 +655,14 @@ export default function BaseView({ data }: { data: BaseData }) {
               onClick={openDv}
             >
               ✓ Verify distribution
+            </button>
+            <button
+              className="btn"
+              style={{ ...selStyle, cursor: "pointer" }}
+              title={`Add a new item to the ${planYear} plan at ${marketName}: search the item master, pick a proxy for base volume, set the first week sold and the load-in. Saves immediately.`}
+              onClick={openDvAdd}
+            >
+              + Add new item
             </button>
             {data.distVer && (data.distVer.verifiedAt
               ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
@@ -1594,22 +1619,12 @@ export default function BaseView({ data }: { data: BaseData }) {
                   })}
                 </tbody>
               </table>
-              <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: dvDoc.additions.length ? 8 : 0 }}>
-                  <b style={{ fontSize: 13 }}>New items for {data.distVer.year}</b>
-                  <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 11.5 }} onClick={() => setDvAddOpen(true)}>+ Add item</button>
+              {dvDoc.additions.length > 0 && (
+                <div className="note" style={{ padding: "10px 16px", borderTop: "1px solid var(--line)" }}>
+                  ◇ {dvDoc.additions.length} new item{dvDoc.additions.length === 1 ? "" : "s"} added for {data.distVer.year} — managed under
+                  <b> + Add new item</b> in the page header.
                 </div>
-                {dvDoc.additions.map((a) => (
-                  <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 12.5, padding: "4px 0" }}>
-                    <span style={{ flex: 1 }}>
-                      <b>{a.name}</b> <span style={{ color: "var(--ink-3)" }}>({a.brand})</span> — {a.proxy_pct}% of{" "}
-                      {data.distVer!.items.find((i) => i.upc === a.proxy_upc)?.name ?? a.proxy_upc}, from {a.first_week}
-                      {a.loadin_units > 0 ? ` · load-in ${Math.round(a.loadin_units).toLocaleString()} u on ${a.loadin_date.slice(0, 10)}` : ""}
-                    </span>
-                    <span className="minichip" style={{ cursor: "pointer" }} onClick={() => dvRemoveAdd(a.id)}>✕</span>
-                  </div>
-                ))}
-              </div>
+              )}
             </div>
             <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", gap: 10, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)", flex: 1 }}>
@@ -1635,6 +1650,21 @@ export default function BaseView({ data }: { data: BaseData }) {
               <button className="x" onClick={() => setDvAddOpen(false)}>✕</button>
             </div>
             <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
+              {dvDoc.additions.length > 0 && !dvNew && (
+                <div style={{ marginBottom: 12, paddingBottom: 10, borderBottom: "1px solid var(--line)" }}>
+                  <b style={{ fontSize: 12.5 }}>Already added for {data.distVer.year}</b>
+                  {dvDoc.additions.map((a) => (
+                    <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 12.5, padding: "4px 0" }}>
+                      <span style={{ flex: 1 }}>
+                        <b>{a.name}</b> <span style={{ color: "var(--ink-3)" }}>({a.brand})</span> — {a.proxy_pct}% of{" "}
+                        {data.distVer!.items.find((i) => i.upc === a.proxy_upc)?.name ?? a.proxy_upc}, from {a.first_week}
+                        {a.loadin_units > 0 ? ` · load-in ${Math.round(a.loadin_units).toLocaleString()} u on ${a.loadin_date.slice(0, 10)}` : ""}
+                      </span>
+                      <span className="minichip" style={{ cursor: "pointer" }} title="Remove this addition from the plan" onClick={() => dvRemoveAdd(a.id)}>✕</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!dvNew ? (<>
                 <input
                   style={{ ...selStyle, width: "100%" }}
@@ -1706,7 +1736,9 @@ export default function BaseView({ data }: { data: BaseData }) {
                 </div>
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
                   <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => setDvAddOpen(false)}>Cancel</button>
-                  <button className="btn primary" style={{ cursor: "pointer" }} onClick={dvAddItem} disabled={!dvProxy || !dvFirst}>Add to plan</button>
+                  <button className="btn primary" style={{ cursor: "pointer" }} onClick={dvAddItem} disabled={!dvProxy || !dvFirst || dvSaving}>
+                    {dvSaving ? "Adding…" : "Add to plan"}
+                  </button>
                 </div>
               </>)}
             </div>
