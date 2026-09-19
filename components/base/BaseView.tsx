@@ -34,6 +34,7 @@ export type OverlayRow = PromoOverlay & {
   pred_lift: number | null;
   pred_fallback: boolean;   // no year-ago data — predicted from avg promoted-week lift
   actual_lift: number | null;
+  funding: boolean;          // EDLP / Slotting — a funding vehicle, no lift unless the planner sets one
   lift_partial: boolean;    // window ends past the latest NIQ week on file
 };
 
@@ -1734,6 +1735,12 @@ export default function BaseView({ data }: { data: BaseData }) {
                     <td style={{ padding: "9px 14px" }}>{o.performance_type}</td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{o.start_date} → {o.end_date}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{Math.round(days / 7)}</td>
+                    {o.funding ? (
+                      <td colSpan={2} style={{ padding: "9px 14px", textAlign: "right", color: "var(--ink-3)", fontSize: 12, fontWeight: 600 }}
+                        title={`${o.performance_type} funds price — a funding vehicle, not a volume event. No lift is read or predicted; the planner carries it at 0% unless someone sets one.`}>
+                        funding · no lift
+                      </td>
+                    ) : (<>
                     <td
                       style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: "var(--ink-2)" }}
                       title={o.pred_fallback && o.pred_lift !== null ? "No year-ago data for this window — predicted from this selection's average lift in NIQ-promoted weeks" : "Actual vs NIQ base over the matching weeks a year earlier"}
@@ -1749,6 +1756,7 @@ export default function BaseView({ data }: { data: BaseData }) {
                     >
                       {fmtLift(o.actual_lift)}{o.lift_partial && o.actual_lift !== null ? " ⏳" : ""}
                     </td>
+                    </>)}
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(o.planned_amount)}</td>
                     <td style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtMoney(o.actual_amount)}</td>
                   </tr>

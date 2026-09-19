@@ -397,6 +397,11 @@ export default async function Page({
     return { lift: n > 0 && b > 0 ? (a - b) / b : null, weeks: n };
   };
   const overlayRows = overlays.map((o) => {
+    // funding vehicles (EDLP, Slotting) fund price, they don't drive volume:
+    // no lift is read or predicted for them unless the planner sets one
+    if (isNonPerformance(o.performance_type)) {
+      return { ...o, pred_lift: null, pred_fallback: false, actual_lift: null, lift_partial: false, funding: true };
+    }
     const act = liftOver(o.start_date, o.end_date);
     const pred = liftOver(yearAgoWeek(o.start_date), yearAgoWeek(o.end_date));
     return {
@@ -405,6 +410,7 @@ export default async function Page({
       pred_fallback: pred.lift === null,
       actual_lift: act.lift,
       lift_partial: utcOf(o.end_date) > utcOf(latestWeek),
+      funding: false,
     };
   });
 
