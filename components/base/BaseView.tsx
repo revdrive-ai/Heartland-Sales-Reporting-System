@@ -62,7 +62,7 @@ export type BaseData = {
     items: { upc: string; name: string; brand: string; acv: number; lastSale: string; baseWk: number }[];
     master: { upc: string; name: string; brand: string }[];
   };
-  forecast: null | { weeks: number; from: string }; // data-edge year: weeks forecast past the edge
+  forecast: null | { weeks: number; from: string; itemShare: Record<string, number> }; // data-edge year: weeks forecast past the edge
   plan: null | {             // the plan-year series (future years only)
     sourceYear: number;                 // the year the actualized base carries from
     actualized: (number | null)[];      // actual NIQ base, matching weeks a year back
@@ -237,12 +237,15 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [aTo, setATo] = useState("");
   const [aNote, setANote] = useState("");
   useEffect(() => {
-    if (planYear) {
-      getPlanAdjustments(data.mkt, planYear).then(setAdjs);
+    if (snapYear) {
+      getPlanAdjustments(data.mkt, snapYear).then(setAdjs);
       setAUpc("ALL"); setAKind("distribution"); setAPct(""); setANote("");
-      setAFrom(`${planYear}-01-01`); setATo(`${planYear}-12-31`);
+      // on the in-flight year, levers only move the forecast — default the
+      // window to start at the data edge
+      setAFrom(planYear ? `${snapYear}-01-01` : (data.forecast?.from ?? `${snapYear}-01-01`));
+      setATo(`${snapYear}-12-31`);
     } else setAdjs([]);
-  }, [data.mkt, planYear]);
+  }, [data.mkt, snapYear, planYear, data.forecast?.from]); // eslint-disable-line react-hooks/exhaustive-deps
   /* "Adjust in Plan →" from a Key insight: pre-fill the adjustment form with
      the insight's item and the matching lever, and bring the card into view.
      From a measured window the chip navigates into the plan year carrying an
@@ -414,10 +417,10 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   const addAdj = async () => {
     const pct = parseFloat(aPct);
-    if (!planYear || !pct || !aFrom || !aTo || aTo < aFrom) return;
+    if (!snapYear || !pct || !aFrom || !aTo || aTo < aFrom) return;
     setAdjs(await savePlanAdjustment({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      market_code: data.mkt, plan_year: planYear, brand: data.brand,
+      market_code: data.mkt, plan_year: snapYear, brand: data.brand,
       upc: aUpc, kind: aKind, pct, from: aFrom, to: aTo,
       note: aNote.trim(), created_at: new Date().toISOString(),
     }));
@@ -428,20 +431,21 @@ export default function BaseView({ data }: { data: BaseData }) {
   /* per-week multiplier the adjustments put on the plan; item-level rows are
      weighted by the item's share of the brand base in the all-items view */
   const adjFactors = useMemo(() => {
-    if (!data.plan) return [];
+    if (!data.plan && !data.forecast) return [];
+    const shares = data.plan?.itemShare ?? data.forecast?.itemShare ?? {};
     return data.points.map((p) => {
       const w = utc(p.week);
       let f = 1;
       for (const a of brandAdjs) {
         if (utc(a.from) > w || utc(a.to) < w - 6 * DAY) continue;
         const weight = a.upc === "ALL" ? 1
-          : data.item === "ALL" ? (data.plan!.itemShare[a.upc] ?? 0)
+          : data.item === "ALL" ? (shares[a.upc] ?? 0)
           : a.upc === data.item ? 1 : 0;
         f *= 1 + (a.pct / 100) * weight;
       }
       return f;
     });
-  }, [data.plan, data.points, data.item, brandAdjs]);
+  }, [data.plan, data.forecast, data.points, data.item, brandAdjs]);
   const hasAdj = adjFactors.some((f) => f !== 1);
   const adjustedPlan = useMemo(() => {
     if (!data.plan) return [];
@@ -451,6 +455,14 @@ export default function BaseView({ data }: { data: BaseData }) {
     });
   }, [data.plan, data.points, adjFactors]);
   const adjTotal = adjustedPlan.reduce((a: number, v) => a + (v ?? 0), 0);
+  // in-flight year: the LE-adjusted forecast (measured weeks never move)
+  const adjustedFc = useMemo(() => {
+    if (!data.forecast) return [];
+    return data.points.map((p, i) => {
+      if (p.actualFc === null || p.actualFc === undefined) return null;
+      return p.actual !== null ? p.actualFc : Math.round(p.actualFc * adjFactors[i]); // bridge week stays measured
+    });
+  }, [data.forecast, data.points, adjFactors]);
   const toggleLanes = () => {
     setShowLanes((v) => {
       try { localStorage.setItem(LANES_KEY, v ? "0" : "1"); } catch {}
@@ -650,7 +662,7 @@ export default function BaseView({ data }: { data: BaseData }) {
   // forecast-to-go: forecast actuals on the unmeasured weeks only (the bridge
   // point on the last measured week duplicates a measured value — skip it)
   const fcToGo = data.forecast
-    ? data.points.reduce((a, p) => a + (p.actual === null ? (p.actualFc ?? 0) : 0), 0)
+    ? data.points.reduce((a, p, i) => a + (p.actual === null ? ((hasAdj ? adjustedFc[i] : p.actualFc) ?? 0) : 0), 0)
     : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
   const scopeName = data.itemName ?? data.brand;
@@ -1000,7 +1012,7 @@ export default function BaseView({ data }: { data: BaseData }) {
               />
             ) : (
             <Line
-              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + (showYB ? "y" : "") + (showYB2 ? "z" : "") + (showLanes ? bands.lanes.length : 0)}
+              key={"b" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (seasHide ? "w" : "") + (showPY ? "p" : "") + (showYB ? "y" : "") + (showYB2 ? "z" : "") + (showLanes ? bands.lanes.length : 0) + (data.forecast ? brandAdjs.map((a) => a.id).join(".") : "")}
               plugins={[bandPlugin]}
               data={{
                 labels: data.points.map((p) => p.week.slice(5)),
@@ -1085,6 +1097,18 @@ export default function BaseView({ data }: { data: BaseData }) {
                     pointRadius: 0,
                     pointHoverRadius: 4,
                   }] : []),
+                  ...(data.forecast && hasAdj ? [{
+                    label: "LE-adjusted forecast",
+                    data: adjustedFc,
+                    borderColor: cssToken("--ink"),
+                    backgroundColor: cssToken("--ink"),
+                    borderDash: [4, 3],
+                    borderWidth: 2,
+                    tension: 0.25,
+                    spanGaps: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 4,
+                  }] : []),
                 ],
               }}
               options={opts}
@@ -1109,7 +1133,9 @@ export default function BaseView({ data }: { data: BaseData }) {
                 {data.forecast && <> The <b>{data.forecast.weeks} weeks from {data.forecast.from}</b> are past the NIQ
                 data edge and show a <b>forecast</b>: dashed base carries the year-ago NIQ base, and dashed forecast
                 actuals apply the expected lift of each Telus window still open (the windows table&apos;s predicted
-                lift; EDLP/Slotting fund price, so they add no lift). Both firm up as NIQ weeks land.</>}
+                lift; EDLP/Slotting fund price, so they add no lift). Both firm up as NIQ weeks land.
+                {hasAdj && <> The dark dashed <b>LE-adjusted forecast</b> applies the LE adjustments below to the
+                forecast weeks — measured weeks don&apos;t move.</>}</>}
                 {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}
                 {data.grossCoverage.priced} of {data.grossCoverage.total} item{data.grossCoverage.total === 1 ? "" : "s"} in
                 this selection {data.grossCoverage.priced === 1 && data.grossCoverage.total === 1 ? "is" : "are"} priced;
@@ -1234,12 +1260,14 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       )}
 
-      {data.plan && (<>
+      {(data.plan || data.forecast) && (<>
       <div ref={adjCard} className="card" style={{ padding: 0, marginTop: 16, scrollMarginTop: 12 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-          <b>Planner adjustments — {data.win}</b>
+          <b>{data.plan ? "Plan adjustments" : "LE adjustments"} — {data.win}</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {marketName} · {data.brand} · distribution, base price and trend levers on the plan base
+            {marketName} · {data.brand} · {data.plan
+              ? "distribution, base price and trend levers on the plan base"
+              : "levers on the forecast to year-end — measured weeks don't move"}
           </span>
         </div>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -1294,7 +1322,8 @@ export default function BaseView({ data }: { data: BaseData }) {
                 const itemName = a.upc === "ALL" ? `All ${a.brand} items`
                   : data.items.find((i) => i.upc === a.upc)?.name ?? a.upc;
                 const kindLabel = a.kind === "distribution" ? "Distribution" : a.kind === "price" ? "Base price" : "Trend";
-                const share = a.upc !== "ALL" && data.item === "ALL" ? data.plan!.itemShare[a.upc] ?? 0 : null;
+                const share = a.upc !== "ALL" && data.item === "ALL"
+                  ? (data.plan?.itemShare ?? data.forecast?.itemShare ?? {})[a.upc] ?? 0 : null;
                 return (
                   <tr key={a.id}>
                     <td style={{ padding: "9px 14px" }}>
@@ -1315,7 +1344,7 @@ export default function BaseView({ data }: { data: BaseData }) {
                         className="minichip"
                         style={{ cursor: "pointer" }}
                         title="Remove this adjustment"
-                        onClick={() => deletePlanAdjustment(a.id, data.mkt, planYear!).then(setAdjs)}
+                        onClick={() => deletePlanAdjustment(a.id, data.mkt, snapYear!).then(setAdjs)}
                       >
                         ✕
                       </span>
@@ -1327,7 +1356,8 @@ export default function BaseView({ data }: { data: BaseData }) {
                 <tr><td colSpan={7} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
                   No adjustments yet for {marketName} · {data.brand} in {data.win}. Add one above — e.g. lost
                   distribution on an item, a coming price increase, or a trend running hotter or colder than the
-                  projection — and the dark <b>Adjusted plan</b> line appears on the chart.
+                  projection — and the dark <b>{data.plan ? "Adjusted plan" : "LE-adjusted forecast"}</b> line
+                  appears on the chart.
                 </td></tr>
               )}
             </tbody>

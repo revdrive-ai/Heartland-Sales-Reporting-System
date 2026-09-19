@@ -73,12 +73,13 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
       byBrand[brand] = { base: monthly, adjusted: monthly }; // one number in-year: expected total
       tot += monthly.reduce((a: number, x: number) => a + x, 0);
     }
+    const adjsIY = ((await getState(`adj:${mkt}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined) ?? [];
     return {
       year,
       computed_at: new Date().toISOString(),
       byBrand,
       totals: { base: Math.round(tot), adjusted: Math.round(tot) },
-      adjustments: [], // plan-year levers don't apply to the in-flight year
+      adjustments: adjsIY, // LE adjustments — applied to the forecast weeks inside fyWeeklySeries
       distver: {
         out: Object.values(dvRawIY?.decisions ?? {}).filter((d) => d === "out").length,
         added: (dvRawIY?.additions ?? []).length,

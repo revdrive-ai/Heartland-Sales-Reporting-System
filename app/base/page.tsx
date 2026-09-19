@@ -408,7 +408,7 @@ export default async function Page({
      expected lift of whichever Telus performance window covers the week — the
      same predicted lift the windows table shows. Funding vehicles (EDLP,
      Slotting) carry no lift; overlapping windows take the strongest read. */
-  let forecast: { weeks: number; from: string } | null = null;
+  let forecast: { weeks: number; from: string; itemShare: Record<string, number> } | null = null;
   if (forecastFrom !== null) {
     const last52 = allWeeks.slice(-52);
     const avg52 = last52.reduce((a, w) => a + (weekBaseFull.get(w) ?? 0), 0) / Math.max(last52.length, 1);
@@ -434,7 +434,19 @@ export default async function Page({
     // bridge: the dashed forecast lines take off from the last measured week
     const edge = points.find((p) => p.week === latestWeek);
     if (edge) { edge.baseFc = edge.base; edge.actualFc = edge.actual; }
-    forecast = { weeks: n, from: forecastFrom };
+    // item shares (latest 52 wks) — the weight item-level LE adjustments carry
+    const last52Set = new Set(last52);
+    const shareTot = new Map<string, number>();
+    let shareSum = 0;
+    for (const r of factsAll) {
+      if (!last52Set.has(r.week_ending)) continue;
+      const v = bVal(r);
+      shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
+      shareSum += v;
+    }
+    const itemShare: Record<string, number> = {};
+    for (const [u, v] of shareTot) itemShare[u] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
+    forecast = { weeks: n, from: forecastFrom, itemShare };
   }
 
   /* Lift engine — depth vs unit lift across the selection's promoted weeks,

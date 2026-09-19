@@ -1,5 +1,7 @@
 import { getPromoOverlays, getWeeklyFacts } from "@/lib/repo";
 import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
+import { getState } from "@/lib/server/appstate";
+import type { PlanAdjustment } from "@/lib/repo/client";
 
 /* The FY forecast construction, shared by the Sales Dashboard's FY mode and
    the Monthly Forecast Review (and matching the Base & Lift Total-year view):
@@ -14,6 +16,18 @@ import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 const DAY = 86400000;
 const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
 const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
+
+// LE adjustments (adj:<mkt>:<year>) apply to the FORECAST weeks; a short
+// cache keeps the dashboard's 13-division × 3-brand sweep to one read each
+const adjCache = new Map<string, { at: number; adjs: PlanAdjustment[] }>();
+async function adjustmentsFor(mkt: string, year: number): Promise<PlanAdjustment[]> {
+  const key = `${mkt}:${year}`;
+  const hit = adjCache.get(key);
+  if (hit && Date.now() - hit.at < 5000) return hit.adjs;
+  const adjs = ((await getState(`adj:${mkt}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined) ?? [];
+  adjCache.set(key, { at: Date.now(), adjs });
+  return adjs;
+}
 
 export type FyWeek = {
   w: string;
@@ -84,6 +98,25 @@ export async function fyWeeklySeries(
       lift: liftOver(yearAgoWeek(o.start_date), yearAgoWeek(o.end_date)) ?? fallbackLift,
     }));
 
+  /* LE adjustments on the forecast weeks — the same multiplier rule the plan
+     view applies: item rows weighted by the item's share of the brand base
+     (latest 52 measured weeks). Measured weeks never move. */
+  const fyYear = +fyWeeks[0].slice(0, 4);
+  const brandAdjs = (await adjustmentsFor(code, fyYear)).filter((a) => a.brand === brand);
+  const shareTot = new Map<string, number>();
+  let shareSum = 0;
+  if (brandAdjs.some((a) => a.upc !== "ALL")) {
+    const last52Set = new Set(allWeeks.slice(-52));
+    for (const r of facts) {
+      const v = r.base_units ?? r.units ?? 0;
+      if (last52Set.has(r.week_ending) && v > 0) {
+        shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
+        shareSum += v;
+      }
+    }
+  }
+  const share = (u: string) => (shareSum > 0 ? (shareTot.get(u) ?? 0) / shareSum : 0);
+
   return fyWeeks.map((w) => {
     const src = yearAgoWeek(w);
     const measured = w <= latestWeek;
@@ -97,7 +130,12 @@ export async function fyWeeklySeries(
       const wt = utcOf(w);
       let lift = 0;
       for (const o of windows) if (o.s <= wt && o.e >= wt - 6 * DAY) lift = Math.max(lift, o.lift);
-      ty$ = base$ * (1 + lift); tyU = baseU * (1 + lift);
+      let f = 1;
+      for (const a of brandAdjs) {
+        if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
+        f *= 1 + (a.pct / 100) * (a.upc === "ALL" ? 1 : upc ? (a.upc === upc ? 1 : 0) : share(a.upc));
+      }
+      ty$ = base$ * (1 + lift) * f; tyU = baseU * (1 + lift) * f;
     }
     return { w, measured, ty$, tyU, prior$: wA$.get(src) ?? 0, priorU: wAU.get(src) ?? 0 };
   });

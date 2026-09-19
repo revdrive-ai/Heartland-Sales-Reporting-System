@@ -50,7 +50,13 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
   LE versions, append-only and diffable (Δ vs previous, Δ vs PoR). The
   header pill shows the latest version and turns amber when the working
   plan drifts from it; the versions doc (`plansnap:<customer>:<year>`) is
-  the audit trail the LE view will consume.
+  the audit trail the LE view will consume. The **in-flight (data-edge)
+  year** gets the same treatment on its Total-year view: every snapshot
+  there is an LE (v1 is the baseline), and the adjustments card appears as
+  **LE adjustments** — its levers move only the forecast-to-go weeks
+  (measured weeks never move) and flow into the chart's LE-adjusted line,
+  the full-year forecast KPI, the dashboard FY mode, and the Monthly
+  Forecast Review (all through `lib/server/fyForecast.ts`).
 - **Lift engine + Predict-a-lift** on measured data (through-origin
   depth-vs-lift fit with per-tactic multipliers), with a hide/show toggle.
 - Promotion windows table with header filters and predicted-vs-actual lift
