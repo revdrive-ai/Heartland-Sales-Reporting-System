@@ -9,7 +9,7 @@ import { Toast } from "./toast";
 import type { Scope } from "@/lib/scope";
 import type { WorkMode } from "@/lib/mode";
 
-export default function AppShell({ children, initialScope, mode }: { children: React.ReactNode; initialScope: Scope; mode: WorkMode }) {
+export default function AppShell({ children, initialScope, mode, strip }: { children: React.ReactNode; initialScope: Scope; mode: WorkMode; strip?: React.ReactNode }) {
   const [askOpen, setAskOpen] = useState(false);
 
   return (
@@ -17,7 +17,7 @@ export default function AppShell({ children, initialScope, mode }: { children: R
       <div className="app">
         <Topbar onAsk={() => setAskOpen(true)} initialScope={initialScope} mode={mode} />
         <Sidebar />
-        <main className="main" id="main">{children}</main>
+        <main className="main" id="main">{strip}{children}</main>
       </div>
       <AskPanel open={askOpen} onClose={() => setAskOpen(false)} />
       <Toast />

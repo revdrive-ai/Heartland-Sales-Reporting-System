@@ -29,7 +29,12 @@ a small year picker offers the second forward year). The preference lives
 in the `hh-mode` cookie beside the customer scope (`lib/mode.ts`,
 `lib/server/mode.ts`, `components/ModeSwitch.tsx`); the per-page year
 selectors are gone, and a stale `?win=`/`?yr=` in a link can't override the
-top bar. Card and button titles inherit the mode word.
+top bar. Card and button titles inherit the mode word. A **status strip**
+under the top bar (LE and Plan modes) says where the mode year stands across
+every customer — LE: customers taken this month, NIQ edge, Telus book,
+adjustments in play; Plan: distribution verified, Plan of Record signed,
+adjustments, events — and links to the Latest Estimate view
+(`lib/server/modeStatus.ts`, one batched `app_state` read).
 
 ## Base & Lift Lab
 
@@ -111,6 +116,17 @@ top bar. Card and button titles inherit the mode word.
   Total-year view (shared `lib/server/fyForecast.ts`). Promo Analysis is now
   step 5 and Deduction Center step 6.
 
+## Latest Estimate (LE) view — Planning Tools
+
+- The LE-mode home: every customer's frozen versions side by side with the
+  live working number (the same construction Base & Lift and the snapshot
+  API use), Δ since the last version, adjustments, distribution rollup, and
+  the take-LE action per customer or in bulk ("Take LE for N still open"),
+  with a shared note. In Plan mode the same page is the **plan sign-off**:
+  Plan of Record per customer, "Sign off N verified & unsigned" in bulk.
+  A portfolio-by-month table sums the latest versions by brand against the
+  previous versions and the live number. Read-only in Analyze mode.
+
 ## Data & Integrations
 
 - **Tie List:** Telus↔NIQ tie table with tie statuses and FY dollar exposure;
@@ -154,7 +170,7 @@ until they're set, the tool falls back to per-browser storage there.
   consumption data. Awaiting the decisions listed in §7 and a sample export.
 - **Remaining stub views** — Promo Analysis (workflow step 5) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
-  Approvals, Latest Estimate, and Sales Leader View.
+  Approvals, and Sales Leader View.
 - **Data gaps to close on the business side** — the RC Taylor territory
   assignment, the Telus "Safeway Mountain West" ↔ NIQ "Safeway IMW" name
   match, and extending the crosswalk and price-list workbooks per the

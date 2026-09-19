@@ -65,3 +65,26 @@ export async function setState(key: string, data: unknown): Promise<void> {
   await fs.writeFile(tmp, JSON.stringify(data));
   await fs.rename(tmp, f); // atomic on the same filesystem — no torn reads
 }
+
+/** Several documents in one round trip (the mode strip and the LE view read
+    three docs for each of the thirteen customers). Missing keys are absent
+    from the result. */
+export async function getStates(keys: string[]): Promise<Map<string, unknown>> {
+  const out = new Map<string, unknown>();
+  if (!keys.length) return out;
+  if (supabase) {
+    const list = keys.map((k) => `"${k.replace(/"/g, "")}"`).join(",");
+    const r = await fetch(
+      `${supabase.url}/rest/v1/app_state?key=in.(${encodeURIComponent(list)})&select=key,data`,
+      { headers: sbHeaders(supabase.key), cache: "no-store" }
+    );
+    if (!r.ok) throw new Error(`app_state read failed: ${r.status} ${(await r.text()).slice(0, 120)}`);
+    for (const row of (await r.json()) as { key: string; data: unknown }[]) out.set(row.key, row.data);
+    return out;
+  }
+  await Promise.all(keys.map(async (k) => {
+    const v = await getState(k);
+    if (v !== undefined) out.set(k, v);
+  }));
+  return out;
+}

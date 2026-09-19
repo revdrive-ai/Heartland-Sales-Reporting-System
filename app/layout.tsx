@@ -4,6 +4,8 @@ import "./rebuild.css";
 import AppShell from "@/components/AppShell";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
+import { getModeStatus } from "@/lib/server/modeStatus";
+import ModeStrip from "@/components/ModeStrip";
 
 export const metadata: Metadata = {
   title: "Heartland Foods — Trade Platform",
@@ -15,11 +17,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Read the persisted customer scope server-side so the selectors render
   // with the saved values on first paint (no hydration flicker).
   const [{ scope }, mode] = await Promise.all([getScope(), getMode()]);
+  const status = await getModeStatus(mode);
 
   return (
     <html lang="en">
       <body>
-        <AppShell initialScope={scope} mode={mode}>{children}</AppShell>
+        <AppShell initialScope={scope} mode={mode} strip={<ModeStrip status={status} />}>{children}</AppShell>
       </body>
     </html>
   );
