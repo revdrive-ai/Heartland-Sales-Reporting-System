@@ -89,7 +89,7 @@ export default function EventWizard({
   const calc = useMemo(() => {
     const weeks = end >= start ? Math.max(1, Math.round((utc(end) - utc(start)) / DAY / 7)) : 0;
     // scored at the chosen customer's divisions — same math as the events table
-    const wkBase = st && cust && upcs.length ? eventWeeklyBase(plan, cust, brand, upcs) : 0;
+    const wkBase = st && cust && upcs.length && weeks > 0 ? eventWeeklyBase(plan, cust, brand, upcs, start, end) : 0;
     const base = wkBase * weeks;
     const incr = lift !== null ? base * (lift / 100) : null;
     const units = base + (incr ?? 0);

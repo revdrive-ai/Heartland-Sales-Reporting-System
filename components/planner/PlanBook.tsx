@@ -10,7 +10,7 @@ import { getPriceEdits } from "@/lib/repo/client";
 import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
 import { usePromoLines } from "./lines";
-import { eventUnitPrice, eventWeeklyBase, itemWeeklyBase, listPriceAsOf, type DatedPrice, type PlanPayload } from "./planMath";
+import { eventBaseProfile, eventUnitPrice, itemBaseProfile, itemWeeklyBase, listPriceAsOf, windowIdx, type DatedPrice, type PlanPayload } from "./planMath";
 import type { PlannerData } from "./PlannerView";
 import type { PromoLine } from "@/lib/types/db";
 
@@ -181,24 +181,67 @@ export default function PlanBook({ data }: { data: PlannerData }) {
      crosswalk knows them, else the brand run-rate there. A customer with no
      NIQ divisions in scope (Ahold, Amazon etc.) scores "—". Incremental =
      base × lift; ROI = incremental retail $ ÷ trade spend. */
+  /* Rate-funded spend follows the plan base, week by week: per-unit funding
+     pays on the units moved, so distribution verification, plan adjustments,
+     lift and rate edits all move trade dollars — no edit needed to refresh.
+     Events with per-item rates score each deal line on its own item's
+     plan-year series at the event's customer; events with only a blended
+     rate score on the whole event profile. A fixed commitment, or an event
+     whose base can't be scored (no NIQ divisions), keeps its stored spend. */
+  const spendParts = (e: PlanEvent, lift: number | null): { weekly: number[]; fixed: number; idx: number[] } | null => {
+    const mult = 1 + (lift ?? 0) / 100;
+    const idx = windowIdx(plan, e.start, e.end);
+    if (e.item_rates?.length) {
+      const weekly = idx.map(() => 0);
+      let anyBase = false;
+      for (const r of e.item_rates) {
+        for (const u of plan.telusUpcs[r.item_number] ?? []) {
+          const prof = itemBaseProfile(plan, e.customer_id, u, e.start, e.end);
+          prof.forEach((v, i) => { if (v > 0) anyBase = true; weekly[i] += v * mult * r.rate; });
+        }
+      }
+      return anyBase ? { weekly, fixed: e.funding?.fixed ?? 0, idx } : null;
+    }
+    if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
+      const prof = eventBaseProfile(plan, e.customer_id, e.brand, e.upcs, e.start, e.end);
+      if (prof && prof.some((v) => v > 0)) {
+        return { weekly: prof.map((v) => v * mult * (e.funding!.oi + e.funding!.scan)), fixed: e.funding.fixed, idx };
+      }
+    }
+    return null;
+  };
+  const recomputeSpend = (e: PlanEvent, lift: number | null): number | undefined => {
+    const p = spendParts(e, lift);
+    return p ? Math.round(p.weekly.reduce((a, v) => a + v, 0) + p.fixed) : undefined;
+  };
+  /** The spend an event carries right now: live for rate-funded events, the
+      stored commitment otherwise. */
+  const spendOf = (e: PlanEvent): number => recomputeSpend(e, e.lift_pct) ?? e.spend;
+  /** The reference a carried event's live spend is read against (the FY book's planned $). */
+  const carriedRef = (e: PlanEvent): number | null =>
+    e.carried_spend ?? (e.origin === "carry" ? e.spend : null);
+
   const calc = (e: PlanEvent): EventCalc => {
     const weeks = weeksOf(e);
     const st = plan.brandStats[e.brand];
     if (!st || st.weeklyBaseUnits <= 0) return { weeks, base: null, incr: null, roi: null };
-    const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
-    if (wkBase <= 0) return { weeks, base: null, incr: null, roi: null };
-    const base = wkBase * weeks;
+    // window base = the plan-year weekly series over the window at THIS
+    // event's customer (distribution verification + adjustments applied)
+    const prof = eventBaseProfile(plan, e.customer_id, e.brand, e.upcs, e.start, e.end);
+    const base = prof ? prof.reduce((a, v) => a + v, 0) : 0;
+    if (base <= 0) return { weeks, base: null, incr: null, roi: null };
     if (e.lift_pct === null) return { weeks, base, incr: null, roi: null };
     const incr = base * (e.lift_pct / 100);
     // gross revenue on the LIST price in force at the event's start (dated
     // price list + local edits); retail price only where nothing is priced
     const price = eventUnitPrice(plan, priceEdits, e) ?? st.price;
-    const roi = e.spend > 0 ? (incr * price) / e.spend : null;
+    const spend = spendOf(e);
+    const roi = spend > 0 ? (incr * price) / spend : null;
     return { weeks, base, incr, roi };
   };
 
   const carriedCount = events.filter((e) => e.origin === "carry").length;
-  const committed = visible.reduce((a, e) => a + e.spend, 0);
+  const committed = visible.reduce((a, e) => a + spendOf(e), 0);
   const over = budget > 0 && committed > budget;
   const overBy = Math.max(0, committed - budget);
   const avail = Math.max(0, budget - committed);
@@ -257,9 +300,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   /* month-by-month: this plan's spend vs the prior-year book (scoped) */
   const planByMonth = useMemo(() => {
     const t = Array(12).fill(0);
-    for (const e of visible) byMonth(t, e.spend, e.start, e.end, year);
+    for (const e of visible) {
+      const p = spendParts(e, e.lift_pct);
+      if (!p) { byMonth(t, e.spend, e.start, e.end, year); continue; }
+      // rate-funded dollars land in the week the units move; fees spread evenly
+      p.weekly.forEach((v, i) => { t[+plan.planWeeks[p.idx[i]].slice(5, 7) - 1] += v; });
+      byMonth(t, p.fixed, e.start, e.end, year);
+    }
     return t.map(Math.round);
-  }, [visible, year]);
+  }, [visible, year, plan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* the FY book's planned + billed dollars by month, under the SAME filters
      as the plan bars — so a filtered view compares like scopes */
@@ -315,15 +364,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     // plus each scored event's incremental, spread across its window (when an
     // item is picked, only that item's share of the event's base lifts)
     for (const e of visible) {
-      const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
-      if (wkBase <= 0 || !e.lift_pct) continue;
-      const share = itemSel ? itemWeeklyBase(plan, e.customer_id, itemSel, 0) / wkBase : 1;
+      if (!e.lift_pct) continue;
+      const prof = eventBaseProfile(plan, e.customer_id, e.brand, e.upcs, e.start, e.end);
+      if (!prof || !prof.some((v) => v > 0)) continue;
+      const wkBase = prof.reduce((a, v) => a + v, 0) / prof.length;
+      const share = itemSel ? itemWeeklyBase(plan, e.customer_id, itemSel, 0) / Math.max(wkBase, 1e-9) : 1;
       if (share <= 0) continue;
-      const incr = wkBase * share * weeksOf(e) * (e.lift_pct / 100);
-      const amount = volMode === "units"
-        ? incr
-        : incr * (eventUnitPrice(plan, priceEdits, e) ?? plan.brandStats[e.brand]?.price ?? 0);
-      byMonth(planM, amount, e.start, e.end, year);
+      const price = volMode === "units" ? 1 : (eventUnitPrice(plan, priceEdits, e) ?? plan.brandStats[e.brand]?.price ?? 0);
+      const idx = windowIdx(plan, e.start, e.end);
+      prof.forEach((v, i) => { planM[+plan.planWeeks[idx[i]].slice(5, 7) - 1] += v * share * (e.lift_pct! / 100) * price; });
     }
 
     const promo = Array(12).fill(0), total = Array(12).fill(0);
@@ -368,7 +417,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       funding: p.funding, // O/I + scan rates and fixed fees, normalized from the Telus lines
       item_rates: p.item_rates, // per-deal-line $/unit rates — editable in the drill-down
       source_promo_id: p.promo_id, // click the row to drill into the FY book's component lines
-      start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned,
+      start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned, carried_spend: p.planned,
       // scored like an import: the tactic's measured lift, else the brand
       // average — except funding vehicles (EDLP, Slotting), which carry no
       // incremental volume by definition; the lift cell stays editable
@@ -444,32 +493,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       );
     };
     rd.readAsText(file);
-  };
-
-  /* Rate-funded spend: per-unit funding pays on the units moved, so lift and
-     rate edits move trade dollars. Events with per-item rates score each deal
-     line on its own item's base at the event's customer; events with only a
-     blended rate score on the whole event base. A fixed commitment, or an
-     event whose base can't be scored (no NIQ divisions), keeps its spend —
-     a zero base must not collapse it to just the fixed fees. */
-  const recomputeSpend = (e: PlanEvent, lift: number | null): number | undefined => {
-    const mult = weeksOf(e) * (1 + (lift ?? 0) / 100);
-    if (e.item_rates?.length) {
-      let spend = e.funding?.fixed ?? 0;
-      let anyBase = false;
-      for (const r of e.item_rates) {
-        const wk = (plan.telusUpcs[r.item_number] ?? [])
-          .reduce((a, u) => a + itemWeeklyBase(plan, e.customer_id, u, 0), 0);
-        if (wk > 0) anyBase = true;
-        spend += wk * mult * r.rate;
-      }
-      return anyBase ? Math.round(spend) : undefined;
-    }
-    if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
-      const wkBase = eventWeeklyBase(plan, e.customer_id, e.brand, e.upcs);
-      if (wkBase > 0) return Math.round(wkBase * mult * (e.funding.oi + e.funding.scan) + e.funding.fixed);
-    }
-    return undefined;
   };
 
   const setLift = (e: PlanEvent, raw: string) => {
@@ -625,6 +648,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
               title={`No division has been through distribution verification for ${year} yet — plan bases carry every item from last year. Verify in the Base & Lift Lab's Total year ${year} view.`}>
               ⚠ distribution unverified
+            </span>
+          )}
+          {plan.adjustments > 0 && (
+            <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
+              title={`${plan.adjustments} plan adjustment${plan.adjustments === 1 ? "" : "s"} from Base & Lift (distribution / price / trend levers) are applied to the ${year} bases here — event volume and rate-funded spend follow them`}>
+              ⇅ {plan.adjustments} adjustment{plan.adjustments === 1 ? "" : "s"} applied
             </span>
           )}
           {itemSel && (() => {
@@ -788,6 +817,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             <tbody>
               {tableRows.slice(0, limit).map((e) => {
                 const c = calc(e);
+                const sp = spendOf(e);
+                const live = recomputeSpend(e, e.lift_pct) !== undefined;
+                const ref = carriedRef(e);
                 return (
                   <React.Fragment key={e.id}>
                   <tr
@@ -837,15 +869,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                     </td>
                     <td
                       style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
-                      title={e.funding && (e.funding.oi > 0 || e.funding.scan > 0)
-                        ? "Rate-funded — spend recomputes when the lift changes (per-unit funding pays on units moved)"
-                        : "Fixed commitment — lift changes don't move this spend"}
+                      title={live
+                        ? "Rate-funded — follows the plan base: units on the deal's items at this customer, week by week over the window, × (1 + lift) × $/unit, plus fixed fees. Moves with distribution verification, plan adjustments, lift and rate edits."
+                        : "Fixed commitment — base and lift changes don't move this spend"}
                     >
-                      {fmtExact(e.spend)}
-                      {e.funding && (e.funding.oi > 0 || e.funding.scan > 0) ? (
+                      {fmtExact(sp)}
+                      {live ? (
                         <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
                       ) : (
                         <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}>committed total</div>
+                      )}
+                      {ref !== null && Math.abs(sp - ref) > Math.max(1, ref * 0.005) && (
+                        <div style={{ fontSize: 10.5, fontWeight: 700, color: sp > ref ? "var(--good)" : "var(--bad)" }}
+                          title={`FY${plan.priorYear} Telus planned ${fmtExact(ref)} — the ${year} base moves it ${sp > ref ? "up" : "down"} ${fmtExact(Math.abs(sp - ref))}`}>
+                          FY{plan.priorYear} {fmtExact(ref)} → {sp > ref ? "+" : "−"}{fmtExact(Math.abs(sp - ref))}
+                        </div>
                       )}
                     </td>
                     <td style={{ padding: "9px 14px", textAlign: "right" }}>{roiCell(c.roi, roiExempt(e))}</td>

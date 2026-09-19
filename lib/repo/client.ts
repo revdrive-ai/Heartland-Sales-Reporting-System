@@ -182,6 +182,7 @@ export type PlanEvent = {
   upcs?: string[];          // items on the deal (wizard entries); absent = whole brand
   funding?: { oi: number; scan: number; fixed: number };  // $/unit rates + fixed fees behind spend
   source_promo_id?: string; // carried events: the FY promo behind this row (drill into its Telus lines)
+  carried_spend?: number;   // carried events: the FY book's planned $ — the reference the live spend is read against
   /** carried events: per-deal-line rates normalized to $/unit, editable in the
       row drill-down; when present, spend recomputes from these instead of the
       blended funding rates. kind maps the Telus component to the O/I or scan bucket. */

@@ -5,14 +5,63 @@ import type { PlannerData } from "./PlannerView";
 
 export type PlanPayload = NonNullable<PlannerData["plan"]>;
 
-/** Weekly base units an event plans against: the deal's items at the event's
-    customer's divisions when the crosswalk knows them (falling back to the
-    brand run-rate there when those items carry no NIQ volume at that
-    customer), else the brand run-rate. 0 = not scorable — the customer has no
-    NIQ divisions in scope. */
-export function eventWeeklyBase(plan: PlanPayload, customer_id: string, brand: string, upcs?: string[]): number {
+const DAY = 86400000;
+const utc = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+
+/** Indices of the plan-year Saturdays a window covers (a week-ending
+    Saturday covers the 7 days ending that day — the Base & Lift rule). */
+export function windowIdx(plan: PlanPayload, start: string, end: string): number[] {
+  const s = utc(start), e = utc(end);
+  const out: number[] = [];
+  plan.planWeeks.forEach((w, i) => {
+    const wt = utc(w);
+    if (s <= wt && e >= wt - 6 * DAY) out.push(i);
+  });
+  return out;
+}
+
+/** One item's plan-year base, week by week over a window, summed across the
+    customer's divisions (distribution verification + adjustments applied). */
+export function itemBaseProfile(plan: PlanPayload, customer_id: string, upc: string, start: string, end: string): number[] {
+  const mkts = plan.custMarkets[customer_id] ?? [];
+  return windowIdx(plan, start, end).map((i) => mkts.reduce((a, m) => a + (plan.divItemWkly[m]?.[upc]?.[i] ?? 0), 0));
+}
+
+/** The base an event plans against, week by week over its window: the deal's
+    items at the event's customer's divisions when the crosswalk knows them
+    (the brand series there when those items carry no volume at that
+    customer), else the brand series. null = not scorable — the customer has
+    no NIQ divisions in scope. */
+export function eventBaseProfile(plan: PlanPayload, customer_id: string, brand: string, upcs: string[] | undefined, start: string, end: string): number[] | null {
+  const mkts = plan.custMarkets[customer_id];
+  if (!mkts?.length) return null;
+  const idx = windowIdx(plan, start, end);
+  if (upcs?.length) {
+    const prof = idx.map((i) => mkts.reduce((a, m) => a + upcs.reduce((b, u) => b + (plan.divItemWkly[m]?.[u]?.[i] ?? 0), 0), 0));
+    if (prof.some((v) => v > 0)) return prof;
+  }
+  return idx.map((i) => mkts.reduce((a, m) => a + (plan.divBrandWkly[m]?.[brand]?.[i] ?? 0), 0));
+}
+
+/** Total base units over an event's window (Σ of the weekly profile). */
+export function eventBaseUnits(plan: PlanPayload, customer_id: string, brand: string, upcs: string[] | undefined, start: string, end: string): number {
+  return (eventBaseProfile(plan, customer_id, brand, upcs, start, end) ?? []).reduce((a, v) => a + v, 0);
+}
+
+/** Weekly base units an event plans against. With a window, the average
+    week of the plan-year series over it (so weekly × weeks = the window
+    total); without one, the latest-52-week run-rate: the deal's items at the
+    event's customer's divisions when the crosswalk knows them (falling back
+    to the brand run-rate there when those items carry no NIQ volume at that
+    customer), else the brand run-rate. 0 = not scorable — the customer has
+    no NIQ divisions in scope. */
+export function eventWeeklyBase(plan: PlanPayload, customer_id: string, brand: string, upcs?: string[], start?: string, end?: string): number {
   const mkts = plan.custMarkets[customer_id];
   if (!mkts?.length) return 0;
+  if (start && end && plan.planWeeks?.length) {
+    const prof = eventBaseProfile(plan, customer_id, brand, upcs, start, end);
+    if (prof && prof.length) return prof.reduce((a, v) => a + v, 0) / prof.length;
+  }
   if (upcs?.length) {
     const w = mkts.reduce((a, m) => a + upcs.reduce((b, u) => b + (plan.divItemWk[m]?.[u] ?? 0), 0), 0);
     if (w > 0) return w;

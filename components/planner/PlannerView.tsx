@@ -43,6 +43,15 @@ export type PlannerData = {
     /** plan-year monthly base per division × brand, via the seasonality
         engine: year-ago base carried where measured, shaped projection after */
     divBrandBaseM: Record<string, Record<string, number[]>>;
+    /** the plan year's Saturdays — the axis of every weekly series below */
+    planWeeks: string[];
+    /** plan-year weekly base per division × brand / × item: year-ago carried
+        where measured, engine-shaped after, with distribution verification
+        and the plan adjustments applied — what events and their rate-funded
+        spend score on, week by week */
+    divBrandWkly: Record<string, Record<string, number[]>>;
+    divItemWkly: Record<string, Record<string, number[]>>;
+    adjustments: number;                                 // plan adjustments applied across the scoped divisions
     /** prior-year NIQ volume by month per division × brand: u/g = total units
         and gross $ (dated list price), pu/pg = the promoted-week slices */
     priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;

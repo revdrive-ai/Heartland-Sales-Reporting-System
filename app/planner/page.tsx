@@ -4,7 +4,7 @@ import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
-import type { DistAddition, DistVerification } from "@/lib/repo/client";
+import type { DistAddition, DistVerification, PlanAdjustment } from "@/lib/repo/client";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
 
 /* Promotion Planner — the first rebuilt view, running on the real Telus
@@ -139,7 +139,24 @@ export default async function Page() {
        their proxy's run-rate (× %) from their first week, plus the load-in. */
     const dvByMkt: Record<string, { out: Set<string>; adds: DistAddition[] }> = {};
     let dvVerified = 0, dvOut = 0, dvAdded = 0;
+    /* Plan adjustments (per division × plan year, the Base & Lift levers):
+       distribution / price / trend % on an item or the whole brand over a
+       window. They multiply the plan-year weekly series below, so events —
+       and their rate-funded O/I dollars — score on the adjusted base. */
+    const adjByMkt: Record<string, PlanAdjustment[]> = {};
+    let adjCount = 0;
+    // the plan year's Saturdays — the axis every weekly series below is on
+    const planWeeks: string[] = [];
+    {
+      let t = Date.UTC(year, 0, 1);
+      while (new Date(t).getUTCDay() !== 6) t += DAY;
+      for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) planWeeks.push(new Date(t).toISOString().slice(0, 10));
+    }
+    const divBrandWkly: Record<string, Record<string, number[]>> = {};
+    const divItemWkly: Record<string, Record<string, number[]>> = {};
     for (const m of markets) {
+      const adjs = (await getState(`adj:${m.code}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined;
+      if (adjs?.length) { adjByMkt[m.code] = adjs; adjCount += adjs.length; }
       const d = (await getState(`distver:${m.code}:${year}`).catch(() => undefined)) as DistVerification | undefined;
       if (!d) continue;
       const out = new Set(Object.entries(d.decisions ?? {}).filter(([, x]) => x === "out").map(([u]) => u));
@@ -164,7 +181,12 @@ export default async function Page() {
         const mB = new Map<string, number>(); // …and NIQ base units
         const mBx = new Map<string, number>(); // …the slice from "no volume" items
         const mProxy = new Map<string, Map<string, number>>(); // addition proxies' weekly base
+        const mI = new Map<string, Map<string, number>>(); // per item → weekly NIQ base
         for (const r of facts) {
+          {
+            const im = mI.get(r.upc) ?? mI.set(r.upc, new Map()).get(r.upc)!;
+            im.set(r.week_ending, (im.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+          }
           const w = wk.get(r.week_ending) ?? { bu: 0, bd: 0, au: 0, promo: false };
           w.bu += r.base_units ?? r.units ?? 0;
           w.bd += r.base_dollars ?? r.dollars ?? 0;
@@ -197,12 +219,17 @@ export default async function Page() {
         (divBrandWk[m.code] ??= {})[brand] =
           m52.reduce((a, w) => a + (mB.get(w) ?? 0), 0) / Math.max(m52.length, 1);
 
-        /* Plan-year monthly base through the seasonality engine — the exact
-           construction the Base & Lift plan view uses, at this division ×
-           brand: each plan-year Saturday carries the year-ago week's measured
-           base (364 days back keeps Saturdays aligned); weeks whose source
-           hasn't been measured yet project as the latest-52w average shaped
-           by this division × brand's monthly index over its full history. */
+        /* Plan-year WEEKLY base per item through the seasonality engine — the
+           construction the Base & Lift plan view uses, at this division: each
+           plan-year Saturday carries the item's year-ago measured base (364
+           days back keeps Saturdays aligned); weeks whose source hasn't been
+           measured yet project as the item's latest-52w average shaped by the
+           division × brand's monthly index over its full history. Items the
+           distribution verification marked "no volume" are left out; verified
+           additions ride in on their proxy's series (× %) from their first
+           week, plus the load-in. The plan adjustments multiply each week.
+           The brand series is the sum of its items, so an item-level lever is
+           weighted exactly by that item's volume. */
         {
           const mTot = Array(12).fill(0), mN = Array(12).fill(0);
           let gTot = 0, gN = 0;
@@ -214,34 +241,56 @@ export default async function Page() {
           const eng = mTot.map((t, i) => (mN[i] > 0 && grand > 0 ? t / mN[i] / grand : 1));
           const avg52 = divBrandWk[m.code][brand];
           const latest = mWeeks[mWeeks.length - 1];
-          // distribution verification at this division: excluded items' run
-          // rate leaves, additions arrive on their proxy's run rate
           const exclAvg52 = m52.reduce((a, w) => a + (mBx.get(w) ?? 0), 0) / Math.max(m52.length, 1);
           const proxyAvg52 = new Map<string, number>();
           for (const [u, pm] of mProxy) {
             proxyAvg52.set(u, m52.reduce((a, w) => a + (pm.get(w) ?? 0), 0) / Math.max(m52.length, 1));
           }
-          const baseM = Array(12).fill(0);
+          const adjsHere = (adjByMkt[m.code] ?? []).filter((a) => a.brand === brand);
+          const adjFactor = (upc: string, wt: number) => {
+            let f = 1;
+            for (const a of adjsHere) {
+              if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
+              if (a.upc === "ALL" || a.upc === upc) f *= 1 + a.pct / 100;
+            }
+            return f;
+          };
+          // one item's raw (unadjusted) plan-year series: year-ago carried, engine-shaped after
+          const rawSeries = (im: Map<string, number>) => {
+            const a52 = m52.reduce((a, w) => a + (im.get(w) ?? 0), 0) / Math.max(m52.length, 1);
+            return planWeeks.map((w) => {
+              const src = new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
+              return latest && src <= latest ? (im.get(src) ?? 0) : a52 * eng[+w.slice(5, 7) - 1];
+            });
+          };
+          const itemWkly = (divItemWkly[m.code] ??= {});
+          const brandWkly = planWeeks.map(() => 0);
           if (latest) {
-            // walk to the last Saturday before the plan year, then step through it
-            let t = utcOf(latest) + 364 * DAY;
-            while (new Date(t).getUTCFullYear() < year) t += 7 * DAY;
-            while (new Date(t).getUTCFullYear() >= year) t -= 7 * DAY;
-            for (t += 7 * DAY; new Date(t).getUTCFullYear() === year; t += 7 * DAY) {
-              const mo = new Date(t).getUTCMonth();
-              const src = new Date(t - 364 * DAY).toISOString().slice(0, 10);
-              let v = src <= latest ? (mB.get(src) ?? 0) : avg52 * eng[mo];
-              v -= src <= latest ? (mBx.get(src) ?? 0) : exclAvg52 * eng[mo];
-              const wIso = new Date(t).toISOString().slice(0, 10);
-              for (const a of addsHere) {
-                if (wIso >= a.first_week) v += (proxyAvg52.get(a.proxy_upc) ?? 0) * (a.proxy_pct / 100) * eng[mo];
-                if (a.loadin_units > 0 && wIso >= a.loadin_date && utcOf(wIso) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+            for (const [u, im] of mI) {
+              if (dv?.out.has(u)) continue; // no volume in the plan year
+              const ser = rawSeries(im).map((v, i) => Math.max(0, v) * adjFactor(u, utcOf(planWeeks[i])));
+              if (ser.every((v) => v <= 0)) continue;
+              itemWkly[u] = ser.map((v) => +v.toFixed(1));
+              ser.forEach((v, i) => { brandWkly[i] += v; });
+            }
+            for (const a of addsHere) {
+              const pim = mI.get(a.proxy_upc);
+              if (!pim) continue;
+              const proxy = rawSeries(pim);
+              const ser = planWeeks.map((w, i) => {
+                let v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
+                if (a.loadin_units > 0 && w >= a.loadin_date && utcOf(w) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
                   v += a.loadin_units; // one-time pipeline fill in this week
                 }
-              }
-              baseM[mo] += Math.max(0, v);
+                return Math.max(0, v) * adjFactor(a.upc, utcOf(w));
+              });
+              itemWkly[a.upc] = ser.map((v, i) => +(v + (itemWkly[a.upc]?.[i] ?? 0)).toFixed(1));
+              ser.forEach((v, i) => { brandWkly[i] += v; });
             }
           }
+          (divBrandWkly[m.code] ??= {})[brand] = brandWkly.map((v) => +v.toFixed(1));
+          const baseM = Array(12).fill(0);
+          brandWkly.forEach((v, i) => { baseM[+planWeeks[i].slice(5, 7) - 1] += v; });
           (divBrandBaseM[m.code] ??= {})[brand] = baseM.map(Math.round);
           // events at this division score on the verified run rate
           divBrandWk[m.code][brand] = Math.max(0, avg52 - exclAvg52)
@@ -428,6 +477,10 @@ export default async function Page() {
       brandListPrice,
       telusUpcs,
       divBrandBaseM,
+      planWeeks,
+      divBrandWkly,
+      divItemWkly,
+      adjustments: adjCount,
       priorMonthly: Object.fromEntries(Object.entries(priorMonthly).map(([mc, byBrand]) => [
         mc,
         Object.fromEntries(Object.entries(byBrand).map(([b, s]) => [

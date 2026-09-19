@@ -94,8 +94,16 @@ adjustments, events — and links to the Latest Estimate view
   lines, items resolved through the crosswalk, bases scored at each event's
   own customer), undo-carry and clear-plan resets, CSV template + import, and
   a step-through event wizard with a live economics rail.
-- Lift edits move rate-funded spend; spend and incremental volume display as
-  exact numbers. Tactic chips show measured lift per performance type.
+- **Rate-funded spend follows volume.** Event bases are the plan-year weekly
+  series at the event's customer (year-ago carried, engine-shaped after, with
+  distribution verification and the Base & Lift plan adjustments applied,
+  per item), summed over the event window. O/I and scan dollars are computed
+  live from that base × (1 + lift) × $/unit plus fixed fees — so verifying
+  distribution, adding an item, or a −20% trend lever moves EDLP O/I spend,
+  the committed total and the monthly spend chart without anyone editing the
+  event. Carried rows show the FY Telus planned $ beside the live number
+  ("FY2026 $6,170 → −$2,160"). Fixed commitments keep their stored spend.
+  Tactic chips show measured lift per performance type.
 - **Item-level planning:** customer and item selectors narrow the entire page
   down to a single UPC, event rows name their items, and "+ New event"
   pre-fills the wizard from the selectors.
