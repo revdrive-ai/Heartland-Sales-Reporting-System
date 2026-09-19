@@ -691,7 +691,7 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 9, alignItems: "center", marginBottom: 16 }}>
+      <div className="selbar">
         <select style={selStyle} value={data.mkt} onChange={(e) => nav({ mkt: e.target.value })}>
           {data.markets.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
         </select>

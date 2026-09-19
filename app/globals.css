@@ -53,11 +53,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .transition-pill{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;color:var(--good);background:var(--good-soft);padding:3px 8px;border-radius:20px;margin-top:8px}
 
 /* ============ MAIN ============ */
-.main{grid-area:main;padding:24px 28px 60px;overflow-y:auto}
+.main{grid-area:main;padding:24px 28px 60px;min-width:0}
 .view{display:none;animation:fade .25s ease}
 .view.active{display:block}
 @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 .pagehead{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}
+/* sticky selector bar: pins under the topbar while the rest of the page scrolls */
+.selbar{position:sticky;top:60px;z-index:40;display:flex;flex-wrap:wrap;gap:9px;align-items:center;background:var(--bg);padding:10px 0;margin:-10px 0 8px;border-bottom:1px solid var(--line)}
 /* title block: description sits beside the tab name, not under it */
 .pagehead>div:first-child{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;flex:1;min-width:0}
 .pagehead h1{font-size:23px;font-weight:800;letter-spacing:-.4px;white-space:nowrap}
