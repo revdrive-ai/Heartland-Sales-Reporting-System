@@ -1,6 +1,6 @@
 import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, priceAsOf } from "@/lib/repo";
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
-import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
+import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
@@ -315,9 +315,10 @@ export default async function Page() {
         const latest = mWeeks[mWeeks.length - 1] ?? "";
         for (const o of await getPromoOverlays({ market_code: m.code, brand })) {
           if (o.start_date > latest) continue; // window entirely in the future — nothing measured
-          // funding vehicles, not performance: their (often year-long) windows
-          // would credit EDLP/Slotting with the lift of everything inside them
-          if (isNonPerformance(o.performance_type)) continue;
+          // funding vehicles and always-on programs, not performance: their
+          // year-long windows would credit EDLP / signage / AMP fees with the
+          // lift of everything inside them
+          if (isNonPerformance(o.performance_type) || isAlwaysOn(o.start_date, o.end_date)) continue;
           const s = utcOf(o.start_date), e = utcOf(o.end_date);
           let a = 0, b = 0;
           for (const w of mWeeks) {

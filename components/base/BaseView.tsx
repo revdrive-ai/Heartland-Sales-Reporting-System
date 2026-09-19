@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { EVENT_MAX_DAYS } from "@/lib/data/nonPerformanceTypes";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
@@ -112,7 +113,7 @@ export type BaseData = {
 };
 
 const DAY = 86400000;
-const EVENT_MAX_DAYS = 84; // ≤ 12 weeks = an event window; longer = always-on
+// ≤ 12 weeks = an event window; longer = always-on (lib/data/nonPerformanceTypes)
 const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";

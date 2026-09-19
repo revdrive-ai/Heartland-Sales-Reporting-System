@@ -7,7 +7,7 @@ import {
   getPlanBudget, getPlanEvents, replacePlanEvents, setPlanBudget, type PlanEvent,
 } from "@/lib/repo/client";
 import { getPriceEdits } from "@/lib/repo/client";
-import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
+import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
 import { usePromoLines } from "./lines";
 import { eventBaseProfile, eventUnitPrice, itemBaseProfile, itemWeeklyBase, listPriceAsOf, windowIdx, type DatedPrice, type PlanPayload } from "./planMath";
@@ -165,6 +165,65 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   // events visible under the global scope + the customer / brand / item selectors
   const scopeIds = useMemo(() => new Set(plan.customers.map((c) => c.id)), [plan.customers]);
+
+  /* Units OTHER events lift in the same weeks at the same customer — what an
+     off-invoice pays on top of base. O/I is charged on every unit shipped in
+     its window, including the units a TPR or feature lifts alongside it;
+     scan pays only on the deal's own units. Item-scoped events land on their
+     items; brand-level events land on the brand and reach an item by its
+     share of the brand base that week. Each entry remembers its event so an
+     event never double-counts its own lift. */
+  const overlap = useMemo(() => {
+    const item = new Map<string, { id: string; u: number }[]>();  // cust|upc|weekIdx
+    const brand = new Map<string, { id: string; u: number }[]>(); // cust|brand|weekIdx
+    const push = (m: Map<string, { id: string; u: number }[]>, key: string, id: string, u: number) => {
+      if (u <= 0) return;
+      (m.get(key) ?? m.set(key, []).get(key)!).push({ id, u });
+    };
+    for (const e of events) {
+      if (!e.lift_pct || e.lift_pct <= 0 || !e.customer_id) continue;
+      const idx = windowIdx(plan, e.start, e.end);
+      if (e.upcs?.length) {
+        for (const u of e.upcs) {
+          itemBaseProfile(plan, e.customer_id, u, e.start, e.end)
+            .forEach((v, k) => push(item, `${e.customer_id}|${u}|${idx[k]}`, e.id, v * (e.lift_pct! / 100)));
+        }
+      } else {
+        eventBaseProfile(plan, e.customer_id, e.brand, undefined, e.start, e.end)
+          ?.forEach((v, k) => push(brand, `${e.customer_id}|${e.brand}|${idx[k]}`, e.id, v * (e.lift_pct! / 100)));
+      }
+    }
+    return { item, brand };
+  }, [events, plan]);
+  const wkAt = (cust: string, i: number, pick: (m: string) => number) =>
+    (plan.custMarkets[cust] ?? []).reduce((a, m) => a + pick(m), 0);
+  /** Other events' incremental units on one item at a customer in plan week i (excluding event `self`). */
+  const extraItemUnits = (self: PlanEvent, upc: string, i: number): number => {
+    const c = self.customer_id;
+    let u = 0;
+    for (const x of overlap.item.get(`${c}|${upc}|${i}`) ?? []) if (x.id !== self.id) u += x.u;
+    const b = itemMeta.get(upc)?.brand ?? self.brand;
+    const bl = overlap.brand.get(`${c}|${b}|${i}`);
+    if (bl?.length) {
+      const iw = wkAt(c, i, (m) => plan.divItemWkly[m]?.[upc]?.[i] ?? 0);
+      const bw = wkAt(c, i, (m) => plan.divBrandWkly[m]?.[b]?.[i] ?? 0);
+      const share = bw > 0 ? iw / bw : 0;
+      for (const x of bl) if (x.id !== self.id) u += x.u * share;
+    }
+    return u;
+  };
+  /** Other events' incremental units across a whole brand at a customer in week i (brand-level O/I). */
+  const extraBrandUnits = (self: PlanEvent, i: number): number => {
+    const c = self.customer_id;
+    let u = 0;
+    for (const [key, list] of overlap.item) {
+      const [kc, ku, ki] = key.split("|");
+      if (kc !== c || +ki !== i || (itemMeta.get(ku)?.brand ?? "") !== self.brand) continue;
+      for (const x of list) if (x.id !== self.id) u += x.u;
+    }
+    for (const x of overlap.brand.get(`${c}|${self.brand}|${i}`) ?? []) if (x.id !== self.id) u += x.u;
+    return u;
+  };
   const preItem = useMemo(() => events.filter((e) =>
     (!plan.scopeActive || !e.customer_id || scopeIds.has(e.customer_id)) &&
     (brandChip === "All brands" || e.brand === brandChip) &&
@@ -188,24 +247,39 @@ export default function PlanBook({ data }: { data: PlannerData }) {
      plan-year series at the event's customer; events with only a blended
      rate score on the whole event profile. A fixed commitment, or an event
      whose base can't be scored (no NIQ divisions), keeps its stored spend. */
-  const spendParts = (e: PlanEvent, lift: number | null): { weekly: number[]; fixed: number; idx: number[] } | null => {
+  const spendParts = (e: PlanEvent, lift: number | null): { weekly: number[]; fixed: number; idx: number[]; extraUnits: number } | null => {
     const mult = 1 + (lift ?? 0) / 100;
     const idx = windowIdx(plan, e.start, e.end);
+    let extraUnits = 0;
     if (e.item_rates?.length) {
       const weekly = idx.map(() => 0);
       let anyBase = false;
       for (const r of e.item_rates) {
         for (const u of plan.telusUpcs[r.item_number] ?? []) {
           const prof = itemBaseProfile(plan, e.customer_id, u, e.start, e.end);
-          prof.forEach((v, i) => { if (v > 0) anyBase = true; weekly[i] += v * mult * r.rate; });
+          prof.forEach((v, i) => {
+            if (v > 0) anyBase = true;
+            // O/I pays on every unit shipped — base, this deal's lift, and
+            // what other events lift on the item in the same week
+            const extra = r.kind === "oi" ? extraItemUnits(e, u, idx[i]) : 0;
+            extraUnits += extra;
+            weekly[i] += (v * mult + extra) * r.rate;
+          });
         }
       }
-      return anyBase ? { weekly, fixed: e.funding?.fixed ?? 0, idx } : null;
+      return anyBase ? { weekly, fixed: e.funding?.fixed ?? 0, idx, extraUnits } : null;
     }
     if (e.funding && (e.funding.oi > 0 || e.funding.scan > 0)) {
       const prof = eventBaseProfile(plan, e.customer_id, e.brand, e.upcs, e.start, e.end);
       if (prof && prof.some((v) => v > 0)) {
-        return { weekly: prof.map((v) => v * mult * (e.funding!.oi + e.funding!.scan)), fixed: e.funding.fixed, idx };
+        const weekly = prof.map((v, i) => {
+          const extra = e.funding!.oi > 0
+            ? (e.upcs?.length ? e.upcs.reduce((a, u) => a + extraItemUnits(e, u, idx[i]), 0) : extraBrandUnits(e, idx[i]))
+            : 0;
+          extraUnits += extra;
+          return v * mult * (e.funding!.oi + e.funding!.scan) + extra * e.funding!.oi;
+        });
+        return { weekly, fixed: e.funding.fixed, idx, extraUnits };
       }
     }
     return null;
@@ -250,7 +324,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   // funding vehicles (EDLP, Slotting) at 0% lift make no incremental claim, so
   // the ROI guardrail doesn't apply to them; a manual lift override re-arms it
-  const roiExempt = (e: PlanEvent) => isNonPerformance(e.perf) && (e.lift_pct ?? 0) === 0;
+  const roiExempt = (e: PlanEvent) => (isNonPerformance(e.perf) || isAlwaysOn(e.start, e.end)) && (e.lift_pct ?? 0) === 0;
 
   const guards = visible.reduce(
     (g, e) => {
@@ -419,9 +493,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       source_promo_id: p.promo_id, // click the row to drill into the FY book's component lines
       start: shiftIso(p.start), end: shiftIso(p.end), spend: p.planned, carried_spend: p.planned,
       // scored like an import: the tactic's measured lift, else the brand
-      // average — except funding vehicles (EDLP, Slotting), which carry no
-      // incremental volume by definition; the lift cell stays editable
-      lift_pct: isNonPerformance(p.perf)
+      // average — except funding vehicles (EDLP, Slotting) and always-on
+      // programs (> 12 weeks: year-round fees, signage), whose effect is
+      // already inside the base; the lift cell stays editable
+      lift_pct: isNonPerformance(p.perf) || isAlwaysOn(p.start, p.end)
         ? 0
         : plan.brandStats[p.brand]?.tactics?.[p.perf]?.lift ?? plan.brandStats[p.brand]?.avgLift ?? null,
       note: `carried from FY${plan.priorYear}`,
@@ -817,8 +892,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             <tbody>
               {tableRows.slice(0, limit).map((e) => {
                 const c = calc(e);
-                const sp = spendOf(e);
-                const live = recomputeSpend(e, e.lift_pct) !== undefined;
+                const parts = spendParts(e, e.lift_pct);
+                const sp = parts ? Math.round(parts.weekly.reduce((a, v) => a + v, 0) + parts.fixed) : e.spend;
+                const live = parts !== null;
                 const ref = carriedRef(e);
                 return (
                   <React.Fragment key={e.id}>
@@ -870,7 +946,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                     <td
                       style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
                       title={live
-                        ? "Rate-funded — follows the plan base: units on the deal's items at this customer, week by week over the window, × (1 + lift) × $/unit, plus fixed fees. Moves with distribution verification, plan adjustments, lift and rate edits."
+                        ? "Rate-funded — follows the plan base: units on the deal's items at this customer, week by week over the window, × (1 + lift) × $/unit, plus fixed fees; off-invoice also pays on the units other events lift in the same weeks. Moves with distribution verification, plan adjustments, lift and rate edits."
                         : "Fixed commitment — base and lift changes don't move this spend"}
                     >
                       {fmtExact(sp)}
@@ -878,6 +954,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                         <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
                       ) : (
                         <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}>committed total</div>
+                      )}
+                      {parts && parts.extraUnits >= 1 && (
+                        <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}
+                          title="Off-invoice pays on every unit shipped in the window — these are the units other events at this customer lift on the same items in the same weeks, charged at this deal's O/I rate">
+                          ⊕ {Math.round(parts.extraUnits).toLocaleString()} u from overlapping events
+                        </div>
                       )}
                       {ref !== null && Math.abs(sp - ref) > Math.max(1, ref * 0.005) && (
                         <div style={{ fontSize: 10.5, fontWeight: 700, color: sp > ref ? "var(--good)" : "var(--bad)" }}

@@ -103,6 +103,13 @@ adjustments, events — and links to the Latest Estimate view
   the committed total and the monthly spend chart without anyone editing the
   event. Carried rows show the FY Telus planned $ beside the live number
   ("FY2026 $6,170 → −$2,160"). Fixed commitments keep their stored spend.
+  **Off-invoice pays on every unit shipped**: an O/I line is also charged
+  on the units other events at that customer lift on the same items in the
+  same weeks (shown as "⊕ N u from overlapping events"); scan pays only on
+  the deal's own units. **Always-on programs** (windows > 12 weeks — the
+  Base & Lift lane rule: year-round signage, AMP fees, EDLP) carry 0 lift
+  like funding vehicles, since their effect is already inside the base, and
+  are excluded from the tactic-lift averages (`lib/data/nonPerformanceTypes.ts`).
   Tactic chips show measured lift per performance type.
 - **Item-level planning:** customer and item selectors narrow the entire page
   down to a single UPC, event rows name their items, and "+ New event"
