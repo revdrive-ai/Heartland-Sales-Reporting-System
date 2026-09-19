@@ -1,6 +1,6 @@
 # Heartland Sales Reporting System — Build Status
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-09-19_
 
 A Next.js/TypeScript rebuild of the heartland-harvest-v3 demo on real data,
 deployed to Vercel from `main`. Every view reads through the repository seam
@@ -117,7 +117,7 @@ until they're set, the tool falls back to per-browser storage there.
   ongoing CSV/Excel drops. Remaining: run `setup.sql` once (health goes
   `writable: true`), press *Load all*, then swap the repo reads to Supabase
   view by view (`supabase/README.md` is the full runbook).
-- **Remaining stub views** — Promo Analysis (workflow step 4) is the natural
+- **Remaining stub views** — Promo Analysis (workflow step 5) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
   Approvals, Latest Estimate, and Sales Leader View.
 - **Data gaps to close on the business side** — the RC Taylor territory
