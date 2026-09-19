@@ -1,5 +1,6 @@
 import { getWeeklyFacts, listItems, listWeekEndings } from "@/lib/repo";
 import { getState, setState } from "@/lib/server/appstate";
+import { fyWeeklySeries } from "@/lib/server/fyForecast";
 import type { DistAddition, DistVerification, PlanAdjustment } from "@/lib/repo/client";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
@@ -54,6 +55,37 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
   const latest = allWeeks[allWeeks.length - 1];
   const last52 = allWeeks.slice(-52);
   const weeks = saturdaysOfYear(year);
+
+  /* The data-edge year is the in-flight year: its LE freezes measured ACTUAL
+     units for landed weeks plus the forecast (year-ago base × expected Telus
+     window lift) for the rest — the Total-year view's construction — rather
+     than the pre-promo plan base a forward year signs off on. */
+  if (year === +latest.slice(0, 4)) {
+    const byBrand: PlanBaseNow["byBrand"] = {};
+    let tot = 0;
+    const dvRawIY = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
+    for (const brand of ownBrands) {
+      const series = await fyWeeklySeries(mkt, brand, weeks, allWeeks, latest);
+      if (!series) continue;
+      const m = Array(12).fill(0);
+      for (const s of series) m[+s.w.slice(5, 7) - 1] += s.tyU;
+      const monthly = m.map(Math.round);
+      byBrand[brand] = { base: monthly, adjusted: monthly }; // one number in-year: expected total
+      tot += monthly.reduce((a: number, x: number) => a + x, 0);
+    }
+    return {
+      year,
+      computed_at: new Date().toISOString(),
+      byBrand,
+      totals: { base: Math.round(tot), adjusted: Math.round(tot) },
+      adjustments: [], // plan-year levers don't apply to the in-flight year
+      distver: {
+        out: Object.values(dvRawIY?.decisions ?? {}).filter((d) => d === "out").length,
+        added: (dvRawIY?.additions ?? []).length,
+        verifiedAt: dvRawIY?.verified_at ?? null,
+      },
+    };
+  }
 
   const dvRaw = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
   const out = new Set(Object.entries(dvRaw?.decisions ?? {}).filter(([, d]) => d === "out").map(([u]) => u));
@@ -153,13 +185,19 @@ export async function takeSnapshot(mkt: string, year: number, note: string): Pro
   const [versions, now] = await Promise.all([getSnapshots(mkt, year), computePlanBase(mkt, year)]);
   const seq = versions.length + 1;
   const when = new Date();
+  // a forward plan year's first version is the base sign-off (Plan of Record);
+  // the in-flight (data-edge) year has its plan of record in Telus, so every
+  // version there is an LE — the first one labeled as the baseline
+  const allWeeks = await listWeekEndings(mkt);
+  const inFlight = year <= +allWeeks[allWeeks.length - 1].slice(0, 4);
+  const leLabel = `LE ${when.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`;
   const version: PlanSnapshotVersion = {
     id: when.getTime().toString(36) + Math.random().toString(36).slice(2, 6),
     seq,
-    kind: seq === 1 ? "por" : "le",
+    kind: seq === 1 && !inFlight ? "por" : "le",
     label: seq === 1
-      ? "Plan of Record"
-      : `LE ${when.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`,
+      ? (inFlight ? `${leLabel} (baseline)` : "Plan of Record")
+      : leLabel,
     taken_at: when.toISOString(),
     note,
     year: now.year,

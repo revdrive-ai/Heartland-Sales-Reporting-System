@@ -203,6 +203,8 @@ export default function BaseView({ data }: { data: BaseData }) {
 
   const nextPlanYear = data.latestDataYear + 1;
   const planYear = data.plan ? +data.win : null;
+  // sign-off & LE snapshots run on plan years AND the in-flight (forecast) year
+  const snapYear = planYear ?? (data.forecast ? +data.win : null);
 
   useEffect(() => {
     try {
@@ -336,8 +338,8 @@ export default function BaseView({ data }: { data: BaseData }) {
   const [snapNote, setSnapNote] = useState("");
   const [snapBusy, setSnapBusy] = useState(false);
   useEffect(() => {
-    if (!planYear) { setSnaps(null); setSnapCur(null); return; }
-    fetch(`/api/plansnap/${data.mkt}/${planYear}`, { cache: "no-store" })
+    if (!snapYear) { setSnaps(null); setSnapCur(null); return; }
+    fetch(`/api/plansnap/${data.mkt}/${snapYear}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d: { versions?: SnapVersion[]; current?: { totals: { base: number; adjusted: number } } }) => {
         setSnaps(d.versions ?? []);
@@ -345,12 +347,12 @@ export default function BaseView({ data }: { data: BaseData }) {
       })
       .catch(() => setSnaps([]));
     // refetch when the inputs that move the plan base change in-session
-  }, [planYear, data.mkt, adjs.length, data.distVer?.verifiedAt, data.distVer?.excluded, data.distVer?.added]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snapYear, data.mkt, adjs.length, data.distVer?.verifiedAt, data.distVer?.excluded, data.distVer?.added]); // eslint-disable-line react-hooks/exhaustive-deps
   const takeSnap = async () => {
-    if (!planYear) return;
+    if (!snapYear) return;
     setSnapBusy(true);
     try {
-      const r = await fetch(`/api/plansnap/${data.mkt}/${planYear}`, {
+      const r = await fetch(`/api/plansnap/${data.mkt}/${snapYear}`, {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ note: snapNote.trim() }),
       });
       const d = (await r.json()) as { version?: SnapVersion };
@@ -368,6 +370,20 @@ export default function BaseView({ data }: { data: BaseData }) {
   const snapChanged = !!lastSnap && Math.abs(snapDrift) > Math.max(lastSnap.totals.adjusted * 0.002, 5);
   const fmtU = (v: number) =>
     Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? Math.round(v / 1e3).toLocaleString() + "K" : String(Math.round(v));
+  const snapPill = snaps !== null && snapYear !== null ? (lastSnap
+    ? snapChanged
+      ? <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+          title={`The full-year number has moved ${snapDrift >= 0 ? "+" : "−"}${fmtU(Math.abs(snapDrift))} units since ${lastSnap.label} (${lastSnap.taken_at.slice(0, 10)}) — take a Latest Estimate to record the new read`}>
+          ⚠ changed since {lastSnap.label}
+        </span>
+      : <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
+          title={`${lastSnap.label} taken ${lastSnap.taken_at.slice(0, 10)} · full-year ${fmtU(lastSnap.totals.adjusted)} units · v${lastSnap.seq}`}>
+          ✓ {lastSnap.label} · v{lastSnap.seq}
+        </span>
+    : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+        title={planYear ? "No Plan of Record yet — finish distribution verification and adjustments, then Mark base complete below" : `No ${snapYear} LE on record yet — take the baseline in the sign-off & LE card below`}>
+        {planYear ? "base not signed off" : "no LE taken yet"}
+      </span>) : null;
 
   const dvAddItem = async () => {
     if (!dvDoc || !dvNew || !dvProxy || !dvFirst) return;
@@ -716,20 +732,7 @@ export default function BaseView({ data }: { data: BaseData }) {
                   title="Carried volume includes every item from last year until someone verifies the list — click Verify distribution">
                   ⚠ distribution unverified
                 </span>)}
-            {snaps !== null && (lastSnap
-              ? snapChanged
-                ? <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-                    title={`The plan base has moved ${snapDrift >= 0 ? "+" : "−"}${fmtU(Math.abs(snapDrift))} units since ${lastSnap.label} (${lastSnap.taken_at.slice(0, 10)}) — take a Latest Estimate to record the new read`}>
-                    ⚠ changed since {lastSnap.label}
-                  </span>
-                : <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
-                    title={`${lastSnap.label} taken ${lastSnap.taken_at.slice(0, 10)} · full-year ${fmtU(lastSnap.totals.adjusted)} units · v${lastSnap.seq}`}>
-                    ✓ {lastSnap.label} · v{lastSnap.seq}
-                  </span>
-              : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-                  title="No Plan of Record yet — finish distribution verification and adjustments, then Mark base complete below">
-                  base not signed off
-                </span>)}
+            {snapPill}
             <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
               ✓ {planYear} registered for {marketName}
               {planReg[data.mkt] ? ` · ${planReg[data.mkt].slice(0, 10)}` : ""}
@@ -747,6 +750,7 @@ export default function BaseView({ data }: { data: BaseData }) {
               ▸ Plan {nextPlanYear}
             </button>
           )}
+          {data.forecast && snapPill}
           <span className="pill">{data.winLabel} · {data.points[0]?.week} → {data.points.at(-1)?.week}</span>
         </div>
       </div>
@@ -1335,12 +1339,14 @@ export default function BaseView({ data }: { data: BaseData }) {
           above to see its plan adjusted in full. Adjustments are saved per customer × plan year.
         </div>
       </div>
+      </>)}
 
+      {(data.plan || data.forecast) && (
       <div className="card" style={{ padding: 0, marginTop: 16 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
-          <b>Plan sign-off &amp; Latest Estimates — {marketName} · {data.win}</b>
+          <b>{data.plan ? "Plan sign-off & Latest Estimates" : "Latest Estimates"} — {marketName} · {data.win}</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            all own brands, units · v1 = the base sign-off (Plan of Record) · later versions = the monthly LE cycle
+            {data.plan ? "all own brands, units · v1 = the base sign-off (Plan of Record) · later versions = the monthly LE cycle" : "all own brands, units · each LE freezes actuals to date + the forecast to year-end"}
           </span>
         </div>
         {snaps === null ? (
@@ -1409,12 +1415,12 @@ export default function BaseView({ data }: { data: BaseData }) {
           <div style={{ padding: "12px 16px", borderTop: snaps.length ? "1px solid var(--line)" : "none", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <input
               style={{ ...selStyle, flex: "1 1 260px" }}
-              placeholder={snaps.length === 0 ? "Sign-off note (optional) — e.g. 2027 base final per S&OP" : "LE note (optional) — what moved and why"}
+              placeholder={snaps.length === 0 && data.plan ? "Sign-off note (optional) — e.g. 2027 base final per S&OP" : "LE note (optional) — what moved and why"}
               value={snapNote}
               onChange={(e) => setSnapNote(e.target.value)}
             />
             <button className="btn primary" style={{ cursor: "pointer" }} onClick={takeSnap} disabled={snapBusy}>
-              {snapBusy ? "Freezing…" : snaps.length === 0 ? "✓ Mark base complete — take Plan of Record" : "Take Latest Estimate"}
+              {snapBusy ? "Freezing…" : snaps.length === 0 ? (data.plan ? "✓ Mark base complete — take Plan of Record" : "Take baseline Latest Estimate") : "Take Latest Estimate"}
             </button>
           </div>
           <div className="note" style={{ margin: 0, padding: "0 16px 12px" }}>
@@ -1425,7 +1431,7 @@ export default function BaseView({ data }: { data: BaseData }) {
           </div>
         </>)}
       </div>
-      </>)}
+      )}
 
       {data.liftEngine && engHide && (
         <div className="card" style={{ marginTop: 16 }}>
