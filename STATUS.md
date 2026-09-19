@@ -30,6 +30,15 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
 - **Key insights** (collapsible): ACV drops, base-price moves, unexplained
   volume breaks, delists, promo-support swings, and dated list-price changes,
   ranked by base-volume impact, each with an "Adjust in Plan" link.
+- **Distribution verification** (plan years): a per-customer popup lists
+  every item the source year sold — %ACV, last sale, base run-rate, sorted
+  brand then ACV — with In plan / No volume decisions (quiet items pre-set to
+  No volume), plus an Add-item flow: search the item master, pick a proxy for
+  base volume with a %, set the first week sold, and enter a retail load-in
+  volume + purchase date. Excluded items drop out of the carried base and
+  projection; additions ride the proxy's weekly shape plus the load-in spike.
+  Carry-by-default with a visible unverified pill; decisions are shared
+  (`distver:<customer>:<year>`).
 - **Planner adjustments** directly under the insights in plan years:
   distribution / base-price / trend levers by item per customer, drawing an
   adjusted-plan line on the chart.

@@ -7,8 +7,9 @@ import type { Plugin } from "chart.js";
 import WorkflowStrip from "@/components/WorkflowStrip";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 import {
-  deletePlanAdjustment, getPlanAdjustments, getPlanRegistry, getPriceEdits,
-  registerPlanYear, savePlanAdjustment, type PlanAdjustment,
+  deletePlanAdjustment, getDistVerification, getPlanAdjustments, getPlanRegistry, getPriceEdits,
+  registerPlanYear, saveDistVerification, savePlanAdjustment,
+  type DistAddition, type DistVerification, type PlanAdjustment,
 } from "@/lib/repo/client";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
@@ -51,6 +52,17 @@ export type BaseData = {
   years: number[];           // total-year choices (2024 → future, in perpetuity)
   latestDataYear: number;
   planningYear: boolean;     // a future year with no NIQ weeks on file yet
+  /** distribution verification (plan years): the source-year item inventory
+      with distribution health, plus the shared doc's summary for the pill */
+  distVer: null | {
+    year: number;
+    dataEdge: string;
+    verifiedAt: string | null;
+    excluded: number;
+    added: number;
+    items: { upc: string; name: string; brand: string; acv: number; lastSale: string; baseWk: number }[];
+    master: { upc: string; name: string; brand: string }[];
+  };
   forecast: null | { weeks: number; from: string }; // data-edge year: weeks forecast past the edge
   plan: null | {             // the plan-year series (future years only)
     sourceYear: number;                 // the year the actualized base carries from
@@ -256,6 +268,59 @@ export default function BaseView({ data }: { data: BaseData }) {
      trend behind the flag, then one click through to the adjustment */
   type InsightRow = BaseData["insights"][number];
   const [insModal, setInsModal] = useState<InsightRow | null>(null);
+
+  /* distribution verification — plan years only */
+  const [dvOpen, setDvOpen] = useState(false);
+  const [dvDoc, setDvDoc] = useState<DistVerification | null>(null);
+  const [dvSaving, setDvSaving] = useState(false);
+  const [dvAddOpen, setDvAddOpen] = useState(false);
+  const [dvSearch, setDvSearch] = useState("");
+  const [dvNew, setDvNew] = useState<{ upc: string; name: string; brand: string } | null>(null);
+  const [dvProxy, setDvProxy] = useState("");
+  const [dvPct, setDvPct] = useState("100");
+  const [dvFirst, setDvFirst] = useState("");
+  const [dvLoadU, setDvLoadU] = useState("");
+  const [dvLoadD, setDvLoadD] = useState("");
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  const openDv = async () => {
+    if (!data.distVer) return;
+    const doc = await getDistVerification(data.mkt, data.distVer.year);
+    // pre-suggest: no sales in the last 8 measured weeks → No volume
+    const cutoff = new Date(Date.parse(data.distVer.dataEdge) - 56 * 86400000).toISOString().slice(0, 10);
+    for (const it of data.distVer.items) {
+      if (!(it.upc in doc.decisions)) doc.decisions[it.upc] = it.lastSale !== "—" && it.lastSale >= cutoff ? "in" : "out";
+    }
+    setDvDoc(doc);
+    setDvOpen(true);
+  };
+  const dvDecide = (upc: string, d: "in" | "out") =>
+    setDvDoc((s) => (s ? { ...s, decisions: { ...s.decisions, [upc]: d } } : s));
+  const dvRemoveAdd = (id: string) =>
+    setDvDoc((s) => (s ? { ...s, additions: s.additions.filter((a) => a.id !== id) } : s));
+  const dvSave = async () => {
+    if (!dvDoc || !data.distVer) return;
+    setDvSaving(true);
+    await saveDistVerification(data.mkt, data.distVer.year, { ...dvDoc, verified_at: new Date().toISOString() });
+    setDvSaving(false);
+    setDvOpen(false);
+    router.refresh(); // the plan series recomputes server-side
+  };
+  const dvAddItem = () => {
+    if (!dvDoc || !dvNew || !dvProxy || !dvFirst) return;
+    const add: DistAddition = {
+      id: newId(),
+      upc: dvNew.upc, name: dvNew.name, brand: dvNew.brand,
+      proxy_upc: dvProxy,
+      proxy_pct: Math.max(1, parseFloat(dvPct) || 100),
+      first_week: dvFirst,
+      loadin_units: Math.max(0, parseFloat(dvLoadU) || 0),
+      loadin_date: dvLoadD || dvFirst,
+    };
+    setDvDoc((s) => (s ? { ...s, additions: [...s.additions, add] } : s));
+    setDvAddOpen(false);
+    setDvNew(null); setDvSearch(""); setDvProxy(""); setDvPct("100"); setDvFirst(""); setDvLoadU(""); setDvLoadD("");
+  };
   const goAdjust = (ins: InsightRow) => {
     setInsModal(null);
     if (data.plan) {
@@ -565,13 +630,30 @@ export default function BaseView({ data }: { data: BaseData }) {
           >
             ⬇ Export base
           </button>
-          {planYear ? (
+          {planYear ? (<>
+            <button
+              className="btn"
+              style={{ ...selStyle, cursor: "pointer" }}
+              title={`Confirm which of last year's items carry volume into ${planYear} at ${marketName}, and add new items with a proxy base + load-in. Shared per customer × year.`}
+              onClick={openDv}
+            >
+              ✓ Verify distribution
+            </button>
+            {data.distVer && (data.distVer.verifiedAt
+              ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
+                  title={`Verified ${data.distVer.verifiedAt.slice(0, 10)} — ${data.distVer.excluded} item${data.distVer.excluded === 1 ? "" : "s"} taken out, ${data.distVer.added} added`}>
+                  ✓ distribution verified · {data.distVer.excluded} out · {data.distVer.added} added
+                </span>
+              : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+                  title="Carried volume includes every item from last year until someone verifies the list — click Verify distribution">
+                  ⚠ distribution unverified
+                </span>)}
             <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
               ✓ {planYear} registered for {marketName}
               {planReg[data.mkt] ? ` · ${planReg[data.mkt].slice(0, 10)}` : ""}
               {" · "}{Object.keys(planReg).length} of {data.markets.length} customers
             </span>
-          ) : (
+          </>) : (
             <button
               className="btn"
               style={{ ...selStyle, cursor: "pointer" }}
@@ -1462,6 +1544,174 @@ export default function BaseView({ data }: { data: BaseData }) {
           </table>
         </div>
       </div>
+      )}
+
+      {dvOpen && dvDoc && data.distVer && (
+        <div className="modal open">
+          <div className="box" style={{ width: 860, maxHeight: "86vh", display: "flex", flexDirection: "column" }}>
+            <div className="m-head">
+              <div>
+                <div className="mt">Distribution verification — {marketName} · Plan {data.distVer.year}</div>
+                <div className="ms">
+                  Every own-brand item this customer sold, with distribution health. <b>In plan</b> carries its base
+                  into {data.distVer.year}; <b>No volume</b> takes it out. Items quiet for 8+ weeks are pre-set to No
+                  volume — override anything. Shared with everyone once saved.
+                </div>
+              </div>
+              <button className="x" onClick={() => setDvOpen(false)}>✕</button>
+            </div>
+            <div className="m-body" style={{ padding: 0, display: "block", overflowY: "auto", flex: 1 }}>
+              <table style={{ fontSize: 12.5, width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Item</th><th>Brand</th>
+                    <th style={{ textAlign: "right" }} title="Latest measured %ACV distribution at this customer">%ACV</th>
+                    <th title="Most recent week with measured sales">Last sale</th>
+                    <th style={{ textAlign: "right" }} title="Average base units per week, latest 52 measured weeks">Base u/wk</th>
+                    <th style={{ textAlign: "center" }}>Decision</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.distVer.items.map((it) => {
+                    const d = dvDoc.decisions[it.upc] ?? "in";
+                    const stale = it.lastSale === "—" || it.lastSale < new Date(Date.parse(data.distVer!.dataEdge) - 56 * 86400000).toISOString().slice(0, 10);
+                    return (
+                      <tr key={it.upc} style={{ opacity: d === "out" ? 0.55 : 1 }}>
+                        <td style={{ padding: "7px 14px" }}>
+                          {it.name}
+                          <span style={{ color: "var(--ink-3)", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11 }}> {it.upc}</span>
+                        </td>
+                        <td style={{ padding: "7px 14px" }}>{it.brand}</td>
+                        <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: it.acv < 10 ? "var(--bad)" : undefined }}>{it.acv}%</td>
+                        <td style={{ padding: "7px 14px", whiteSpace: "nowrap", color: stale ? "var(--bad)" : undefined }}>{it.lastSale}</td>
+                        <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{it.baseWk}</td>
+                        <td style={{ padding: "7px 14px", textAlign: "center", whiteSpace: "nowrap" }}>
+                          <span className={"minichip" + (d === "in" ? " on" : "")} style={{ cursor: "pointer", marginRight: 4 }} onClick={() => dvDecide(it.upc, "in")}>In plan</span>
+                          <span className={"minichip" + (d === "out" ? " on" : "")} style={{ cursor: "pointer" }} onClick={() => dvDecide(it.upc, "out")}>No volume</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: dvDoc.additions.length ? 8 : 0 }}>
+                  <b style={{ fontSize: 13 }}>New items for {data.distVer.year}</b>
+                  <button className="btn ghost" style={{ padding: "4px 10px", fontSize: 11.5 }} onClick={() => setDvAddOpen(true)}>+ Add item</button>
+                </div>
+                {dvDoc.additions.map((a) => (
+                  <div key={a.id} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 12.5, padding: "4px 0" }}>
+                    <span style={{ flex: 1 }}>
+                      <b>{a.name}</b> <span style={{ color: "var(--ink-3)" }}>({a.brand})</span> — {a.proxy_pct}% of{" "}
+                      {data.distVer!.items.find((i) => i.upc === a.proxy_upc)?.name ?? a.proxy_upc}, from {a.first_week}
+                      {a.loadin_units > 0 ? ` · load-in ${Math.round(a.loadin_units).toLocaleString()} u on ${a.loadin_date.slice(0, 10)}` : ""}
+                    </span>
+                    <span className="minichip" style={{ cursor: "pointer" }} onClick={() => dvRemoveAdd(a.id)}>✕</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", gap: 10, alignItems: "center" }}>
+              <span style={{ fontSize: 12, color: "var(--ink-3)", flex: 1 }}>
+                {Object.values(dvDoc.decisions).filter((d) => d === "out").length} of {data.distVer.items.length} items set to No volume · {dvDoc.additions.length} added
+              </span>
+              <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => setDvOpen(false)}>Cancel</button>
+              <button className="btn primary" style={{ cursor: "pointer" }} onClick={dvSave} disabled={dvSaving}>
+                {dvSaving ? "Saving…" : "Save & mark verified"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {dvAddOpen && dvDoc && data.distVer && (
+        <div className="modal open">
+          <div className="box" style={{ width: 560 }}>
+            <div className="m-head">
+              <div>
+                <div className="mt">Add a new item to Plan {data.distVer.year}</div>
+                <div className="ms">Search the item master by UPC or name, pick a proxy for base volume, and set the launch.</div>
+              </div>
+              <button className="x" onClick={() => setDvAddOpen(false)}>✕</button>
+            </div>
+            <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
+              {!dvNew ? (<>
+                <input
+                  style={{ ...selStyle, width: "100%" }}
+                  placeholder="Search by UPC or item name…"
+                  value={dvSearch}
+                  autoFocus
+                  onChange={(e) => setDvSearch(e.target.value)}
+                />
+                <div style={{ maxHeight: 260, overflowY: "auto", marginTop: 8 }}>
+                  {dvSearch.trim().length >= 2 && data.distVer.master
+                    .filter((m) => {
+                      const q = dvSearch.trim().toLowerCase();
+                      return m.upc.includes(dvSearch.trim()) || m.name.toLowerCase().includes(q) || m.brand.toLowerCase().includes(q);
+                    })
+                    .slice(0, 30)
+                    .map((m) => (
+                      <div key={m.upc}
+                        style={{ padding: "7px 10px", cursor: "pointer", borderTop: "1px solid var(--line)", fontSize: 12.5 }}
+                        onClick={() => {
+                          setDvNew(m);
+                          const sameBrand = data.distVer!.items.find((i) => i.brand === m.brand);
+                          setDvProxy(sameBrand?.upc ?? data.distVer!.items[0]?.upc ?? "");
+                          setDvFirst(data.points[0]?.week ?? "");
+                        }}>
+                        <b>{m.name}</b> <span style={{ color: "var(--ink-3)" }}>{m.brand} · {m.upc}</span>
+                      </div>
+                    ))}
+                  {dvSearch.trim().length >= 2 &&
+                    !data.distVer.master.some((m) => {
+                      const q = dvSearch.trim().toLowerCase();
+                      return m.upc.includes(dvSearch.trim()) || m.name.toLowerCase().includes(q) || m.brand.toLowerCase().includes(q);
+                    }) && (
+                    <div className="note">No match in the item master — new UPCs enter through the item crosswalk ingest first.</div>
+                  )}
+                </div>
+              </>) : (<>
+                <div style={{ fontSize: 13, marginBottom: 10 }}>
+                  <b>{dvNew.name}</b> <span style={{ color: "var(--ink-3)" }}>{dvNew.brand} · {dvNew.upc}</span>{" "}
+                  <span className="minichip" style={{ cursor: "pointer" }} onClick={() => setDvNew(null)}>change</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>Proxy for base volume
+                    <select style={{ ...selStyle, width: "100%", marginTop: 4 }} value={dvProxy} onChange={(e) => setDvProxy(e.target.value)}>
+                      {data.distVer.items
+                        .filter((i) => (dvDoc.decisions[i.upc] ?? "in") === "in")
+                        .sort((a, b) => (a.brand === dvNew.brand ? -1 : 0) - (b.brand === dvNew.brand ? -1 : 0) || b.baseWk - a.baseWk)
+                        .map((i) => <option key={i.upc} value={i.upc}>{i.name.length > 34 ? i.name.slice(0, 33) + "…" : i.name} · {i.baseWk} u/wk</option>)}
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>% of proxy base
+                    <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={1} max={500} value={dvPct} onChange={(e) => setDvPct(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>First week sold
+                    <select style={{ ...selStyle, width: "100%", marginTop: 4 }} value={dvFirst} onChange={(e) => { setDvFirst(e.target.value); if (!dvLoadD) setDvLoadD(e.target.value); }}>
+                      {data.points.map((p) => <option key={p.week} value={p.week}>{p.week}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>Load-in purchase date
+                    <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="date" value={dvLoadD || dvFirst} onChange={(e) => setDvLoadD(e.target.value)} />
+                  </label>
+                  <label style={{ fontSize: 11.5, fontWeight: 700, color: "var(--ink-2)" }}>Load-in volume (retail units)
+                    <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={0} placeholder="0" value={dvLoadU} onChange={(e) => setDvLoadU(e.target.value)} />
+                  </label>
+                </div>
+                <div className="note">
+                  ◇ The item inherits the proxy&apos;s weekly base shape × the percentage, starting its first week; the
+                  load-in lands as a one-time volume spike in the week of the purchase date. Entered as retail so the
+                  O/I rate math and trade spend read it in the Promotion Planner.
+                </div>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
+                  <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => setDvAddOpen(false)}>Cancel</button>
+                  <button className="btn primary" style={{ cursor: "pointer" }} onClick={dvAddItem} disabled={!dvProxy || !dvFirst}>Add to plan</button>
+                </div>
+              </>)}
+            </div>
+          </div>
+        </div>
       )}
 
       {insModal && (

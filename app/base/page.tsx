@@ -1,5 +1,7 @@
 import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
+import { getState } from "@/lib/server/appstate";
+import type { DistVerification } from "@/lib/repo/client";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
@@ -223,27 +225,104 @@ export default async function Page({
      as that source year has actualized, and project the remaining weeks as
      the latest-52-week average base shaped by the seasonality engine. */
   let plan: BaseData["plan"] = null;
+  let distVer: BaseData["distVer"] = null;
   if (planningYear) {
+    /* Distribution verification (per customer × plan year, shared doc):
+       items marked "no volume" drop out of the carried base and projection;
+       verified additions ride in on their proxy's weekly shape from their
+       first week, plus a one-time load-in. Carry-by-default until verified. */
+    const utc2 = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+    const itemMetaAll = new Map(allItems.map((i) => [i.upc, i]));
+    const dvRaw = (await getState(`distver:${mkt}:${+win}`).catch(() => undefined)) as DistVerification | undefined;
+    const dv: DistVerification = { decisions: dvRaw?.decisions ?? {}, additions: dvRaw?.additions ?? [], verified_at: dvRaw?.verified_at ?? null };
+    const outSet = new Set(Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => u));
+    const planScoped = scoped.filter((r) => !outSet.has(r.upc));
+
     const weekBaseM = new Map<string, number>(); // weekly base in the chosen metric
-    for (const r of scoped) {
+    for (const r of planScoped) {
       weekBaseM.set(r.week_ending, (weekBaseM.get(r.week_ending) ?? 0) + bVal(r));
     }
     const last52 = allWeeks.slice(-52);
     const avgBase = last52.reduce((a, w) => a + (weekBaseM.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+
+    // per-item weekly base (chosen metric + units) — proxy shapes for additions
+    const upcWeek = new Map<string, Map<string, number>>();
+    const upcWeekU = new Map<string, Map<string, number>>();
+    for (const r of factsAll) {
+      (upcWeek.get(r.upc) ?? upcWeek.set(r.upc, new Map()).get(r.upc)!)
+        .set(r.week_ending, ((upcWeek.get(r.upc)!.get(r.week_ending)) ?? 0) + bVal(r));
+      (upcWeekU.get(r.upc) ?? upcWeekU.set(r.upc, new Map()).get(r.upc)!)
+        .set(r.week_ending, ((upcWeekU.get(r.upc)!.get(r.week_ending)) ?? 0) + (r.base_units ?? r.units ?? 0));
+    }
+    const avg52Of = (m: Map<string, number> | undefined) =>
+      m ? last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1) : 0;
+    const planValOf = (upc: string, w: string) => {
+      const m = upcWeek.get(upc);
+      if (!m) return 0;
+      const src = yearAgoWeek(w);
+      return src <= latestWeek ? (m.get(src) ?? 0) : avg52Of(m) * (engine[+w.slice(5, 7) - 1] ?? 1);
+    };
+    // load-in is entered in retail units; convert with the proxy's base value/unit
+    const perUnitOf = (upc: string) => {
+      if (metric === "units") return 1;
+      const u = avg52Of(upcWeekU.get(upc));
+      return u > 0 ? avg52Of(upcWeek.get(upc)) / u : 0;
+    };
+    const adds = item === "ALL" ? dv.additions.filter((a) => a.brand === brand) : [];
+
     const actualized: (number | null)[] = [];
     const projected: (number | null)[] = [];
     let nAct = 0;
     for (const w of weeks) {
       const src = yearAgoWeek(w);
+      let extra = 0;
+      for (const a of adds) {
+        if (w >= a.first_week) extra += planValOf(a.proxy_upc, w) * (a.proxy_pct / 100);
+        // the load-in lands in the plan week covering its purchase date
+        if (a.loadin_units > 0 && w >= a.loadin_date && utc2(w) - utc2(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+          extra += a.loadin_units * perUnitOf(a.proxy_upc);
+        }
+      }
       if (src <= latestWeek) {
-        actualized.push(Math.round(weekBaseM.get(src) ?? 0));
+        actualized.push(Math.round((weekBaseM.get(src) ?? 0) + extra));
         projected.push(null);
         nAct++;
       } else {
         actualized.push(null);
-        projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1)));
+        projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1) + extra));
       }
     }
+
+    /* the verification popup's inventory: every own-brand item this customer
+       sold in the source year, with distribution health */
+    const mktFacts = await getWeeklyFacts({ market_code: mkt });
+    const stats = new Map<string, { lastSale: string; acv: number; acvW: string; base: number; baseN: number }>();
+    const last52Set2 = new Set(last52);
+    for (const r of mktFacts) {
+      const meta = itemMetaAll.get(r.upc);
+      if (!meta?.is_own) continue;
+      const s = stats.get(r.upc) ?? { lastSale: "", acv: 0, acvW: "", base: 0, baseN: 0 };
+      if ((r.units ?? 0) > 0 && r.week_ending > s.lastSale) s.lastSale = r.week_ending;
+      if (r.acv_dist !== null && r.week_ending >= s.acvW) { s.acv = Math.max(r.week_ending > s.acvW ? 0 : s.acv, r.acv_dist); s.acvW = r.week_ending; }
+      if (last52Set2.has(r.week_ending)) { s.base += r.base_units ?? r.units ?? 0; s.baseN = 52; }
+      stats.set(r.upc, s);
+    }
+    distVer = {
+      year: +win,
+      dataEdge: latestWeek,
+      verifiedAt: dv.verified_at,
+      excluded: [...outSet].filter((u) => stats.has(u)).length,
+      added: dv.additions.length,
+      items: [...stats.entries()].map(([u, s]) => ({
+        upc: u,
+        name: itemMetaAll.get(u)?.name ?? u,
+        brand: itemMetaAll.get(u)?.brand ?? "",
+        acv: Math.round(s.acv * 10) / 10,
+        lastSale: s.lastSale || "—",
+        baseWk: Math.round((s.base / Math.max(s.baseN, 1)) * 10) / 10,
+      })).sort((a, b) => a.brand.localeCompare(b.brand) || b.acv - a.acv),
+      master: allItems.filter((i) => i.is_own).map((i) => ({ upc: i.upc, name: i.name, brand: i.brand })),
+    };
     // Each item's share of the brand base over the latest 52 weeks — the
     // weight an item-level planner adjustment carries in the all-items view.
     const last52Set = new Set(last52);
@@ -475,6 +554,7 @@ export default async function Page({
     latestDataYear,
     planningYear,
     plan,
+    distVer,
     forecast,
     points,
     overlays: overlayRows,

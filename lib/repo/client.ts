@@ -310,3 +310,41 @@ export async function setPlanBudget(key: string, value: number): Promise<void> {
   map[key] = value;
   await saveDoc("budget", map);
 }
+
+/* ---- distribution verification (plan years) ----
+   The new-year gate on carried volume, per customer × plan year: every item
+   the previous year sold is confirmed In plan or No volume, and genuinely new
+   items are added with a proxy for base volume plus a load-in. Carried by
+   default until verified (the plan view shows an "unverified" pill); the doc
+   is shared, like all planner work. Consumed server-side by the Base & Lift
+   plan-year series. */
+
+export type DistAddition = {
+  id: string;
+  upc: string;            // the new item (from the item master)
+  name: string;
+  brand: string;
+  proxy_upc: string;      // the in-plan item whose weekly base shape it inherits
+  proxy_pct: number;      // % of the proxy's base, default 100
+  first_week: string;     // ISO Saturday — ongoing volume starts here
+  loadin_units: number;   // one-time pipeline fill, retail units
+  loadin_date: string;    // lands in the plan week containing this date
+};
+
+export type DistVerification = {
+  decisions: Record<string, "in" | "out">; // upc → keep in plan / no volume
+  additions: DistAddition[];
+  verified_at: string | null;
+};
+
+const dvKey = (market_code: string, plan_year: number) => `distver:${market_code}:${plan_year}`;
+const DV_EMPTY: DistVerification = { decisions: {}, additions: [], verified_at: null };
+
+export async function getDistVerification(market_code: string, plan_year: number): Promise<DistVerification> {
+  const doc = await loadDoc<DistVerification>(dvKey(market_code, plan_year), () => null);
+  return doc ? { ...DV_EMPTY, ...doc } : { ...DV_EMPTY };
+}
+
+export async function saveDistVerification(market_code: string, plan_year: number, dv: DistVerification): Promise<void> {
+  await saveDoc(dvKey(market_code, plan_year), dv);
+}
