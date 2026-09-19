@@ -44,6 +44,13 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
 - **Planner adjustments** directly under the insights in plan years:
   distribution / base-price / trend levers by item per customer, drawing an
   adjusted-plan line on the chart.
+- **Plan sign-off & Latest Estimates** (plan years): "Mark base complete"
+  freezes v1 — the Plan of Record — per customer × year (per-brand monthly
+  units, adjustment list, distver rollup); later snapshots are the monthly
+  LE versions, append-only and diffable (Δ vs previous, Δ vs PoR). The
+  header pill shows the latest version and turns amber when the working
+  plan drifts from it; the versions doc (`plansnap:<customer>:<year>`) is
+  the audit trail the LE view will consume.
 - **Lift engine + Predict-a-lift** on measured data (through-origin
   depth-vs-lift fit with per-tactic multipliers), with a hide/show toggle.
 - Promotion windows table with header filters and predicted-vs-actual lift

@@ -323,6 +323,52 @@ export default function BaseView({ data }: { data: BaseData }) {
     setDvOpen(false);
     router.refresh(); // the plan series recomputes server-side
   };
+  /* plan sign-off & Latest Estimates — versions of the plan base, per
+     customer × year (v1 = Plan of Record, later = monthly LEs) */
+  type SnapVersion = {
+    id: string; seq: number; kind: "por" | "le"; label: string; taken_at: string; note: string;
+    totals: { base: number; adjusted: number };
+    distver: { out: number; added: number };
+    adjustments: unknown[];
+  };
+  const [snaps, setSnaps] = useState<SnapVersion[] | null>(null);
+  const [snapCur, setSnapCur] = useState<{ totals: { base: number; adjusted: number } } | null>(null);
+  const [snapNote, setSnapNote] = useState("");
+  const [snapBusy, setSnapBusy] = useState(false);
+  useEffect(() => {
+    if (!planYear) { setSnaps(null); setSnapCur(null); return; }
+    fetch(`/api/plansnap/${data.mkt}/${planYear}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d: { versions?: SnapVersion[]; current?: { totals: { base: number; adjusted: number } } }) => {
+        setSnaps(d.versions ?? []);
+        setSnapCur(d.current ?? null);
+      })
+      .catch(() => setSnaps([]));
+    // refetch when the inputs that move the plan base change in-session
+  }, [planYear, data.mkt, adjs.length, data.distVer?.verifiedAt, data.distVer?.excluded, data.distVer?.added]); // eslint-disable-line react-hooks/exhaustive-deps
+  const takeSnap = async () => {
+    if (!planYear) return;
+    setSnapBusy(true);
+    try {
+      const r = await fetch(`/api/plansnap/${data.mkt}/${planYear}`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ note: snapNote.trim() }),
+      });
+      const d = (await r.json()) as { version?: SnapVersion };
+      if (d.version) {
+        setSnaps((s) => [...(s ?? []), d.version!]);
+        setSnapCur({ totals: d.version.totals });
+        setSnapNote("");
+      }
+    } finally {
+      setSnapBusy(false);
+    }
+  };
+  const lastSnap = snaps && snaps.length ? snaps[snaps.length - 1] : null;
+  const snapDrift = lastSnap && snapCur ? snapCur.totals.adjusted - lastSnap.totals.adjusted : 0;
+  const snapChanged = !!lastSnap && Math.abs(snapDrift) > Math.max(lastSnap.totals.adjusted * 0.002, 5);
+  const fmtU = (v: number) =>
+    Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? Math.round(v / 1e3).toLocaleString() + "K" : String(Math.round(v));
+
   const dvAddItem = async () => {
     if (!dvDoc || !dvNew || !dvProxy || !dvFirst) return;
     const add: DistAddition = {
@@ -669,6 +715,20 @@ export default function BaseView({ data }: { data: BaseData }) {
               : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
                   title="Carried volume includes every item from last year until someone verifies the list — click Verify distribution">
                   ⚠ distribution unverified
+                </span>)}
+            {snaps !== null && (lastSnap
+              ? snapChanged
+                ? <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+                    title={`The plan base has moved ${snapDrift >= 0 ? "+" : "−"}${fmtU(Math.abs(snapDrift))} units since ${lastSnap.label} (${lastSnap.taken_at.slice(0, 10)}) — take a Latest Estimate to record the new read`}>
+                    ⚠ changed since {lastSnap.label}
+                  </span>
+                : <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
+                    title={`${lastSnap.label} taken ${lastSnap.taken_at.slice(0, 10)} · full-year ${fmtU(lastSnap.totals.adjusted)} units · v${lastSnap.seq}`}>
+                    ✓ {lastSnap.label} · v{lastSnap.seq}
+                  </span>
+              : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+                  title="No Plan of Record yet — finish distribution verification and adjustments, then Mark base complete below">
+                  base not signed off
                 </span>)}
             <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
               ✓ {planYear} registered for {marketName}
@@ -1170,7 +1230,7 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       )}
 
-      {data.plan && (
+      {data.plan && (<>
       <div ref={adjCard} className="card" style={{ padding: 0, marginTop: 16, scrollMarginTop: 12 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>Planner adjustments — {data.win}</b>
@@ -1276,7 +1336,96 @@ export default function BaseView({ data }: { data: BaseData }) {
         </div>
       </div>
 
-      )}
+      <div className="card" style={{ padding: 0, marginTop: 16 }}>
+        <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
+          <b>Plan sign-off &amp; Latest Estimates — {marketName} · {data.win}</b>
+          <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
+            all own brands, units · v1 = the base sign-off (Plan of Record) · later versions = the monthly LE cycle
+          </span>
+        </div>
+        {snaps === null ? (
+          <div className="note" style={{ padding: "12px 16px" }}>Loading versions…</div>
+        ) : (<>
+          {snaps.length > 0 && (
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ fontSize: 12.5, width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Version</th><th>Taken</th><th>Note</th>
+                    <th style={{ textAlign: "right" }} title="Excluded / added items at snapshot time">Dist</th>
+                    <th style={{ textAlign: "right" }}>Adjustments</th>
+                    <th style={{ textAlign: "right" }}>Full-year base</th>
+                    <th style={{ textAlign: "right" }}>Adjusted</th>
+                    <th style={{ textAlign: "right" }} title="Adjusted full-year vs the previous version">Δ vs prev</th>
+                    <th style={{ textAlign: "right" }} title="Adjusted full-year vs the Plan of Record">Δ vs PoR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snaps.map((s, i) => {
+                    const prev = i > 0 ? snaps[i - 1] : null;
+                    const por = snaps[0];
+                    const dPrev = prev ? s.totals.adjusted - prev.totals.adjusted : null;
+                    const dPor = i > 0 ? s.totals.adjusted - por.totals.adjusted : null;
+                    const delta = (d: number | null) =>
+                      d === null ? <span style={{ color: "var(--ink-3)" }}>—</span>
+                        : <span style={{ fontWeight: 700, color: d >= 0 ? "var(--good)" : "var(--bad)" }}>{d >= 0 ? "+" : "−"}{fmtU(Math.abs(d))}</span>;
+                    return (
+                      <tr key={s.id}>
+                        <td style={{ padding: "8px 14px", fontWeight: 700 }}>
+                          v{s.seq} · {s.label}
+                          {s.kind === "por" && <span className="badge" style={{ marginLeft: 6, background: "var(--good-soft, rgba(22,163,74,.12))", color: "var(--good)" }}>sign-off</span>}
+                        </td>
+                        <td style={{ padding: "8px 14px", whiteSpace: "nowrap" }}>{s.taken_at.slice(0, 10)}</td>
+                        <td style={{ padding: "8px 14px", color: "var(--ink-2)", maxWidth: 260 }}>{s.note || "—"}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{s.distver.out} out · {s.distver.added} added</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{s.adjustments.length}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtU(s.totals.base)}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{fmtU(s.totals.adjusted)}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{delta(dPrev)}</td>
+                        <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{delta(dPor)}</td>
+                      </tr>
+                    );
+                  })}
+                  {snapCur && (
+                    <tr style={{ borderTop: "2px solid var(--line)", color: "var(--ink-2)" }}>
+                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>current working plan</td>
+                      <td style={{ padding: "8px 14px" }}>live</td>
+                      <td style={{ padding: "8px 14px" }}>{snapChanged ? "has moved since the last version" : "matches the last version"}</td>
+                      <td style={{ padding: "8px 14px" }} /><td style={{ padding: "8px 14px" }} />
+                      <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmtU(snapCur.totals.base)}</td>
+                      <td style={{ padding: "8px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", fontWeight: 700 }}>{fmtU(snapCur.totals.adjusted)}</td>
+                      <td style={{ padding: "8px 14px", textAlign: "right" }}>
+                        {lastSnap ? (snapChanged
+                          ? <span style={{ fontWeight: 700, color: snapDrift >= 0 ? "var(--good)" : "var(--bad)" }}>{snapDrift >= 0 ? "+" : "−"}{fmtU(Math.abs(snapDrift))}</span>
+                          : <span style={{ color: "var(--ink-3)" }}>±0</span>) : "—"}
+                      </td>
+                      <td style={{ padding: "8px 14px" }} />
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={{ padding: "12px 16px", borderTop: snaps.length ? "1px solid var(--line)" : "none", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              style={{ ...selStyle, flex: "1 1 260px" }}
+              placeholder={snaps.length === 0 ? "Sign-off note (optional) — e.g. 2027 base final per S&OP" : "LE note (optional) — what moved and why"}
+              value={snapNote}
+              onChange={(e) => setSnapNote(e.target.value)}
+            />
+            <button className="btn primary" style={{ cursor: "pointer" }} onClick={takeSnap} disabled={snapBusy}>
+              {snapBusy ? "Freezing…" : snaps.length === 0 ? "✓ Mark base complete — take Plan of Record" : "Take Latest Estimate"}
+            </button>
+          </div>
+          <div className="note" style={{ margin: 0, padding: "0 16px 12px" }}>
+            ◇ Each version freezes the full plan base (per brand by month, in units), the adjustment list, and the
+            distribution rollup — nothing here is ever edited or deleted, so any two versions can be compared. The
+            header pill turns amber when the working plan drifts from the last version; taking an LE records the new
+            read. Versions are shared, per customer × plan year.
+          </div>
+        </>)}
+      </div>
+      </>)}
 
       {data.liftEngine && engHide && (
         <div className="card" style={{ marginTop: 16 }}>
