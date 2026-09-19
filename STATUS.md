@@ -132,6 +132,12 @@ until they're set, the tool falls back to per-browser storage there.
   ongoing CSV/Excel drops. Remaining: run `setup.sql` once (health goes
   `writable: true`), press *Load all*, then swap the repo reads to Supabase
   view by view (`supabase/README.md` is the full runbook).
+- **Shipment data (SYSPRO)** — design plan in
+  `docs/design/shipments-forecasting.md`: cases-by-customer-by-item-by-day
+  as the actual-sales basis, customer supply parameters (lead time, buy-in
+  window, safety stock), consumption → shipment-month translation for NIQ
+  customers, and a derived weekly shipment base for customers with no
+  consumption data. Awaiting the decisions listed in §7 and a sample export.
 - **Remaining stub views** — Promo Analysis (workflow step 5) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
   Approvals, Latest Estimate, and Sales Leader View.
