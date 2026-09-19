@@ -141,7 +141,6 @@ export default function PlannerView({ data }: { data: PlannerData }) {
 
       <div className="pagehead">
         <div>
-          <div className="crumb">Trade Workflow · Step 2</div>
           <h1>Promotion Planner</h1>
           <p>
             The FY{data.meta.fiscal_year} promotion book from Telus — {data.meta.promotions.toLocaleString()} promotions,{" "}

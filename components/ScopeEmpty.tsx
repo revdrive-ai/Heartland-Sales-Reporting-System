@@ -11,7 +11,6 @@ export default function ScopeEmpty({
     <div className="view active">
       <div className="pagehead">
         <div>
-          <div className="crumb">{crumb}</div>
           <h1>{title}</h1>
           <p>Scoped to <b>{label}</b> by the customer selectors above.</p>
         </div>

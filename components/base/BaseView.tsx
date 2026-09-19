@@ -628,7 +628,6 @@ export default function BaseView({ data }: { data: BaseData }) {
 
       <div className="pagehead">
         <div>
-          <div className="crumb">Trade Workflow · Step 1</div>
           <h1>Base &amp; Lift Lab</h1>
           <p>
             NIQ weekly {metricLabel} for {scopeName} at {marketName} — actual against NIQ&apos;s modelled base,

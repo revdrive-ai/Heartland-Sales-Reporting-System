@@ -120,7 +120,6 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
       <div className="pagehead">
         <div>
-          <div className="crumb">Trade Workflow · Step 3{data.plan ? " · Plan year" : data.fy ? " · FY forecast" : ""}</div>
           <h1>Sales Dashboard{data.plan ? ` — ${data.plan.year} plan` : data.fy ? ` — FY${data.fy.year} forecast` : ""}</h1>
           <p>
             {data.plan ? (

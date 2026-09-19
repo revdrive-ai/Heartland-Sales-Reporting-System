@@ -15,7 +15,6 @@ export default function PageStub({ view, lead }: { view: string; lead?: string }
 
       <div className="pagehead">
         <div>
-          <div className="crumb">{groupFor(view)}</div>
           <h1>{item.label}</h1>
           <p>{item.title}</p>
         </div>

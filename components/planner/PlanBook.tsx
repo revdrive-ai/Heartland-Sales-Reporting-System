@@ -520,7 +520,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
       <div className="pagehead">
         <div>
-          <div className="crumb">Trade Workflow · Step 2 · Plan year</div>
           <h1>Promotion Planner — {year} plan</h1>
           <p>
             Build the {year} book before it exists in Telus: enter events, import a year plan, or carry the FY

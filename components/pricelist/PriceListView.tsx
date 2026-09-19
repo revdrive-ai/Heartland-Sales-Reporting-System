@@ -127,7 +127,6 @@ export default function PriceListView({ rows }: { rows: PriceRow[] }) {
     <div className="view active">
       <div className="pagehead">
         <div>
-          <div className="crumb">Data &amp; Integrations · Pricing Basis</div>
           <h1>Price List</h1>
           <p>
             Dated list prices per item — the pricing basis every analysis ties back to. Each price carries an

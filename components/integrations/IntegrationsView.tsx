@@ -104,7 +104,6 @@ export default function IntegrationsView() {
     <div className="view active">
       <div className="pagehead">
         <div>
-          <div className="crumb">Data &amp; Integrations</div>
           <h1>Integrations</h1>
           <p>Backend connection health and the fixture-data loader for the connected Supabase project.</p>
         </div>

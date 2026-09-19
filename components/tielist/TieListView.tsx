@@ -80,7 +80,6 @@ export default function TieListView({ data }: { data: TieListData }) {
     <div className="view active">
       <div className="pagehead">
         <div>
-          <div className="crumb">Data &amp; Integrations · Core Model</div>
           <h1>Tie List</h1>
           <p>
             The single mapping that ties every item identifier together: Telus/Heartland item # ↔ NIQ UPC ↔ the

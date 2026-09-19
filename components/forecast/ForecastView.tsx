@@ -66,7 +66,6 @@ export default function ForecastView({ data }: { data: ForecastData }) {
 
       <div className="pagehead">
         <div>
-          <div className="crumb">Trade Workflow · Step 4</div>
           <h1>Monthly Forecast Review</h1>
           <p>
             FY{data.fyYear} month by month for {brandName} at {scopeName} — measured NIQ retail where the month has
