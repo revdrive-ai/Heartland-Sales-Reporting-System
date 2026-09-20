@@ -3,6 +3,7 @@ import { getStates } from "@/lib/server/appstate";
 import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 import type { DistVerification, PlanAdjustment } from "@/lib/repo/client";
 import type { WorkMode } from "@/lib/mode";
+import { daysUntilLock, dueCycle, openCycle, type LeCycle } from "@/lib/leSchedule";
 
 /* Where the work stands for the mode year, across every customer — the
    rollup behind the strip under the top bar and the Latest Estimate view.
@@ -13,7 +14,8 @@ export type CustomerStatus = {
   name: string;
   versions: PlanSnapshotVersion[];
   latest: PlanSnapshotVersion | null;
-  takenThisMonth: boolean;       // a version taken in the current calendar month
+  lockedForDue: boolean;         // locked for the cycle whose scheduled lock has passed
+  lockedCycle: string | null;    // the cycle its newest version belongs to
   signedOff: boolean;            // plan years: a Plan of Record exists
   adjustments: number;
   distver: { out: number; added: number; verifiedAt: string | null };
@@ -22,13 +24,16 @@ export type CustomerStatus = {
 export type ModeStatus = {
   kind: "le" | "plan";
   year: number;
-  month: string;                 // "Sep 2026" — the LE cycle this is
+  month: string;                 // the due cycle's month name
+  /** the LE lock schedule: every account freezes at the end of the second
+      Friday, so "which cycle" is a date, not whenever someone got to it */
+  schedule: { due: LeCycle; open: LeCycle; daysToLock: number } | null;
   dataEdge: string;              // latest NIQ week on file
   telusSnapshot: string;
   customers: CustomerStatus[];
   totals: {
     customers: number;
-    taken: number;               // LE: versions taken this month; Plan: customers with any version
+    taken: number;               // LE: customers locked for the due cycle; Plan: customers with any version
     signed: number;              // Plan of Record count (plan years)
     verified: number;            // distribution verified
     adjustments: number;
@@ -55,7 +60,7 @@ export async function getModeStatus(mode: WorkMode): Promise<ModeStatus | null> 
   const docs = await getStates(keys);
 
   const now = new Date();
-  const ym = now.toISOString().slice(0, 7);
+  const due = dueCycle(now), open = openCycle(now);
   const customers: CustomerStatus[] = markets.map((m) => {
     const versions = ((docs.get(`plansnap:${m.code}:${year}`) as { versions?: PlanSnapshotVersion[] } | undefined)?.versions ?? []);
     const latest = versions[versions.length - 1] ?? null;
@@ -66,7 +71,8 @@ export async function getModeStatus(mode: WorkMode): Promise<ModeStatus | null> 
       name: m.name,
       versions,
       latest,
-      takenThisMonth: versions.some((v) => v.taken_at.slice(0, 7) === ym),
+      lockedForDue: versions.some((v) => (v.cycle ?? v.taken_at.slice(0, 7)) === due.key),
+      lockedCycle: versions.length ? (versions[versions.length - 1].cycle ?? versions[versions.length - 1].taken_at.slice(0, 7)) : null,
       signedOff: versions.some((v) => v.kind === "por"),
       adjustments: adjs.length,
       distver: {
@@ -80,13 +86,14 @@ export async function getModeStatus(mode: WorkMode): Promise<ModeStatus | null> 
   return {
     kind: mode.kind,
     year,
-    month: cycleMonth(now),
+    month: due.monthName,
+    schedule: mode.kind === "le" ? { due, open, daysToLock: daysUntilLock(open, now) } : null,
     dataEdge,
     telusSnapshot: meta.snapshot_date,
     customers,
     totals: {
       customers: customers.length,
-      taken: mode.kind === "le" ? customers.filter((c) => c.takenThisMonth).length : customers.filter((c) => c.versions.length > 0).length,
+      taken: mode.kind === "le" ? customers.filter((c) => c.lockedForDue).length : customers.filter((c) => c.versions.length > 0).length,
       signed: customers.filter((c) => c.signedOff).length,
       verified: customers.filter((c) => c.distver.verifiedAt).length,
       adjustments: customers.reduce((a, c) => a + c.adjustments, 0),

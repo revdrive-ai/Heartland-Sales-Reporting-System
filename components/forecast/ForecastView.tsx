@@ -288,9 +288,10 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
 
         {!le ? (
           <div className="note" style={{ margin: 0, padding: "16px" }}>
-            ◇ No Latest Estimates have been frozen for FY{data.fyYear} yet, so there is nothing to compare. Take the
-            month&apos;s LE in the <b>Latest Estimate</b> view (Planning Tools) — each customer&apos;s version freezes that
-            month&apos;s forecast by month and by item, and this table then shows what moved between any two cycles.
+            ◇ No Latest Estimates have been locked for FY{data.fyYear} yet, so there is nothing to compare. The forecast
+            locks at the end of the second Friday of each month; run the lock in the <b>Latest Estimate</b> view (Planning
+            Tools) and each account&apos;s version freezes that month&apos;s forecast by month and by item. This table then
+            shows what moved between any two locks.
           </div>
         ) : (<>
           <div style={{ padding: "11px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
@@ -301,16 +302,16 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
                 style={{ ...selStyle, padding: "6px 9px" }}
                 value={le.comparisons[slot]?.key ?? ""}
                 onChange={(e) => setCmp(slot, e.target.value)}
-                title="An earlier LE cycle — each customer contributes the version it had standing at the end of that month"
+                title="An earlier LE — the forecast on record at the end of that month's second Friday, across every account"
               >
                 <option value="">— none —</option>
                 {le.cycles.filter((c) => c.key !== le.latest.key).map((c) => (
-                  <option key={c.key} value={c.key}>{c.label} · {c.takenInCycle} taken</option>
+                  <option key={c.key} value={c.key}>{c.label} · locked {c.lockDate}</option>
                 ))}
               </select>
             ))}
-            <span className="pill" title={`${le.cycles[0].ofRecord} customers have an LE standing in the newest cycle`}>
-              {le.latest.label} · {le.cycles[0].ofRecord} customers
+            <span className="pill" title={`Locked ${le.cycles[0].lockDate} — the forecast on record at the end of that second Friday, across ${le.cycles[0].ofRecord} accounts`}>
+              {le.latest.label} · locked {le.cycles[0].lockDate}
             </span>
           </div>
 
@@ -381,9 +382,10 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
             </table>
           </div>
           <div className="note" style={{ margin: 0, padding: "10px 16px" }}>
-            ◇ Each cycle is what the portfolio&apos;s LE said <b>at the end of that month</b>: every customer contributes the
-            version it had standing then, so a customer that skipped a month carries the same number into both sides and
-            nets to zero. Grey months didn&apos;t move. Months already closed can still change between cycles as NIQ weeks land.
+            ◇ Every account locks on the same schedule — the forecast on record at the <b>end of the second Friday</b> of
+            each month — so each column is the whole portfolio as it stood at that lock. An account whose lock didn&apos;t run
+            that month carries its previous number into both sides and nets to zero. Grey months didn&apos;t move. Months
+            already closed can still change between locks as NIQ weeks land.
           </div>
           </>)}
         </>)}

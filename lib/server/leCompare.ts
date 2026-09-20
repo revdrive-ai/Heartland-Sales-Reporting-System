@@ -1,25 +1,25 @@
 import { getStates } from "@/lib/server/appstate";
+import { cycleFromKey } from "@/lib/leSchedule";
 import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 
-/* Comparing Latest Estimates month over month.
+/* Comparing Latest Estimates cycle over cycle.
 
-   A customer takes its LE whenever it takes it, so raw version numbers don't
-   line up across the portfolio — v3 at Jewel and v3 at Vons can be different
-   months. The comparable unit is the CYCLE: the calendar month an LE was
-   taken in. For a cycle, each customer contributes the latest version it had
-   taken on or before the end of that month — so a customer that skipped a
-   month still carries its standing number into both sides of a comparison
-   and nets to zero there, which is what "what changed between the August and
-   September LE" actually means. */
+   Every account locks on the same schedule — the end of the second Friday of
+   each month — so the comparable unit is that scheduled CYCLE, and a version
+   carries the cycle it was locked for. For a cycle, each customer
+   contributes the version standing at that lock; a customer whose lock
+   didn't run that month carries its previous one into both sides of a
+   comparison and nets to zero there, which is what "what changed between the
+   August and September LE" actually means. */
 
-const MONTH_ABBR = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const cycleKey = (iso: string) => iso.slice(0, 7);
-const cycleLabel = (key: string) => `LE ${MONTH_ABBR[+key.slice(5, 7) - 1]} ${key.slice(0, 4)}`;
+const cycleOfVersion = (v: PlanSnapshotVersion) => v.cycle ?? v.taken_at.slice(0, 7);
+const cycleLabel = (key: string) => cycleFromKey(key).label;
 
 export type LeCycleMeta = {
   key: string;        // "2026-09"
   label: string;      // "LE Sep 2026"
-  takenInCycle: number; // customers that took a version IN this cycle
+  lockDate: string;   // the second Friday it was read on
+  takenInCycle: number; // customers locked for this cycle
   ofRecord: number;     // customers with any version standing as of this cycle
 };
 
@@ -56,7 +56,7 @@ async function versionsByCustomer(codes: string[], year: number): Promise<Map<st
   const out = new Map<string, PlanSnapshotVersion[]>();
   for (const c of codes) {
     const v = (docs.get(`plansnap:${c}:${year}`) as { versions?: PlanSnapshotVersion[] } | undefined)?.versions ?? [];
-    if (v.length) out.set(c, [...v].sort((a, b) => a.taken_at.localeCompare(b.taken_at)));
+    if (v.length) out.set(c, [...v].sort((a, b) => (cycleOfVersion(a) + a.taken_at).localeCompare(cycleOfVersion(b) + b.taken_at)));
   }
   return out;
 }
@@ -65,7 +65,7 @@ async function versionsByCustomer(codes: string[], year: number): Promise<Map<st
 function versionAsOf(versions: PlanSnapshotVersion[], key: string): PlanSnapshotVersion | null {
   let hit: PlanSnapshotVersion | null = null;
   for (const v of versions) {
-    if (cycleKey(v.taken_at) <= key) hit = v; else break;
+    if (cycleOfVersion(v) <= key) hit = v; else break;
   }
   return hit;
 }
@@ -119,12 +119,13 @@ export async function getLeCompare(
 
   // every cycle any customer took a version in, newest first
   const keys = new Set<string>();
-  for (const vs of byCustomer.values()) for (const v of vs) keys.add(cycleKey(v.taken_at));
+  for (const vs of byCustomer.values()) for (const v of vs) keys.add(cycleOfVersion(v));
   const ordered = [...keys].sort().reverse();
   const cycles: LeCycleMeta[] = ordered.map((key) => ({
     key,
     label: cycleLabel(key),
-    takenInCycle: [...byCustomer.values()].filter((vs) => vs.some((v) => cycleKey(v.taken_at) === key)).length,
+    lockDate: cycleFromKey(key).lockDate,
+    takenInCycle: [...byCustomer.values()].filter((vs) => vs.some((v) => cycleOfVersion(v) === key)).length,
     ofRecord: [...byCustomer.values()].filter((vs) => versionAsOf(vs, key) !== null).length,
   }));
 

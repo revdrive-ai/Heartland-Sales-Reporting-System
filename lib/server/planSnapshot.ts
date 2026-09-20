@@ -2,6 +2,7 @@ import { getWeeklyFacts, listItems, listWeekEndings } from "@/lib/repo";
 import { getState, setState } from "@/lib/server/appstate";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import type { DistAddition, DistVerification, PlanAdjustment } from "@/lib/repo/client";
+import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
 
@@ -48,8 +49,15 @@ export type PlanSnapshotVersion = Omit<PlanBaseNow, "computed_at"> & {
   seq: number;             // 1 = Plan of Record, 2+ = Latest Estimates
   kind: "por" | "le";
   label: string;
-  taken_at: string;
+  taken_at: string;        // when this version was actually written
   note: string;
+  /** LE versions: the scheduled lock this belongs to. Every account locks on
+      the same schedule — the end of the second Friday of the month — so the
+      cycle, not the moment someone pressed the button, is what lines versions
+      up across customers. */
+  cycle?: string;          // "2026-09"
+  scheduled_lock?: string; // that cycle's lock instant, ISO
+  locked_late?: boolean;   // written after the scheduled instant had passed
 };
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {
@@ -225,7 +233,7 @@ export async function getSnapshots(mkt: string, year: number): Promise<PlanSnaps
 
 /** Freeze the current plan base as the next version: v1 = Plan of Record
     (the base sign-off), later versions = Latest Estimates. */
-export async function takeSnapshot(mkt: string, year: number, note: string): Promise<PlanSnapshotVersion> {
+export async function takeSnapshot(mkt: string, year: number, note: string, cycleKey?: string): Promise<PlanSnapshotVersion> {
   const [versions, now] = await Promise.all([getSnapshots(mkt, year), computePlanBase(mkt, year)]);
   const seq = versions.length + 1;
   const when = new Date();
@@ -234,16 +242,22 @@ export async function takeSnapshot(mkt: string, year: number, note: string): Pro
   // version there is an LE — the first one labeled as the baseline
   const allWeeks = await listWeekEndings(mkt);
   const inFlight = year <= +allWeeks[allWeeks.length - 1].slice(0, 4);
-  const leLabel = `LE ${when.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`;
+  /* An LE belongs to a scheduled cycle: the one asked for, else the cycle
+     whose lock has most recently passed. A forward year's sign-off is not on
+     that schedule, so it carries no cycle. */
+  const cyc = inFlight ? (cycleKey ? cycleFromKey(cycleKey) : dueCycle(when)) : null;
   const version: PlanSnapshotVersion = {
     id: when.getTime().toString(36) + Math.random().toString(36).slice(2, 6),
     seq,
     kind: seq === 1 && !inFlight ? "por" : "le",
-    label: seq === 1
-      ? (inFlight ? `${leLabel} (baseline)` : "Plan of Record")
-      : leLabel,
+    label: cyc ? cyc.label : seq === 1 ? "Plan of Record" : `LE ${when.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`,
     taken_at: when.toISOString(),
     note,
+    ...(cyc ? {
+      cycle: cyc.key,
+      scheduled_lock: cyc.lockAt,
+      locked_late: when > new Date(cyc.lockAt),
+    } : {}),
     year: now.year,
     byBrand: now.byBrand,
     byItem: now.byItem,

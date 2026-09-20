@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { LeCycle } from "@/lib/leSchedule";
 
 /* Latest Estimate (LE) view — see app/le/page.tsx. */
 
 export type VersionLite = {
   id: string; seq: number; kind: "por" | "le"; label: string; taken_at: string; note: string;
+  cycle?: string; scheduled_lock?: string; locked_late?: boolean;
   total: number; adjustments: number; distver: { out: number; added: number; verifiedAt: string | null };
 };
 
@@ -15,13 +17,15 @@ export type LeRow = {
   name: string;
   versions: VersionLite[];
   live: { total: number; adjustments: number; distver: { out: number; added: number; verifiedAt: string | null } } | null;
-  takenThisMonth: boolean;
+  lockedForDue: boolean;
+  lockedCycle: string | null;
   signedOff: boolean;
   hasVersions: boolean;
 };
 
 export type LeData = {
   kind: "le" | "plan";
+  schedule: { due: LeCycle; open: LeCycle; daysToLock: number } | null;
   hint: string | null;
   year: number;
   month: string;
@@ -60,19 +64,23 @@ export default function LeView({ data }: { data: LeData }) {
     for (const code of codes) {
       try {
         const r = await fetch(`/api/plansnap/${code}/${data.year}`, {
-          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ note: note.trim() }),
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ note: note.trim(), ...(data.schedule ? { cycle: data.schedule.due.key } : {}) }),
         });
         if (r.ok) ok++; else fail++;
       } catch { fail++; }
     }
     setBusy(null);
     setNote("");
-    setMsg(`${plan ? "Signed off" : "Took"} ${ok} ${ok === 1 ? "version" : "versions"}${fail ? ` · ${fail} failed` : ""}.`);
+    setMsg(`${plan ? "Signed off" : "Locked"} ${ok} ${ok === 1 ? "account" : "accounts"}${fail ? ` · ${fail} failed` : ""}.`);
     router.refresh();
   };
 
-  // bulk targets: LE — everyone not taken this month; Plan — verified but unsigned
-  const bulk = data.rows.filter((r) => (plan ? !r.signedOff && r.live?.distver.verifiedAt : !r.takenThisMonth)).map((r) => r.code);
+  // bulk targets: LE — every account not yet locked for the due cycle;
+  // Plan — verified but unsigned
+  const bulk = data.rows.filter((r) => (plan ? !r.signedOff && r.live?.distver.verifiedAt : !r.lockedForDue)).map((r) => r.code);
+  const sched = data.schedule;
+  const overdue = !plan && !!sched && sched.daysToLock <= 0;
 
   const latestTotal = sum(data.rows.map((r) => r.versions.at(-1)?.total ?? 0));
   const prevTotal = sum(data.rows.map((r) => (r.versions.length > 1 ? r.versions[r.versions.length - 2].total : r.versions.at(-1)?.total ?? 0)));
@@ -87,7 +95,7 @@ export default function LeView({ data }: { data: LeData }) {
   const actionLabel = (r: LeRow) =>
     plan
       ? (r.hasVersions ? "Take LE" : "Take Plan of Record")
-      : (r.hasVersions ? (r.takenThisMonth ? "Take again" : "Take LE") : "Take baseline LE");
+      : (r.lockedForDue ? "Re-lock" : "Lock");
 
   return (
     <div className="view active">
@@ -99,13 +107,21 @@ export default function LeView({ data }: { data: LeData }) {
               ? <>Every customer&apos;s {data.year} plan base side by side: distribution verification, adjustments, and the
                 Plan of Record sign-off that freezes v1. Later versions are the in-year Latest Estimates; each one is
                 diffable against the last and against the Plan of Record.</>
-              : <>The {data.month} LE cycle: each customer&apos;s frozen versions against the working forecast right now
-                (actuals through the NIQ edge plus the forecast to year-end, with LE adjustments). Take the month&apos;s LE
-                per customer or for everyone still open; every version is append-only and diffable.</>}
+              : <>Every account locks on the same schedule: the forecast on record at the{" "}
+                <b>end of the second Friday</b> of each month becomes that month&apos;s Latest Estimate and never moves again. This is{" "}
+                {sched ? <><b>{sched.due.label}</b> (read {sched.due.lockDate})</> : "the current cycle"} against the
+                working forecast right now — actuals through the NIQ edge plus the forecast to year-end, with LE
+                adjustments. Versions are append-only and diffable.</>}
           </p>
         </div>
         <div className="actions">
           {data.hint && <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }} title={data.hint}>Analyze mode — read only</span>}
+          {sched && !plan && (
+            <span className="pill" style={overdue ? { borderColor: "var(--warn)", color: "var(--warn)" } : undefined}
+              title={`The forecast freezes at the end of the second Friday. ${sched.due.label} was read on ${sched.due.lockDate}; the next lock is ${sched.open.lockDate}.`}>
+              {overdue ? "lock due now" : `next lock ${sched.open.lockDate} · ${sched.daysToLock}d`}
+            </span>
+          )}
           <span className="pill">NIQ through {data.dataEdge}</span>
           <span className="pill">Telus book {data.telusSnapshot}</span>
         </div>
@@ -113,9 +129,18 @@ export default function LeView({ data }: { data: LeData }) {
 
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">{plan ? "Plan of Record signed" : `Taken this month · ${data.month}`}</span></div>
-          <div className="k-val">{plan ? data.totals.signed : data.totals.taken} <span style={{ fontSize: 14, color: "var(--ink-3)" }}>of {data.totals.customers}</span></div>
-          <div className="k-sub flat">{plan ? `${data.totals.verified} of ${data.totals.customers} distribution verified` : `${data.totals.customers - data.totals.taken} still open`}</div>
+          <div className="k-top"><span className="k-label">{plan ? "Plan of Record signed" : `Locked · ${sched?.due.label ?? "cycle"}`}</span></div>
+          <div className="k-val" style={!plan && data.totals.taken < data.totals.customers ? { color: "var(--warn)" } : undefined}>
+            {plan ? data.totals.signed : data.totals.taken} <span style={{ fontSize: 14, color: "var(--ink-3)" }}>of {data.totals.customers}</span>
+          </div>
+          <div className="k-sub flat">
+            {plan ? `${data.totals.verified} of ${data.totals.customers} distribution verified`
+              : sched
+              ? (sched.daysToLock > 0
+                  ? `next lock ${sched.open.lockDate} · ${sched.daysToLock} day${sched.daysToLock === 1 ? "" : "s"}`
+                  : "next lock due now")
+              : `${data.totals.customers - data.totals.taken} still open`}
+          </div>
         </div>
         <div className="kpi">
           <div className="k-top"><span className="k-label">Portfolio full year — latest versions</span></div>
@@ -136,10 +161,10 @@ export default function LeView({ data }: { data: LeData }) {
 
       <div className="card" style={{ padding: 0 }}>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 9, alignItems: "center" }}>
-          <b>{plan ? `Customers — ${data.year} plan` : `Customers — ${data.month} LE`}</b>
+          <b>{plan ? `Customers — ${data.year} plan` : `Accounts — ${sched?.due.label ?? "LE"}`}</b>
           <input
             style={{ ...selStyle, flex: "1 1 260px", minWidth: 200, fontWeight: 500 }}
-            placeholder={plan ? "Sign-off note (optional) — applies to the versions you take from here" : "LE note (optional) — what moved and why; applies to the versions you take from here"}
+            placeholder={plan ? "Sign-off note (optional) — applies to the versions you take from here" : "Lock note (optional) — what moved and why; recorded on every account you lock from here"}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
@@ -149,15 +174,15 @@ export default function LeView({ data }: { data: LeData }) {
             className="btn primary"
             style={{ ...selStyle, cursor: bulk.length && canAct ? "pointer" : "default", opacity: bulk.length && canAct ? 1 : 0.5 }}
             disabled={!bulk.length || !canAct || busy !== null}
-            title={plan ? "Take the Plan of Record for every customer whose distribution is verified and who has no sign-off yet" : "Take this month's LE for every customer still open"}
+            title={plan ? "Take the Plan of Record for every customer whose distribution is verified and who has no sign-off yet" : `Lock ${sched?.due.label ?? "this cycle"} for every account not yet locked — the scheduled portfolio freeze`}
             onClick={() => {
               if (!window.confirm(plan
                 ? `Sign off the Plan of Record for ${bulk.length} customer${bulk.length === 1 ? "" : "s"} (verified, unsigned)? Versions are append-only.`
-                : `Take the ${data.month} LE for ${bulk.length} customer${bulk.length === 1 ? "" : "s"} still open? Versions are append-only.`)) return;
+                : `Lock ${sched?.due.label ?? "this cycle"} for ${bulk.length} account${bulk.length === 1 ? "" : "s"}? The forecast on record for ${sched?.due.lockDate ?? "the lock date"} freezes and cannot be edited afterwards.`)) return;
               void take(bulk);
             }}
           >
-            {busy === "ALL" ? "Taking…" : plan ? `Sign off ${bulk.length} verified & unsigned` : `Take LE for ${bulk.length} still open`}
+            {busy === "ALL" ? "Locking…" : plan ? `Sign off ${bulk.length} verified & unsigned` : `Lock ${sched?.due.label ?? "cycle"} · ${bulk.length} account${bulk.length === 1 ? "" : "s"}`}
           </button>
           {msg && <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>{msg}</span>}
         </div>
@@ -191,8 +216,14 @@ export default function LeView({ data }: { data: LeData }) {
                         <span className="pill" style={latest.kind === "por" ? { borderColor: "var(--good)", color: "var(--good)" } : undefined}>
                           v{latest.seq} · {latest.label}
                         </span>{" "}
-                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{latest.taken_at.slice(0, 10)}</span>
-                        {!plan && r.takenThisMonth && <span style={{ marginLeft: 6, color: "var(--good)", fontWeight: 800, fontSize: 12 }}>✓ this month</span>}
+                        <span style={{ fontSize: 12, color: "var(--ink-3)" }}
+                          title={latest.scheduled_lock
+                            ? `Forecast on record for the scheduled lock${latest.locked_late ? ` — run ${latest.taken_at.slice(0, 10)}, after the lock instant` : ""}`
+                            : `Taken ${latest.taken_at.slice(0, 10)}`}>
+                          {latest.scheduled_lock ? new Date(new Date(latest.scheduled_lock).getTime() - 86400000).toISOString().slice(0, 10) : latest.taken_at.slice(0, 10)}
+                          {latest.locked_late ? " ·  late" : ""}
+                        </span>
+                        {!plan && r.lockedForDue && <span style={{ marginLeft: 6, color: "var(--good)", fontWeight: 800, fontSize: 12 }}>✓ locked</span>}
                       </>) : (
                         <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>{plan ? "not signed off" : "no LE yet"}</span>
                       )}
@@ -214,12 +245,12 @@ export default function LeView({ data }: { data: LeData }) {
                     <td style={td}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
                         <button
-                          className={"btn" + (latest && !moved && (plan || r.takenThisMonth) ? "" : " primary")}
+                          className={"btn" + (latest && !moved && (plan || r.lockedForDue) ? "" : " primary")}
                           style={{ ...selStyle, padding: "6px 10px", cursor: canAct ? "pointer" : "default", opacity: canAct ? 1 : 0.5 }}
                           disabled={!canAct || busy !== null}
                           title={plan
                             ? (r.hasVersions ? `Freeze the current ${data.year} plan base as the next LE version` : `Freeze the current ${data.year} plan base as v1 — the Plan of Record`)
-                            : `Freeze the current FY${data.year} forecast (actuals to date + forecast to go) as ${r.hasVersions ? "the next LE version" : "the baseline LE"}`}
+                            : `Lock this account's FY${data.year} forecast for ${sched?.due.label ?? "this cycle"} — every account locks on the same schedule, so do this only to catch one up`}
                           onClick={() => void take([r.code])}
                         >
                           {busy === r.code ? "Taking…" : actionLabel(r)}
@@ -243,8 +274,8 @@ export default function LeView({ data }: { data: LeData }) {
         <div className="note" style={{ margin: 0, padding: "10px 16px" }}>
           ◇ <b>Full year — latest</b> is the last frozen version&apos;s adjusted units (all own brands); <b>Working now</b> is the same
           construction computed live — {plan ? "the carried + projected plan base with distribution verification and adjustments" : "actuals through the NIQ edge plus the forecast to year-end with LE adjustments"}.
-          A Δ in color means the working number has moved more than 0.2% (or 5 units) since the last version — take the next one to
-          record it. Versions are never edited or deleted.
+          A Δ in color means the working forecast has moved more than 0.2% (or 5 units) since that account&apos;s last locked
+          version — that drift is what the next lock will capture. Versions are never edited or deleted.
         </div>
       </div>
 

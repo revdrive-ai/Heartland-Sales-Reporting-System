@@ -24,6 +24,7 @@ export default async function Page() {
 
   const lite = (v: PlanSnapshotVersion): VersionLite => ({
     id: v.id, seq: v.seq, kind: v.kind, label: v.label, taken_at: v.taken_at, note: v.note,
+    cycle: v.cycle, scheduled_lock: v.scheduled_lock, locked_late: v.locked_late,
     total: v.totals.adjusted, adjustments: v.adjustments.length, distver: v.distver,
   });
 
@@ -49,7 +50,8 @@ export default async function Page() {
       name: c.name,
       versions: c.versions.map(lite),
       live: live ? { total: live.totals.adjusted, adjustments: live.adjustments.length, distver: live.distver } : null,
-      takenThisMonth: c.takenThisMonth,
+      lockedForDue: c.lockedForDue,
+      lockedCycle: c.lockedCycle,
       signedOff: c.signedOff,
       hasVersions: c.versions.length > 0,
     };
@@ -57,6 +59,7 @@ export default async function Page() {
 
   const data: LeData = {
     kind: status.kind,
+    schedule: status.schedule,
     hint: mode.kind === "analyze" ? `Working on: Analyze — showing the in-flight FY${status.year} LE cycle. Switch to LE or Plan in the top bar to act here.` : null,
     year: status.year,
     month: status.month,

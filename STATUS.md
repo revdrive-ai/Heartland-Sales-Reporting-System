@@ -33,8 +33,8 @@ lives in the `hh-mode` cookie beside the customer scope (`lib/mode.ts`,
 selectors are gone, and a stale `?win=`/`?yr=` in a link can't override the
 sidebar. Card and button titles inherit the mode word. A **status strip**
 at the top of the page (LE and Plan modes) says where the mode year stands across
-every customer — LE: customers taken this month, NIQ edge, Telus book,
-adjustments in play; Plan: distribution verified, Plan of Record signed,
+every customer — LE: accounts locked for the due cycle, when the next lock
+falls, NIQ edge, adjustments in play; Plan: distribution verified, Plan of Record signed,
 adjustments, events — and links to the Latest Estimate view
 (`lib/server/modeStatus.ts`, one batched `app_state` read).
 
@@ -136,11 +136,11 @@ adjustments, events — and links to the Latest Estimate view
   step 5 and Deduction Center step 6.
 - **Item selector** narrows the whole review — KPIs, chart, month table and
   the LE comparison — to a single UPC.
-- **LE comparison** (`lib/server/leCompare.ts`): the frozen Latest Estimates
-  grouped into monthly **cycles**, so versions line up across customers that
-  take their LE on different days. For a cycle each customer contributes the
-  version standing at the end of that month, so a customer that skipped a
-  month carries the same number into both sides and nets to zero. Pick up to
+- **LE comparison** (`lib/server/leCompare.ts`): the locked Latest Estimates
+  by scheduled **cycle** (see the lock schedule below). For a cycle each
+  account contributes the version standing at that lock, so an account whose
+  lock didn't run that month carries the same number into both sides and
+  nets to zero. Pick up to
   three earlier cycles to read against the newest one: months down the rows,
   Δ per cycle across the columns (toggle to show each cycle's own values), a
   full-year row and a % line. Deltas print exact below 10K — two cycles a few
@@ -154,11 +154,21 @@ adjustments, events — and links to the Latest Estimate view
 
 ## Latest Estimate (LE) view — Planning Tools
 
+- **The lock schedule** (`lib/leSchedule.ts`): an LE is not taken per
+  customer whenever someone gets to it. Every account locks together, on a
+  fixed schedule — whatever the forecast says at the **end of the second
+  Friday** of a calendar month (midnight as that Friday turns into Saturday,
+  UTC) is that month's Latest Estimate, and it never moves again. Versions
+  carry the `cycle` they were locked for, their `scheduled_lock` instant and
+  a `locked_late` flag when the lock was run after that instant, so the
+  record says what it is. The view leads with the due cycle, how many
+  accounts are locked for it and when the next lock falls; the primary
+  action locks every account still open in one pass.
 - The LE-mode home: every customer's frozen versions side by side with the
   live working number (the same construction Base & Lift and the snapshot
   API use), Δ since the last version, adjustments, distribution rollup, and
-  the take-LE action per customer or in bulk ("Take LE for N still open"),
-  with a shared note. In Plan mode the same page is the **plan sign-off**:
+  the lock action for the whole portfolio ("Lock LE Sep 2026 · N accounts")
+  with a shared note, plus a per-account re-lock to catch one up. In Plan mode the same page is the **plan sign-off**:
   Plan of Record per customer, "Sign off N verified & unsigned" in bulk.
   A portfolio-by-month table sums the latest versions by brand against the
   previous versions and the live number. Read-only in Analyze mode.
