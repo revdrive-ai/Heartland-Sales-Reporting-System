@@ -19,7 +19,7 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
 
 ## Working mode — Analyze · LE · Plan
 
-One decision, made once in the top bar ("Working on"), decides which year
+One decision, made once in the sidebar ("Working on"), decides which year
 every workflow tab opens in: **Analyze** (measured history — rolling
 windows and prior total years), **LE — FY<data-edge year>** (the in-flight
 year: actuals + forecast to year-end, LE adjustments, monthly Latest
@@ -31,8 +31,8 @@ is held green — so the year is picked before the view. The preference
 lives in the `hh-mode` cookie beside the customer scope (`lib/mode.ts`,
 `lib/server/mode.ts`, `components/Sidebar.tsx`); the per-page year
 selectors are gone, and a stale `?win=`/`?yr=` in a link can't override the
-top bar. Card and button titles inherit the mode word. A **status strip**
-under the top bar (LE and Plan modes) says where the mode year stands across
+sidebar. Card and button titles inherit the mode word. A **status strip**
+at the top of the page (LE and Plan modes) says where the mode year stands across
 every customer — LE: customers taken this month, NIQ edge, Telus book,
 adjustments in play; Plan: distribution verified, Plan of Record signed,
 adjustments, events — and links to the Latest Estimate view
