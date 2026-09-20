@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LeCycle } from "@/lib/leSchedule";
+import type { LeCronRun } from "@/lib/server/leCron";
 
 /* Latest Estimate (LE) view — see app/le/page.tsx. */
 
@@ -26,6 +27,7 @@ export type LeRow = {
 export type LeData = {
   kind: "le" | "plan";
   schedule: { due: LeCycle; open: LeCycle; daysToLock: number } | null;
+  lastLockRun: LeCronRun | null;
   hint: string | null;
   year: number;
   month: string;
@@ -272,6 +274,18 @@ export default function LeView({ data }: { data: LeData }) {
           </table>
         </div>
         <div className="note" style={{ margin: 0, padding: "10px 16px" }}>
+          {!plan && (<>
+            ◇ The lock runs <b>automatically</b> just after midnight UTC each day and acts at the second-Friday
+            boundary, so a cycle closes without anyone pressing anything.{" "}
+            {data.lastLockRun
+              ? <>Last automated lock: <b>{data.lastLockRun.cycle}</b> on {data.lastLockRun.at.slice(0, 10)} —{" "}
+                {data.lastLockRun.locked.length} account{data.lastLockRun.locked.length === 1 ? "" : "s"} locked
+                {data.lastLockRun.failed.length > 0 && <span style={{ color: "var(--bad)", fontWeight: 700 }}>, {data.lastLockRun.failed.length} failed</span>}
+                {!data.lastLockRun.onTime && <span style={{ color: "var(--warn)", fontWeight: 700 }}> (late)</span>}.
+                The button above is the manual catch-up.</>
+              : <>No automated run has locked a cycle yet; the button above locks one by hand.</>}
+            <br />
+          </>)}
           ◇ <b>Full year — latest</b> is the last frozen version&apos;s adjusted units (all own brands); <b>Working now</b> is the same
           construction computed live — {plan ? "the carried + projected plan base with distribution verification and adjustments" : "actuals through the NIQ edge plus the forecast to year-end with LE adjustments"}.
           A Δ in color means the working forecast has moved more than 0.2% (or 5 units) since that account&apos;s last locked

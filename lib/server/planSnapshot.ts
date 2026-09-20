@@ -256,7 +256,9 @@ export async function takeSnapshot(mkt: string, year: number, note: string, cycl
     ...(cyc ? {
       cycle: cyc.key,
       scheduled_lock: cyc.lockAt,
-      locked_late: when > new Date(cyc.lockAt),
+      // the lock instant is midnight ending the second Friday, so a job that
+      // runs that same day is on time; a later day is genuinely late
+      locked_late: when.toISOString().slice(0, 10) > cyc.lockAt.slice(0, 10),
     } : {}),
     year: now.year,
     byBrand: now.byBrand,

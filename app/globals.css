@@ -184,7 +184,9 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .derive .step .d{font-size:11px;color:var(--ink-3);line-height:1.35}
 .derive .step .arrow{position:absolute;right:-9px;top:50%;transform:translateY(-50%);z-index:2;background:var(--surface);border:1px solid var(--line);width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;color:var(--ink-3)}
 
-.note{font-size:11.5px;color:var(--ink-3);margin-top:10px;display:flex;align-items:center;gap:7px}
+/* Notes are prose: a flex container would make every inline <b> and text
+   run its own flex item, which stacks a sentence into columns. */
+.note{font-size:11.5px;color:var(--ink-3);margin-top:10px;line-height:1.55}
 .callout{display:flex;gap:12px;align-items:flex-start;background:var(--accent-soft);border:1px solid transparent;border-radius:12px;padding:13px 15px;margin-bottom:16px}
 .callout .ci{font-size:18px}
 .callout .ct{font-size:12.5px;color:var(--ink);line-height:1.45}

@@ -154,6 +154,16 @@ adjustments, events — and links to the Latest Estimate view
 
 ## Latest Estimate (LE) view — Planning Tools
 
+- **The lock runs itself.** `vercel.json` schedules `/api/cron/le-lock`
+  daily at 00:05 UTC; the handler locks every account for the due cycle and
+  does nothing on the days no cycle is due, so the Saturday after a second
+  Friday closes the month on time and any later run is a self-healing
+  catch-up recorded as late. Locking is idempotent per account × cycle, so a
+  retry never writes a second version. The endpoint authenticates with
+  `CRON_SECRET` (Vercel sends it as a bearer token) and fails closed without
+  it, naming the missing variable in the 401 so a misconfigured deployment
+  is obvious in the cron log. The last run is kept at `lecron:<year>` and
+  reported in the LE view.
 - **The lock schedule** (`lib/leSchedule.ts`): an LE is not taken per
   customer whenever someone gets to it. Every account locks together, on a
   fixed schedule — whatever the forecast says at the **end of the second
@@ -223,3 +233,7 @@ until they're set, the tool falls back to per-browser storage there.
   unpriced-items CSV.
 - **Vercel deployment protection** — whether the deployed site sits behind
   SSO is still an open decision.
+- **`CRON_SECRET` must be set** in the Vercel project (any long random
+  string) for the scheduled LE lock to run; without it `/api/cron/le-lock`
+  refuses every call. Deployment protection, if enabled, must also allow
+  Vercel's own cron requests through to that path.

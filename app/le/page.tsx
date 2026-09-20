@@ -2,6 +2,7 @@ import { listItems } from "@/lib/repo";
 import { getMode } from "@/lib/server/mode";
 import { getModeStatus } from "@/lib/server/modeStatus";
 import { computePlanBase, type PlanSnapshotVersion } from "@/lib/server/planSnapshot";
+import { lastCronRun } from "@/lib/server/leCron";
 import LeView, { type LeData, type LeRow, type VersionLite } from "@/components/le/LeView";
 
 /* Latest Estimate (LE) — the home of the monthly LE cycle and, in Plan mode,
@@ -60,6 +61,7 @@ export default async function Page() {
   const data: LeData = {
     kind: status.kind,
     schedule: status.schedule,
+    lastLockRun: await lastCronRun(status.year),
     hint: mode.kind === "analyze" ? `Working on: Analyze — showing the in-flight FY${status.year} LE cycle. Switch to LE or Plan in the top bar to act here.` : null,
     year: status.year,
     month: status.month,
