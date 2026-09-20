@@ -71,7 +71,9 @@ adjustments, events — and links to the Latest Estimate view
   LE versions, append-only and diffable (Δ vs previous, Δ vs PoR). The
   header pill shows the latest version and turns amber when the working
   plan drifts from it; the versions doc (`plansnap:<customer>:<year>`) is
-  the audit trail the LE view will consume. The **in-flight (data-edge)
+  the audit trail the LE view consumes. Versions also freeze **per-item**
+  monthly units, which is what the Monthly Forecast Review's LE comparison
+  drills into. The **in-flight (data-edge)
   year** gets the same treatment on its Total-year view: every snapshot
   there is an LE (v1 is the baseline), and the adjustments card appears as
   **LE adjustments** — its levers move only the forecast-to-go weeks
@@ -132,6 +134,23 @@ adjustments, events — and links to the Latest Estimate view
   cut. Same construction as the dashboard FY mode and the Base & Lift
   Total-year view (shared `lib/server/fyForecast.ts`). Promo Analysis is now
   step 5 and Deduction Center step 6.
+- **Item selector** narrows the whole review — KPIs, chart, month table and
+  the LE comparison — to a single UPC.
+- **LE comparison** (`lib/server/leCompare.ts`): the frozen Latest Estimates
+  grouped into monthly **cycles**, so versions line up across customers that
+  take their LE on different days. For a cycle each customer contributes the
+  version standing at the end of that month, so a customer that skipped a
+  month carries the same number into both sides and nets to zero. Pick up to
+  three earlier cycles to read against the newest one: months down the rows,
+  Δ per cycle across the columns (toggle to show each cycle's own values), a
+  full-year row and a % line. Deltas print exact below 10K — two cycles a few
+  hundred units apart must not both read "29K".
+- **What moved it**: items ranked by absolute change between the newest cycle
+  and the primary comparison, with each item's Δ units, Δ % and its biggest
+  month. Item movers sum to the full-year Δ, because a snapshot's per-brand
+  monthly units are the sum of its per-item units (`byItem` on every version)
+  and an item's forecast is its own base × the brand's window lift — items
+  are an exact decomposition of the brand, not a separate model.
 
 ## Latest Estimate (LE) view — Planning Tools
 

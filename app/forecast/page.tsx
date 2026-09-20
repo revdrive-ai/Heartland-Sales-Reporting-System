@@ -1,7 +1,8 @@
 import { listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
-import { fyWeeklySeries } from "@/lib/server/fyForecast";
+import { fyWeeklyByItem } from "@/lib/server/fyForecast";
+import { getLeCompare } from "@/lib/server/leCompare";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import ForecastView, { type ForecastData } from "@/components/forecast/ForecastView";
 
@@ -27,7 +28,7 @@ function saturdaysOfYear(year: number): string[] {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ mkt?: string; brand?: string }>;
+  searchParams: Promise<{ mkt?: string; brand?: string; item?: string; cmp?: string }>;
 }) {
   const [allMarkets, items, gscope, mode] = await Promise.all([listMarkets(), listItems(), getScope(), getMode()]);
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
@@ -43,6 +44,7 @@ export default async function Page({
   const sp = await searchParams;
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt! : "ALL";
   const brand = ownBrands.includes(sp.brand ?? "") ? sp.brand! : "ALL";
+  const itemSel = sp.item && items.some((i) => i.upc === sp.item && i.is_own) ? sp.item : "ALL";
   const scopeMarkets = mkt === "ALL" ? markets.map((m) => m.code) : [mkt];
 
   const allWeeks = await listWeekEndings(scopeMarkets[0]);
@@ -56,25 +58,38 @@ export default async function Page({
   const brandTot = new Map<string, { fy: number; prior: number }>();
   const wkCounted = new Set<string>(); // count measured/total weeks once, not per div × brand
 
+  const itemName = new Map(items.map((i) => [i.upc, i.name]));
+  const itemVol = new Map<string, { upc: string; name: string; brand: string; fy: number }>();
   for (const code of scopeMarkets) {
     for (const b of ownBrands) {
       if (brand !== "ALL" && b !== brand) continue;
-      const series = await fyWeeklySeries(code, b, fyWeeks, allWeeks, latestWeek);
-      if (!series) continue;
+      const perItem = await fyWeeklyByItem(code, b, fyWeeks, allWeeks, latestWeek);
       let bFy = 0, bPrior = 0;
-      for (const s of series) {
-        const m = +s.w.slice(5, 7) - 1;
-        months[m].fy$ += s.ty$; months[m].fyU += s.tyU; months[m].prior$ += s.prior$;
-        bFy += s.ty$; bPrior += s.prior$;
-        if (!wkCounted.has(s.w)) {
-          wkCounted.add(s.w);
-          months[m].totalWks++;
-          if (s.measured) months[m].measuredWks++;
+      for (const [upc, series] of perItem) {
+        // the item picker offers every item with FY volume, whatever is selected
+        const tot = series.reduce((a, s) => a + s.ty$, 0);
+        if (tot > 0) {
+          const e = itemVol.get(upc) ?? { upc, name: itemName.get(upc) ?? upc, brand: b, fy: 0 };
+          e.fy += tot;
+          itemVol.set(upc, e);
+        }
+        if (itemSel !== "ALL" && upc !== itemSel) continue;
+        for (const s of series) {
+          const m = +s.w.slice(5, 7) - 1;
+          months[m].fy$ += s.ty$; months[m].fyU += s.tyU; months[m].prior$ += s.prior$;
+          bFy += s.ty$; bPrior += s.prior$;
+          if (!wkCounted.has(s.w)) {
+            wkCounted.add(s.w);
+            months[m].totalWks++;
+            if (s.measured) months[m].measuredWks++;
+          }
         }
       }
-      const bt = brandTot.get(b) ?? { fy: 0, prior: 0 };
-      bt.fy += bFy; bt.prior += bPrior;
-      brandTot.set(b, bt);
+      if (bFy || bPrior) {
+        const bt = brandTot.get(b) ?? { fy: 0, prior: 0 };
+        bt.fy += bFy; bt.prior += bPrior;
+        brandTot.set(b, bt);
+      }
     }
   }
 
@@ -92,10 +107,25 @@ export default async function Page({
   const measured$ = months.reduce((a, m, i) => a + (rows[i].status === "actual" ? m.fy$ : 0), 0)
     + months.reduce((a, m, i) => (rows[i].status === "partial" ? a + m.fy$ * (m.measuredWks / Math.max(m.totalWks, 1)) : a), 0);
 
+  /* LE comparison: the frozen Latest Estimates for the customers in scope,
+     grouped into monthly cycles. Defaults to the three cycles before the
+     newest one; ?cmp=2026-08,2026-07 overrides. */
+  const cmpWanted = (sp.cmp ?? "").split(",").map((k) => k.trim()).filter(Boolean);
+  const leAll = await getLeCompare(scopeMarkets, fyYear, cmpWanted, brand, itemSel).catch(() => null);
+  let le = leAll;
+  if (leAll && cmpWanted.length === 0) {
+    const auto = leAll.cycles.filter((c) => c.key !== leAll.latest.key).slice(0, 3).map((c) => c.key);
+    le = auto.length ? await getLeCompare(scopeMarkets, fyYear, auto, brand, itemSel).catch(() => leAll) : leAll;
+  }
+
   const data: ForecastData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
     ownBrands,
     mkt, brand,
+    item: itemSel,
+    itemName: itemSel === "ALL" ? null : itemName.get(itemSel) ?? itemSel,
+    items: [...itemVol.values()].sort((a, b) => b.fy - a.fy).map(({ upc, name, brand: b }) => ({ upc, name, brand: b })),
+    le,
     fyYear, priorYear: fyYear - 1,
     latestWeek,
     rows,

@@ -1,6 +1,6 @@
 import { getWeeklyFacts, listItems, listWeekEndings } from "@/lib/repo";
 import { getState, setState } from "@/lib/server/appstate";
-import { fyWeeklySeries } from "@/lib/server/fyForecast";
+import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import type { DistAddition, DistVerification, PlanAdjustment } from "@/lib/repo/client";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
@@ -34,6 +34,10 @@ export type PlanBaseNow = {
   year: number;
   computed_at: string;
   byBrand: Record<string, { base: number[]; adjusted: number[] }>; // monthly units
+  /** the same monthly units per ITEM — what the LE comparison drills into to
+      say which items moved. Each brand total is the sum of its items, so the
+      drill-down always reconciles with the headline. */
+  byItem: Record<string, { brand: string; name: string; adjusted: number[] }>;
   totals: { base: number; adjusted: number };
   adjustments: PlanAdjustment[];
   distver: { out: number; added: number; verifiedAt: string | null };
@@ -62,14 +66,22 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
      than the pre-promo plan base a forward year signs off on. */
   if (year === +latest.slice(0, 4)) {
     const byBrand: PlanBaseNow["byBrand"] = {};
+    const byItem: PlanBaseNow["byItem"] = {};
+    const itemName = new Map(items.map((i) => [i.upc, i.name]));
     let tot = 0;
     const dvRawIY = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
     for (const brand of ownBrands) {
-      const series = await fyWeeklySeries(mkt, brand, weeks, allWeeks, latest);
-      if (!series) continue;
-      const m = Array(12).fill(0);
-      for (const s of series) m[+s.w.slice(5, 7) - 1] += s.tyU;
-      const monthly = m.map(Math.round);
+      const perItem = await fyWeeklyByItem(mkt, brand, weeks, allWeeks, latest);
+      if (!perItem.size) continue;
+      const bm = Array(12).fill(0);
+      for (const [upc, series] of perItem) {
+        const m = Array(12).fill(0);
+        for (const s of series) m[+s.w.slice(5, 7) - 1] += s.tyU;
+        if (m.every((v) => v <= 0)) continue;
+        byItem[upc] = { brand, name: itemName.get(upc) ?? upc, adjusted: m.map(Math.round) };
+        m.forEach((v, i) => { bm[i] += v; });
+      }
+      const monthly = bm.map(Math.round);
       byBrand[brand] = { base: monthly, adjusted: monthly }; // one number in-year: expected total
       tot += monthly.reduce((a: number, x: number) => a + x, 0);
     }
@@ -78,6 +90,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
       year,
       computed_at: new Date().toISOString(),
       byBrand,
+      byItem,
       totals: { base: Math.round(tot), adjusted: Math.round(tot) },
       adjustments: adjsIY, // LE adjustments — applied to the forecast weeks inside fyWeeklySeries
       distver: {
@@ -88,41 +101,41 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
     };
   }
 
+  /* A forward plan year: the pre-promo plan base, built PER ITEM so the LE
+     comparison can say which items moved. Each item carries its year-ago
+     weekly base forward (engine-shaped run rate where the source week was
+     never measured); items the distribution verification took out carry
+     nothing, verified additions ride their proxy's shape plus the load-in,
+     and the plan adjustments multiply the weeks they cover — in full on the
+     item they name, so an item-level lever is exact rather than weighted.
+     Each brand total is the sum of its items. */
   const dvRaw = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
   const out = new Set(Object.entries(dvRaw?.decisions ?? {}).filter(([, d]) => d === "out").map(([u]) => u));
   const additions: DistAddition[] = dvRaw?.additions ?? [];
   const adjs = ((await getState(`adj:${mkt}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined) ?? [];
+  const itemName = new Map(items.map((i) => [i.upc, i.name]));
 
   const byBrand: PlanBaseNow["byBrand"] = {};
+  const byItem: PlanBaseNow["byItem"] = {};
   let totBase = 0, totAdj = 0;
 
   for (const brand of ownBrands) {
     const facts = await getWeeklyFacts({ market_code: mkt, brand });
     if (!facts.length) continue;
     const adds = additions.filter((a) => a.brand === brand);
+    const brandAdjs = adjs.filter((a) => a.brand === brand);
 
-    const mB = new Map<string, number>();   // weekly base units, all items
-    const mBx = new Map<string, number>();  // …the excluded items' slice
-    const mProxy = new Map<string, Map<string, number>>();
-    const shareTot = new Map<string, number>();
-    let shareSum = 0;
-    const last52Set = new Set(last52);
+    // weekly base per item, and the brand's own history for the engine
+    const mI = new Map<string, Map<string, number>>();
+    const mB = new Map<string, number>();
     for (const r of facts) {
       const v = r.base_units ?? r.units ?? 0;
+      const im = mI.get(r.upc) ?? mI.set(r.upc, new Map()).get(r.upc)!;
+      im.set(r.week_ending, (im.get(r.week_ending) ?? 0) + v);
       mB.set(r.week_ending, (mB.get(r.week_ending) ?? 0) + v);
-      if (out.has(r.upc)) mBx.set(r.week_ending, (mBx.get(r.week_ending) ?? 0) + v);
-      if (adds.some((a) => a.proxy_upc === r.upc)) {
-        const pm = mProxy.get(r.upc) ?? mProxy.set(r.upc, new Map()).get(r.upc)!;
-        pm.set(r.week_ending, (pm.get(r.week_ending) ?? 0) + v);
-      }
-      if (last52Set.has(r.week_ending) && v > 0) {
-        shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
-        shareSum += v;
-      }
     }
-    const share = (u: string) => (shareSum > 0 ? (shareTot.get(u) ?? 0) / shareSum : 0);
 
-    // monthly seasonality index over full history + latest-52 run rates
+    // monthly seasonality index over the brand's full history
     const monthTot = Array(12).fill(0), monthN = Array(12).fill(0);
     let gTot = 0, gN = 0;
     for (const [w, v] of mB) {
@@ -132,41 +145,71 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
     const grand = gN > 0 ? gTot / gN : 0;
     const eng = monthTot.map((t, i) => (monthN[i] > 0 && grand > 0 ? t / monthN[i] / grand : 1));
     const avg = (m: Map<string, number>) => last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1);
-    const avg52 = avg(mB), exclAvg52 = avg(mBx);
-    const proxyAvg = new Map([...mProxy].map(([u, m]) => [u, avg(m)]));
 
-    const brandAdjs = adjs.filter((a) => a.brand === brand);
-    const base = Array(12).fill(0), adjusted = Array(12).fill(0);
-    for (const w of weeks) {
-      const mo = +w.slice(5, 7) - 1;
-      const src = yearAgoWeek(w);
-      let v = src <= latest ? (mB.get(src) ?? 0) - (mBx.get(src) ?? 0) : Math.max(0, avg52 - exclAvg52) * eng[mo];
-      for (const a of adds) {
-        if (w >= a.first_week) v += (proxyAvg.get(a.proxy_upc) ?? 0) * (a.proxy_pct / 100) * eng[mo];
-        if (a.loadin_units > 0 && w >= a.loadin_date && utcOf(w) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
-          v += a.loadin_units;
-        }
-      }
-      v = Math.max(0, v);
-      // adjustment multiplier — the same rule the Base & Lift chart applies
+    const adjFactor = (upc: string, wISO: string) => {
+      const wt = utcOf(wISO);
       let f = 1;
-      const wt = utcOf(w);
       for (const a of brandAdjs) {
         if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
-        f *= 1 + (a.pct / 100) * (a.upc === "ALL" ? 1 : share(a.upc));
+        if (a.upc === "ALL" || a.upc === upc) f *= 1 + a.pct / 100;
       }
-      base[mo] += v;
-      adjusted[mo] += v * f;
+      return f;
+    };
+    /** one item's carried weekly base, before adjustments */
+    const rawOf = (im: Map<string, number>) => {
+      const a52 = avg(im);
+      return weeks.map((w) => {
+        const src = yearAgoWeek(w);
+        return Math.max(0, src <= latest ? (im.get(src) ?? 0) : a52 * eng[+w.slice(5, 7) - 1]);
+      });
+    };
+
+    const bBase = Array(12).fill(0), bAdj = Array(12).fill(0);
+    const addItem = (upc: string, weekly: number[]) => {
+      const base = Array(12).fill(0), adjusted = Array(12).fill(0);
+      weekly.forEach((v, i) => {
+        const mo = +weeks[i].slice(5, 7) - 1;
+        base[mo] += v;
+        adjusted[mo] += v * adjFactor(upc, weeks[i]);
+      });
+      if (adjusted.every((v) => v <= 0)) return;
+      const prev = byItem[upc];
+      byItem[upc] = {
+        brand,
+        name: itemName.get(upc) ?? upc,
+        adjusted: adjusted.map((v, i) => Math.round(v + (prev?.adjusted[i] ?? 0))),
+      };
+      base.forEach((v, i) => { bBase[i] += v; });
+      adjusted.forEach((v, i) => { bAdj[i] += v; });
+    };
+
+    for (const [upc, im] of mI) {
+      if (out.has(upc)) continue; // no volume in the plan year
+      addItem(upc, rawOf(im));
     }
-    byBrand[brand] = { base: base.map(Math.round), adjusted: adjusted.map(Math.round) };
-    totBase += base.reduce((a: number, x: number) => a + x, 0);
-    totAdj += adjusted.reduce((a: number, x: number) => a + x, 0);
+    for (const a of adds) {
+      const pim = mI.get(a.proxy_upc);
+      if (!pim) continue;
+      const proxy = rawOf(pim);
+      addItem(a.upc, weeks.map((w, i) => {
+        let v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
+        if (a.loadin_units > 0 && w >= a.loadin_date && utcOf(w) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+          v += a.loadin_units; // one-time pipeline fill in this week
+        }
+        return v;
+      }));
+    }
+
+    byBrand[brand] = { base: bBase.map(Math.round), adjusted: bAdj.map(Math.round) };
+    totBase += bBase.reduce((a: number, x: number) => a + x, 0);
+    totAdj += bAdj.reduce((a: number, x: number) => a + x, 0);
   }
 
   return {
     year,
     computed_at: new Date().toISOString(),
     byBrand,
+    byItem,
     totals: { base: Math.round(totBase), adjusted: Math.round(totAdj) },
     adjustments: adjs,
     distver: { out: out.size, added: additions.length, verifiedAt: dvRaw?.verified_at ?? null },
@@ -203,6 +246,7 @@ export async function takeSnapshot(mkt: string, year: number, note: string): Pro
     note,
     year: now.year,
     byBrand: now.byBrand,
+    byItem: now.byItem,
     totals: now.totals,
     adjustments: now.adjustments,
     distver: now.distver,

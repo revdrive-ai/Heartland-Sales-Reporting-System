@@ -1,6 +1,7 @@
 import { getPromoOverlays, getWeeklyFacts } from "@/lib/repo";
 import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getState } from "@/lib/server/appstate";
+import type { NielsenWeeklyRow } from "@/lib/types/db";
 import type { PlanAdjustment } from "@/lib/repo/client";
 
 /* The FY forecast construction, shared by the Sales Dashboard's FY mode and
@@ -38,32 +39,86 @@ export type FyWeek = {
   priorU: number;
 };
 
-/** The FY weekly series for one division × brand (optionally one item);
-    null when no facts exist. */
-export async function fyWeeklySeries(
-  code: string,
-  brand: string,
+/* The whole construction for ONE set of fact rows — a brand, or one item's
+   slice of it. The seasonality shape and each window's expected lift are the
+   BRAND's (Telus windows are brand-level, and a small item's own lift read is
+   noise), while the base, the actuals and the run rate are the rows' own. An
+   item is therefore an exact decomposition of its brand: the same multiplier
+   applied to a partition of the same base, so items always sum to the brand. */
+function buildSeries(
+  rows: NielsenWeeklyRow[],
+  ctx: BrandCtx,
   fyWeeks: string[],
   allWeeks: string[],
   latestWeek: string,
-  upc?: string
-): Promise<FyWeek[] | null> {
-  let facts = await getWeeklyFacts({ market_code: code, brand });
-  if (upc) facts = facts.filter((r) => r.upc === upc);
-  if (!facts.length) return null;
-
+  upc: string | undefined
+): FyWeek[] {
   const wA$ = new Map<string, number>(), wAU = new Map<string, number>();
   const wB$ = new Map<string, number>(), wBU = new Map<string, number>();
-  const wAcv = new Map<string, number>();
-  for (const r of facts) {
+  for (const r of rows) {
     wA$.set(r.week_ending, (wA$.get(r.week_ending) ?? 0) + (r.dollars ?? 0));
     wAU.set(r.week_ending, (wAU.get(r.week_ending) ?? 0) + (r.units ?? 0));
     wB$.set(r.week_ending, (wB$.get(r.week_ending) ?? 0) + (r.base_dollars ?? r.dollars ?? 0));
     wBU.set(r.week_ending, (wBU.get(r.week_ending) ?? 0) + (r.base_units ?? r.units ?? 0));
+  }
+  const last52 = allWeeks.slice(-52);
+  const avg52$ = last52.reduce((a, w) => a + (wB$.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+  const avg52U = last52.reduce((a, w) => a + (wBU.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+
+  return fyWeeks.map((w) => {
+    const src = yearAgoWeek(w);
+    const measured = w <= latestWeek;
+    let ty$: number, tyU: number;
+    if (measured) {
+      ty$ = wA$.get(w) ?? 0; tyU = wAU.get(w) ?? 0;
+    } else {
+      const m = +w.slice(5, 7) - 1;
+      const base$ = src <= latestWeek ? (wB$.get(src) ?? 0) : avg52$ * ctx.engine[m];
+      const baseU = src <= latestWeek ? (wBU.get(src) ?? 0) : avg52U * ctx.engine[m];
+      const wt = utcOf(w);
+      let lift = 0;
+      for (const o of ctx.lifts) if (o.s <= wt && o.e >= wt - 6 * DAY) lift = Math.max(lift, o.lift);
+      /* LE adjustments on the forecast weeks: applied in full on the item
+         they name, and item rows weighted by the item's share of the brand
+         base only when the series is the whole brand. */
+      let f = 1;
+      for (const a of ctx.brandAdjs) {
+        if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
+        f *= 1 + (a.pct / 100) * (a.upc === "ALL" ? 1 : upc ? (a.upc === upc ? 1 : 0) : ctx.share(a.upc));
+      }
+      ty$ = base$ * (1 + lift) * f; tyU = baseU * (1 + lift) * f;
+    }
+    return { w, measured, ty$, tyU, prior$: wA$.get(src) ?? 0, priorU: wAU.get(src) ?? 0 };
+  });
+}
+
+type BrandCtx = {
+  engine: number[];
+  lifts: { s: number; e: number; lift: number }[];
+  brandAdjs: PlanAdjustment[];
+  share: (u: string) => number;
+};
+
+/** The seasonality shape, each Telus window's expected lift, the LE
+    adjustments and the item base shares for a division × brand — the context
+    every series under that brand shares. */
+async function brandContext(code: string, brand: string, facts: NielsenWeeklyRow[], allWeeks: string[], fyYear: number): Promise<BrandCtx> {
+  const wAU = new Map<string, number>(), wBU = new Map<string, number>(), wAcv = new Map<string, number>();
+  const shareTot = new Map<string, number>();
+  const last52Set = new Set(allWeeks.slice(-52));
+  let shareSum = 0;
+  for (const r of facts) {
+    const b = r.base_units ?? r.units ?? 0;
+    wAU.set(r.week_ending, (wAU.get(r.week_ending) ?? 0) + (r.units ?? 0));
+    wBU.set(r.week_ending, (wBU.get(r.week_ending) ?? 0) + b);
     wAcv.set(r.week_ending, Math.max(wAcv.get(r.week_ending) ?? 0, r.acv_any_promo ?? 0));
+    if (last52Set.has(r.week_ending) && b > 0) {
+      shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + b);
+      shareSum += b;
+    }
   }
 
-  // seasonality engine + latest-52 run rate, for source weeks never measured
+  // seasonality engine, for source weeks never measured
   const monthTot = Array(12).fill(0), monthN = Array(12).fill(0);
   let grandSum = 0;
   for (const [w, v] of wBU) {
@@ -71,9 +126,6 @@ export async function fyWeeklySeries(
   }
   const grandAvg = grandSum / Math.max(wBU.size, 1);
   const engine = monthTot.map((t, m) => (monthN[m] > 0 && grandAvg > 0 ? t / monthN[m] / grandAvg : 1));
-  const last52 = allWeeks.slice(-52);
-  const avg52$ = last52.reduce((a, w) => a + (wB$.get(w) ?? 0), 0) / Math.max(last52.length, 1);
-  const avg52U = last52.reduce((a, w) => a + (wBU.get(w) ?? 0), 0) / Math.max(last52.length, 1);
 
   // expected lift per Telus window — year-ago actual vs base over the shifted
   // window (units), promoted-week average as the fallback
@@ -91,52 +143,53 @@ export async function fyWeeklySeries(
     }
     return bb > 0 ? (a - bb) / bb : null;
   };
-  const windows = (await getPromoOverlays({ market_code: code, brand }))
+  const lifts = (await getPromoOverlays({ market_code: code, brand }))
     .filter((o) => !isNonPerformance(o.performance_type))
     .map((o) => ({
       s: utcOf(o.start_date), e: utcOf(o.end_date),
       lift: liftOver(yearAgoWeek(o.start_date), yearAgoWeek(o.end_date)) ?? fallbackLift,
     }));
 
-  /* LE adjustments on the forecast weeks — the same multiplier rule the plan
-     view applies: item rows weighted by the item's share of the brand base
-     (latest 52 measured weeks). Measured weeks never move. */
-  const fyYear = +fyWeeks[0].slice(0, 4);
   const brandAdjs = (await adjustmentsFor(code, fyYear)).filter((a) => a.brand === brand);
-  const shareTot = new Map<string, number>();
-  let shareSum = 0;
-  if (brandAdjs.some((a) => a.upc !== "ALL")) {
-    const last52Set = new Set(allWeeks.slice(-52));
-    for (const r of facts) {
-      const v = r.base_units ?? r.units ?? 0;
-      if (last52Set.has(r.week_ending) && v > 0) {
-        shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
-        shareSum += v;
-      }
-    }
-  }
   const share = (u: string) => (shareSum > 0 ? (shareTot.get(u) ?? 0) / shareSum : 0);
+  return { engine, lifts, brandAdjs, share };
+}
 
-  return fyWeeks.map((w) => {
-    const src = yearAgoWeek(w);
-    const measured = w <= latestWeek;
-    let ty$: number, tyU: number;
-    if (measured) {
-      ty$ = wA$.get(w) ?? 0; tyU = wAU.get(w) ?? 0;
-    } else {
-      const m = +w.slice(5, 7) - 1;
-      const base$ = src <= latestWeek ? (wB$.get(src) ?? 0) : avg52$ * engine[m];
-      const baseU = src <= latestWeek ? (wBU.get(src) ?? 0) : avg52U * engine[m];
-      const wt = utcOf(w);
-      let lift = 0;
-      for (const o of windows) if (o.s <= wt && o.e >= wt - 6 * DAY) lift = Math.max(lift, o.lift);
-      let f = 1;
-      for (const a of brandAdjs) {
-        if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
-        f *= 1 + (a.pct / 100) * (a.upc === "ALL" ? 1 : upc ? (a.upc === upc ? 1 : 0) : share(a.upc));
-      }
-      ty$ = base$ * (1 + lift) * f; tyU = baseU * (1 + lift) * f;
-    }
-    return { w, measured, ty$, tyU, prior$: wA$.get(src) ?? 0, priorU: wAU.get(src) ?? 0 };
-  });
+/** The FY weekly series for one division × brand (optionally one item);
+    null when no facts exist. */
+export async function fyWeeklySeries(
+  code: string,
+  brand: string,
+  fyWeeks: string[],
+  allWeeks: string[],
+  latestWeek: string,
+  upc?: string
+): Promise<FyWeek[] | null> {
+  const all = await getWeeklyFacts({ market_code: code, brand });
+  const facts = upc ? all.filter((r) => r.upc === upc) : all;
+  if (!facts.length) return null;
+  const ctx = await brandContext(code, brand, all, allWeeks, +fyWeeks[0].slice(0, 4));
+  return buildSeries(facts, ctx, fyWeeks, allWeeks, latestWeek, upc);
+}
+
+/** The same series for every item under a division × brand, in one pass.
+    Summing these gives the brand series exactly — the Monthly Forecast
+    Review, the LE snapshots and their item drill-downs all rest on that. */
+export async function fyWeeklyByItem(
+  code: string,
+  brand: string,
+  fyWeeks: string[],
+  allWeeks: string[],
+  latestWeek: string
+): Promise<Map<string, FyWeek[]>> {
+  const out = new Map<string, FyWeek[]>();
+  const all = await getWeeklyFacts({ market_code: code, brand });
+  if (!all.length) return out;
+  const ctx = await brandContext(code, brand, all, allWeeks, +fyWeeks[0].slice(0, 4));
+  const byUpc = new Map<string, NielsenWeeklyRow[]>();
+  for (const r of all) (byUpc.get(r.upc) ?? byUpc.set(r.upc, []).get(r.upc)!).push(r);
+  for (const [upc, rows] of byUpc) {
+    out.set(upc, buildSeries(rows, ctx, fyWeeks, allWeeks, latestWeek, upc));
+  }
+  return out;
 }

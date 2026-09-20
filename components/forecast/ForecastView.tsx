@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { ModeKind } from "@/lib/mode";
 import { useRouter } from "next/navigation";
 import { Bar } from "react-chartjs-2";
@@ -10,11 +10,18 @@ import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/char
    actuals, with each month labeled actual / landing / forecast. Same numbers
    as the Sales Dashboard FY mode, at monthly review altitude. */
 
+import type { LeCompare } from "@/lib/server/leCompare";
+
 export type ForecastData = {
   markets: { code: string; name: string }[];
   ownBrands: string[];
   mkt: string;
   brand: string;
+  item: string;                 // "ALL" or a UPC — narrows the whole review
+  itemName: string | null;
+  items: { upc: string; name: string; brand: string }[];
+  /** frozen Latest Estimates for the customers in scope, by monthly cycle */
+  le: LeCompare | null;
   fyYear: number;
   priorYear: number;
   latestWeek: string;
@@ -40,6 +47,17 @@ const selStyle: React.CSSProperties = {
 const fmtUnits = (v: number) =>
   Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" : Math.abs(v) >= 1e3 ? Math.round(v / 1e3).toLocaleString() + "K" : String(Math.round(v));
 
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const tdc: React.CSSProperties = { padding: "8px 13px", whiteSpace: "nowrap" };
+const tdn: React.CSSProperties = { ...tdc, textAlign: "right", fontVariantNumeric: "tabular-nums" };
+const deltaColor = (d: number) => (Math.abs(d) < 1 ? "var(--ink-3)" : d > 0 ? "var(--good)" : "var(--bad)");
+/* A change of 3,501 units reading "+4K" hides exactly what an LE review is
+   looking at, so the comparison keeps a decimal place: two cycles a few
+   hundred units apart must not both print as "29K". */
+const fmtLE = (v: number) =>
+  v >= 1e6 ? (v / 1e6).toFixed(2) + "M" : v >= 1e4 ? (v / 1e3).toFixed(1) + "K" : Math.round(v).toLocaleString();
+const fmtDelta = (d: number) => (Math.abs(d) < 1 ? "—" : `${d > 0 ? "+" : "−"}${fmtLE(Math.abs(d))}`);
+
 const STATUS: Record<string, { label: string; bg: string; fg: string; title: string }> = {
   actual: { label: "actual", bg: "var(--good-soft, rgba(22,163,74,.12))", fg: "var(--good)", title: "Every NIQ week of this month is measured" },
   partial: { label: "landing", bg: "var(--warn-soft, rgba(217,119,6,.12))", fg: "var(--warn)", title: "Some weeks measured, the rest forecast — firms up as NIQ weeks land" },
@@ -49,12 +67,24 @@ const STATUS: Record<string, { label: string; bg: string; fg: string; title: str
 export default function ForecastView({ data, mode, planYear }: { data: ForecastData; mode: ModeKind; planYear: number }) {
   const tick = useThemeTick();
   const router = useRouter();
-  const nav = (patch: Partial<Record<"mkt" | "brand", string>>) => {
-    const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, ...patch });
+  const nav = (patch: Partial<Record<"mkt" | "brand" | "item" | "cmp", string>>) => {
+    const p = new URLSearchParams({
+      mkt: data.mkt, brand: data.brand, item: data.item,
+      cmp: (data.le?.comparisons ?? []).map((c) => c.key).join(","),
+      ...patch,
+    });
     router.push(`/forecast?${p.toString()}`);
   };
+  /** replace one comparison slot; "" clears it */
+  const setCmp = (slot: number, key: string) => {
+    const keys = (data.le?.comparisons ?? []).map((c) => c.key);
+    keys[slot] = key;
+    nav({ cmp: keys.filter(Boolean).join(",") });
+  };
+  const [showValues, setShowValues] = useState(false);
+  const le = data.le;
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
-  const brandName = data.brand === "ALL" ? "all own brands" : data.brand;
+  const brandName = data.itemName ?? (data.brand === "ALL" ? "all own brands" : data.brand);
   const pct = (cur: number, ly: number) => (ly > 0 ? ((cur - ly) / ly) * 100 : null);
   const yoy = pct(data.totals.fy, data.totals.prior);
   const toGo = data.totals.fy - data.totals.measuredApprox;
@@ -89,9 +119,26 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
         <select style={selStyle} value={data.mkt} onChange={(e) => nav({ mkt: e.target.value })}>
           {data.markets.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
         </select>
-        <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value })}>
+        <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value, item: "ALL" })}>
           <option value="ALL">All own brands</option>
           {data.ownBrands.map((b) => <option key={b}>{b}</option>)}
+        </select>
+        <select
+          style={{ ...selStyle, maxWidth: 340 }}
+          value={data.item}
+          onChange={(e) => nav({ item: e.target.value })}
+          title="Narrow the whole review to a single item — every month, the chart and the LE comparison follow"
+        >
+          <option value="ALL">
+            {data.brand === "ALL" ? "All items" : `All ${data.brand} items`} ({data.items.length})
+          </option>
+          {[...new Set(data.items.map((i) => i.brand))].map((b) => (
+            <optgroup key={b} label={b}>
+              {data.items.filter((i) => i.brand === b).map((i) => (
+                <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
+              ))}
+            </optgroup>
+          ))}
         </select>
       </div>
 
@@ -218,6 +265,195 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
           lift). Each month firms up as its NIQ weeks land.
         </div>
       </div>
+
+
+      {/* ---- LE comparison: what moved between Latest Estimate cycles ---- */}
+      <div className="card" style={{ padding: 0, marginBottom: 16 }}>
+        <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <b>LE comparison{le ? ` — ${le.latest.label}` : ""}</b>
+          <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
+            {brandName} · {scopeName} · units
+          </span>
+          {le && le.comparisons.length > 0 && (
+            <button
+              className="btn"
+              style={{ ...selStyle, marginLeft: "auto", cursor: "pointer", padding: "5px 10px" }}
+              onClick={() => setShowValues((v) => !v)}
+              title={showValues ? "Show only the change against each earlier LE" : "Show each earlier LE's own monthly numbers beside the change"}
+            >
+              {showValues ? "Δ only" : "Show LE values"}
+            </button>
+          )}
+        </div>
+
+        {!le ? (
+          <div className="note" style={{ margin: 0, padding: "16px" }}>
+            ◇ No Latest Estimates have been frozen for FY{data.fyYear} yet, so there is nothing to compare. Take the
+            month&apos;s LE in the <b>Latest Estimate</b> view (Planning Tools) — each customer&apos;s version freezes that
+            month&apos;s forecast by month and by item, and this table then shows what moved between any two cycles.
+          </div>
+        ) : (<>
+          <div style={{ padding: "11px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-3)" }}>Compare {le.latest.label} against</span>
+            {[0, 1, 2].map((slot) => (
+              <select
+                key={slot}
+                style={{ ...selStyle, padding: "6px 9px" }}
+                value={le.comparisons[slot]?.key ?? ""}
+                onChange={(e) => setCmp(slot, e.target.value)}
+                title="An earlier LE cycle — each customer contributes the version it had standing at the end of that month"
+              >
+                <option value="">— none —</option>
+                {le.cycles.filter((c) => c.key !== le.latest.key).map((c) => (
+                  <option key={c.key} value={c.key}>{c.label} · {c.takenInCycle} taken</option>
+                ))}
+              </select>
+            ))}
+            <span className="pill" title={`${le.cycles[0].ofRecord} customers have an LE standing in the newest cycle`}>
+              {le.latest.label} · {le.cycles[0].ofRecord} customers
+            </span>
+          </div>
+
+          {le.comparisons.length === 0 ? (
+            <div className="note" style={{ margin: 0, padding: "16px" }}>
+              ◇ Only one LE cycle on record ({le.latest.label}). Pick an earlier cycle above once a second month has been
+              taken — the table then reads month by month, and the movers below name the items behind each change.
+            </div>
+          ) : (<>
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th style={{ textAlign: "right" }}>{le.latest.label}</th>
+                  {le.comparisons.map((c) => (
+                    <Fragment key={c.key}>
+                      {showValues && <th style={{ textAlign: "right" }}>{c.label}</th>}
+                      <th style={{ textAlign: "right" }} title={`Change from ${c.label} to ${le.latest.label}`}>Δ vs {c.label.replace("LE ", "")}</th>
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {MONTH_NAMES.map((mn, i) => {
+                  const cur = le.latest.months[i];
+                  const moved = le.comparisons.some((c) => Math.abs(cur - c.months[i]) >= 1);
+                  return (
+                    <tr key={mn} style={moved ? undefined : { color: "var(--ink-3)" }}>
+                      <td style={tdc}>{mn}</td>
+                      <td style={{ ...tdn, fontWeight: 700 }}>{cur ? fmtLE(cur) : "—"}</td>
+                      {le.comparisons.map((c) => (
+                        <Fragment key={c.key}>
+                          {showValues && <td style={tdn}>{c.months[i] ? fmtLE(c.months[i]) : "—"}</td>}
+                          <td style={{ ...tdn, fontWeight: 700, color: deltaColor(cur - c.months[i]) }}>
+                            {fmtDelta(cur - c.months[i])}
+                          </td>
+                        </Fragment>
+                      ))}
+                    </tr>
+                  );
+                })}
+                <tr style={{ borderTop: "2px solid var(--line)" }}>
+                  <td style={tdc}><b>Full year</b></td>
+                  <td style={{ ...tdn, fontWeight: 800 }}>{fmtLE(le.latest.total)}</td>
+                  {le.comparisons.map((c) => (
+                    <Fragment key={c.key}>
+                      {showValues && <td style={{ ...tdn, fontWeight: 700 }}>{fmtLE(c.total)}</td>}
+                      <td style={{ ...tdn, fontWeight: 800, color: deltaColor(le.latest.total - c.total) }}>
+                        {fmtDelta(le.latest.total - c.total)}
+                      </td>
+                    </Fragment>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={tdc}>vs that LE</td>
+                  <td style={tdn}>—</td>
+                  {le.comparisons.map((c) => (
+                    <Fragment key={c.key}>
+                      {showValues && <td style={tdn}>—</td>}
+                      <td style={{ ...tdn, color: deltaColor(le.latest.total - c.total) }}>
+                        {c.total > 0 ? `${le.latest.total >= c.total ? "+" : "−"}${Math.abs(((le.latest.total - c.total) / c.total) * 100).toFixed(1)}%` : "—"}
+                      </td>
+                    </Fragment>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="note" style={{ margin: 0, padding: "10px 16px" }}>
+            ◇ Each cycle is what the portfolio&apos;s LE said <b>at the end of that month</b>: every customer contributes the
+            version it had standing then, so a customer that skipped a month carries the same number into both sides and
+            nets to zero. Grey months didn&apos;t move. Months already closed can still change between cycles as NIQ weeks land.
+          </div>
+          </>)}
+        </>)}
+      </div>
+
+      {/* ---- which items drove the change ---- */}
+      {le && le.comparisons.length > 0 && (
+        <div className="card" style={{ padding: 0, marginBottom: 16 }}>
+          <div style={{ padding: "13px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 10, alignItems: "baseline" }}>
+            <b>What moved it — {le.comparisons[0].label} → {le.latest.label}</b>
+            <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
+              items ranked by absolute change{data.item !== "ALL" ? " · this item only" : ""}
+            </span>
+          </div>
+          {!le.itemDetail ? (
+            <div className="note" style={{ margin: 0, padding: "16px" }}>
+              ◇ These LE versions were frozen before per-item detail was recorded, so only the monthly totals above can be
+              compared. The next LE taken carries item detail and this table fills in.
+            </div>
+          ) : le.drivers.length === 0 ? (
+            <div className="note" style={{ margin: 0, padding: "16px" }}>◇ No item changed between these two cycles.</div>
+          ) : (<>
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Brand</th>
+                    <th style={{ textAlign: "right" }}>{le.comparisons[0].label}</th>
+                    <th style={{ textAlign: "right" }}>{le.latest.label}</th>
+                    <th style={{ textAlign: "right" }}>Δ units</th>
+                    <th style={{ textAlign: "right" }}>Δ %</th>
+                    <th>Biggest month</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {le.drivers.slice(0, 15).map((d) => {
+                    let bi = 0;
+                    d.months.forEach((v, i) => { if (Math.abs(v) > Math.abs(d.months[bi])) bi = i; });
+                    return (
+                      <tr key={d.upc}>
+                        <td style={{ ...tdc, whiteSpace: "normal", maxWidth: 300 }}>
+                          <b>{d.name.length > 52 ? d.name.slice(0, 51) + "…" : d.name}</b>
+                        </td>
+                        <td style={tdc}>{d.brand}</td>
+                        <td style={tdn}>{d.prior ? fmtLE(d.prior) : "—"}</td>
+                        <td style={{ ...tdn, fontWeight: 700 }}>{d.latest ? fmtLE(d.latest) : "—"}</td>
+                        <td style={{ ...tdn, fontWeight: 800, color: deltaColor(d.delta) }}>{fmtDelta(d.delta)}</td>
+                        <td style={{ ...tdn, color: deltaColor(d.delta) }}>
+                          {d.prior > 0 ? `${d.delta >= 0 ? "+" : "−"}${Math.abs((d.delta / d.prior) * 100).toFixed(1)}%` : d.latest > 0 ? "new" : "—"}
+                        </td>
+                        <td style={tdc}>
+                          {Math.abs(d.months[bi]) >= 1
+                            ? <>{MONTH_NAMES[bi]} <span style={{ color: deltaColor(d.months[bi]), fontWeight: 700 }}>{fmtDelta(d.months[bi])}</span></>
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="note" style={{ margin: 0, padding: "10px 16px" }}>
+              ◇ Showing the {Math.min(15, le.drivers.length)} biggest movers of {le.drivers.length}. An item moves between
+              cycles when its measured weeks landed differently than forecast, when an LE adjustment was set on it, or when
+              distribution changed. Pick the item in the selector above to see its whole year.
+            </div>
+          </>)}
+        </div>
+      )}
 
       {data.brand === "ALL" && data.brandRows.length > 1 && (
         <div className="card">
