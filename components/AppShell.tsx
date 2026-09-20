@@ -15,8 +15,8 @@ export default function AppShell({ children, initialScope, mode, strip }: { chil
   return (
     <>
       <div className="app">
-        <Topbar onAsk={() => setAskOpen(true)} initialScope={initialScope} mode={mode} />
-        <Sidebar />
+        <Topbar onAsk={() => setAskOpen(true)} initialScope={initialScope} />
+        <Sidebar mode={mode} />
         <main className="main" id="main">{strip}{children}</main>
       </div>
       <AskPanel open={askOpen} onClose={() => setAskOpen(false)} />

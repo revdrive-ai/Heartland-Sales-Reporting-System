@@ -25,9 +25,11 @@ windows and prior total years), **LE — FY<data-edge year>** (the in-flight
 year: actuals + forecast to year-end, LE adjustments, monthly Latest
 Estimates), **Plan — FY<next>** (the forward year: distribution
 verification, plan adjustments, the plan builder, Plan of Record sign-off;
-a small year picker offers the second forward year). The preference lives
-in the `hh-mode` cookie beside the customer scope (`lib/mode.ts`,
-`lib/server/mode.ts`, `components/ModeSwitch.tsx`); the per-page year
+a small year picker sits under it for the second forward year). It is the
+first thing in the **sidebar**, above Trade Workflow, and the chosen mode
+is held green — so the year is picked before the view. The preference
+lives in the `hh-mode` cookie beside the customer scope (`lib/mode.ts`,
+`lib/server/mode.ts`, `components/Sidebar.tsx`); the per-page year
 selectors are gone, and a stale `?win=`/`?yr=` in a link can't override the
 top bar. Card and button titles inherit the mode word. A **status strip**
 under the top bar (LE and Plan modes) says where the mode year stands across
