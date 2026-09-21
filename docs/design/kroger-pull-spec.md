@@ -1,6 +1,106 @@
-# Kroger (84.51° Stratum) — which facts to collect
+# Kroger — which facts to collect
 
-_Drafted 2026-09-21 against “Glossary of Measures with calculations” (314 measures)._
+_Drafted 2026-09-21 against “Glossary of Measures with calculations” (314
+measures). That glossary is the **card/loyalty** side (84.51° Stratum).
+Kroger exposes a second, separate body of data — **Market6** — covered in
+“Two Kroger sources” below; it changes which source should feed the engine._
+
+## Two Kroger sources, and which one feeds the engine
+
+Kroger gives suppliers two different things, and they answer different
+questions:
+
+| | **84.51° Stratum (card)** | **Market6** |
+| --- | --- | --- |
+| Basis | Loyalty-card transactions | **Total store scan** — every sale through the register |
+| Grain | Item × division × promotion week | **Daily, item × store** (and warehouse) |
+| Strengths | Uplift/baseline modelling, promo tactic flags (Ad/Display/TPR/Mega), margin, household and shopper diagnostics | Raw scanned units and dollars, store and DC **inventory**, out-of-stocks, days of supply, forecasts |
+| Missing | Total-store sales, inventory, daily grain | Household measures, uplift/baseline, margin |
+
+84.51° and Market6 merged in 2016, so both may appear inside one portal, but
+they remain distinct datasets with distinct licensing.
+
+**This resolves the biggest concern in this document.** Concern 2 said their
+uplift comes from a model we cannot see, so lift would not be comparable to
+NIQ. Market6 gives **raw scan** — which is exactly what our seasonality
+engine wants as input. So:
+
+- **Market6 scanned units and dollars become the fact table**, the NIQ
+  equivalent: item × geography × week. We compute the baseline ourselves,
+  with the same engine we run on NIQ, so lift stays comparable across every
+  retailer.
+- **The card data becomes the overlay**: promo tactic flags and store-on-promotion
+  percentages for the windows, their uplift as a published cross-check
+  against our baseline, margin for joint business planning, and the shopper
+  diagnostics in Tier 3.
+- Concern 4 (loyalty-card basis) also goes away for the headline numbers,
+  because Market6 is total-store scan rather than card-only.
+
+### What Market6 carries
+
+Verified from public material: daily item/store-level sales and operational
+data for every Kroger store and warehouse; warehouse inventory on hand by
+case and case GTIN; store and DC inventory with future sales forecasts for
+promoted items; days-of-supply thresholds, out-of-stock alerting and
+min/max target inventory; year-over-year dollar sales at enterprise,
+division and vendor level; new-item sales and out-of-stock frequency.
+
+Where Kroger delivers the same content over EDI rather than the portal, the
+852 Product Activity Report carries it as qualifier codes — **QS** quantity
+sold, **QA** quantity on hand/available, **QP** on order not yet received,
+**QO** out of stock — by Kroger division and store number, daily or weekly.
+
+**The definitive list is in our own Market6/Stratum instance**, not in public
+documentation: export the measure picker from the ad-hoc report builder, the
+same way the card glossary was produced. Everything above should be treated
+as the shape to expect, not as the contract.
+
+### What to request from Market6
+
+Required, at item × division × week (store level only if we decide we need it):
+
+- Scanned units, scanned dollars
+- Store count selling the item, and the division store universe
+- Store inventory on hand, DC inventory on hand
+- Out-of-stock indicator / count
+- Retail price actually scanned, if available separately from dollars ÷ units
+
+Valuable:
+
+- Days of supply, on-order quantity
+- Kroger’s own store-level forecast (a second opinion beside ours)
+- New-item first-sale dates (feeds distribution verification directly)
+
+### Market6-specific concerns
+
+1. **Scan data carries no promo flags.** Market6 tells us what sold, not what
+   was on Ad/Display/TPR. Those come from the card side at EPG/RBP group
+   grain, so Concern 6’s crosswalk is still required — now as the join
+   between two Kroger systems as well as to our items.
+2. **Daily grain, and an unknown week.** We aggregate to our Saturday weeks,
+   which is only safe once Kroger’s week-ending day is confirmed (Concern 5).
+   Daily data is an advantage — it lets us build any week definition — but
+   only if we know theirs.
+3. **Store-level volume.** ~2,700 stores × items × days is far more data than
+   the tool needs. Division × week is the grain that matches NIQ; store-level
+   should be pulled only where it earns its keep (distribution verification,
+   out-of-stocks).
+4. **Still no ACV weighting.** Market6 gives store counts, like the card data.
+   If it can supply store-level category or total-store sales, we can build a
+   proper ACV-style weight ourselves — worth asking, since it would fix
+   Concern 3 rather than working around it.
+5. **History depth is usually shorter than syndicated data.** Our year-ago
+   carry and seasonality engine want two years. Confirm retention.
+6. **Separate licensing.** Market6 access is not implied by Stratum access.
+7. **Inventory is the bridge to SYSPRO.** Store and DC inventory plus
+   out-of-stocks are exactly what `docs/design/shipments-forecasting.md`
+   needs to reconcile shipments against consumption — buy-in, safety stock
+   and sell-down stop being inferred and become measured. This is the
+   strongest argument for taking Market6 beyond the scan facts.
+
+---
+
+## The card glossary (84.51° Stratum) — measure-by-measure
 
 The goal is a Kroger feed that drives the **same** tool as NIQ: base & lift,
 the seasonality engine, promo-window lift reads, distribution verification,

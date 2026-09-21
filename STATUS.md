@@ -218,7 +218,9 @@ until they're set, the tool falls back to per-browser storage there.
   ongoing CSV/Excel drops. Remaining: run `setup.sql` once (health goes
   `writable: true`), press *Load all*, then swap the repo reads to Supabase
   view by view (`supabase/README.md` is the full runbook).
-- **Kroger (84.51° Stratum) feed** — which measures to request, mapped
+- **Kroger feed — two sources.** Market6 (total-store daily scan, store/DC
+  inventory, out-of-stocks) should be the fact table the engine runs on, with
+  84.51° Stratum card data as the promo/uplift/shopper overlay. Which measures to request, mapped
   against what the tool consumes from NIQ, plus the ten places their model
   diverges (no baseline measure, store counts instead of %ACV, loyalty-card
   sales, EPG/RBP grain, week alignment): `docs/design/kroger-pull-spec.md`.
