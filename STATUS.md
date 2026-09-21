@@ -192,6 +192,29 @@ adjustments, events — and links to the Latest Estimate view
   planner ROI, plan gross revenue, chart price-change markers, and insights.
   A CSV of the 50 Albertsons items still unpriced has been delivered.
 
+## Sign-in
+
+Access is by **emailed six-digit code**, limited to `@revdrive.ai`
+addresses — no passwords. `/login` takes an address, `/api/auth/otp` checks
+the domain before Supabase is asked to send anything, Supabase emails the
+code (`{{ .Token }}` in the Magic Link template), the browser verifies it,
+and `middleware.ts` revalidates the session and re-checks the domain on
+every request. The middleware **fails closed**: with Supabase unconfigured,
+every route redirects to `/login` rather than serving.
+
+The control that actually closes the door is the Supabase **before-user-
+created hook** (`supabase/migrations/00013_auth_domain_lock.sql`), which
+refuses to create an account whose domain is not in
+`public.signup_email_domains` — the anon key is public, so the app's own
+checks alone would not be enough. Allowed domains are table rows, so adding
+one is an insert, not a deploy. `/api/cron/le-lock` stays outside the session
+check and keeps authenticating with `CRON_SECRET`.
+
+Dashboard steps (env vars, running the SQL, **enabling the hook**, putting
+the code in the email templates, URLs, and the SMTP rate-limit warning) are
+in `supabase/AUTH.md`. The domain restriction is not active until the hook
+is enabled.
+
 ## Shared, held plan state
 
 Planner work — plan events, budgets, planner adjustments, plan-year

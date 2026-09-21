@@ -6,6 +6,7 @@ import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getModeStatus } from "@/lib/server/modeStatus";
 import ModeStrip from "@/components/ModeStrip";
+import { currentUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "Heartland Foods — Trade Platform",
@@ -14,6 +15,18 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  /* Signed out, the shell has nothing to show — no scope, no mode, no data —
+     so the login page renders bare. The middleware has already decided who
+     may be here; this only picks the chrome. */
+  const user = await currentUser();
+  if (!user) {
+    return (
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    );
+  }
+
   // Read the persisted customer scope server-side so the selectors render
   // with the saved values on first paint (no hydration flicker).
   const [{ scope }, mode] = await Promise.all([getScope(), getMode()]);
@@ -22,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <AppShell initialScope={scope} mode={mode} strip={<ModeStrip status={status} />}>{children}</AppShell>
+        <AppShell initialScope={scope} mode={mode} user={user} strip={<ModeStrip status={status} />}>{children}</AppShell>
       </body>
     </html>
   );

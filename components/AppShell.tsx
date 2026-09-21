@@ -8,14 +8,15 @@ import WelcomeModal from "./WelcomeModal";
 import { Toast } from "./toast";
 import type { Scope } from "@/lib/scope";
 import type { WorkMode } from "@/lib/mode";
+import type { SessionUser } from "@/lib/supabase/server";
 
-export default function AppShell({ children, initialScope, mode, strip }: { children: React.ReactNode; initialScope: Scope; mode: WorkMode; strip?: React.ReactNode }) {
+export default function AppShell({ children, initialScope, mode, user, strip }: { children: React.ReactNode; initialScope: Scope; mode: WorkMode; user: SessionUser; strip?: React.ReactNode }) {
   const [askOpen, setAskOpen] = useState(false);
 
   return (
     <>
       <div className="app">
-        <Topbar onAsk={() => setAskOpen(true)} initialScope={initialScope} />
+        <Topbar onAsk={() => setAskOpen(true)} initialScope={initialScope} user={user} />
         <Sidebar mode={mode} />
         <main className="main" id="main">{strip}{children}</main>
       </div>
