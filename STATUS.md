@@ -218,6 +218,11 @@ until they're set, the tool falls back to per-browser storage there.
   ongoing CSV/Excel drops. Remaining: run `setup.sql` once (health goes
   `writable: true`), press *Load all*, then swap the repo reads to Supabase
   view by view (`supabase/README.md` is the full runbook).
+- **Kroger (84.51° Stratum) feed** — which measures to request, mapped
+  against what the tool consumes from NIQ, plus the ten places their model
+  diverges (no baseline measure, store counts instead of %ACV, loyalty-card
+  sales, EPG/RBP grain, week alignment): `docs/design/kroger-pull-spec.md`.
+  Awaiting the seven questions in that doc and a sample weekly extract.
 - **Shipment data (SYSPRO)** — design plan in
   `docs/design/shipments-forecasting.md`: cases-by-customer-by-item-by-day
   as the actual-sales basis, customer supply parameters (lead time, buy-in
