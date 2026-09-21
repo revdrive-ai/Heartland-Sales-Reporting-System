@@ -239,10 +239,12 @@ until they're set, the tool falls back to per-browser storage there.
   match, and extending the crosswalk and price-list workbooks per the
   unpriced-items CSV.
 - **Custom domain** — `heartland.revdrive.ai` is attached to the Vercel
-  project and ownership-verified. `revdrive.ai` still uses the registrar's
-  nameservers (Namecheap), so the CNAME for the `heartland` host has to be
-  added there; the exact target is shown on the project's Domains settings
-  page. The `.vercel.app` URLs keep working alongside it.
+  project and ownership-verified. `revdrive.ai` runs on the registrar's
+  nameservers (Namecheap), so the record lives there: an **A record**,
+  host `heartland`, value `76.76.21.21` — the same pattern the existing
+  `medserve` and `projectorscreen` subdomains already use on this domain.
+  Added 2026-09-21; Vercel issues the TLS certificate automatically once it
+  resolves. The `.vercel.app` URLs keep working alongside it.
 - **Vercel deployment protection** — the project has SSO protection set to
   **all except custom domains**. So `heartland.revdrive.ai` will be reachable
   **without a Vercel login**, while the `.vercel.app` URLs stay behind SSO.
