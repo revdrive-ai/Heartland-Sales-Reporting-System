@@ -238,8 +238,18 @@ until they're set, the tool falls back to per-browser storage there.
   assignment, the Telus "Safeway Mountain West" ↔ NIQ "Safeway IMW" name
   match, and extending the crosswalk and price-list workbooks per the
   unpriced-items CSV.
-- **Vercel deployment protection** — whether the deployed site sits behind
-  SSO is still an open decision.
+- **Custom domain** — `heartland.revdrive.ai` is attached to the Vercel
+  project and ownership-verified. `revdrive.ai` still uses the registrar's
+  nameservers (Namecheap), so the CNAME for the `heartland` host has to be
+  added there; the exact target is shown on the project's Domains settings
+  page. The `.vercel.app` URLs keep working alongside it.
+- **Vercel deployment protection** — the project has SSO protection set to
+  **all except custom domains**. So `heartland.revdrive.ai` will be reachable
+  **without a Vercel login**, while the `.vercel.app` URLs stay behind SSO.
+  That is what makes the custom domain shareable with the client, and it also
+  means the tool and its data are public to anyone holding the URL — decide
+  deliberately whether that is wanted, or move protection to "all
+  deployments" and give reviewers Vercel accounts.
 - **`CRON_SECRET` must be set** in the Vercel project (any long random
   string) for the scheduled LE lock to run; without it `/api/cron/le-lock`
   refuses every call. Deployment protection, if enabled, must also allow
