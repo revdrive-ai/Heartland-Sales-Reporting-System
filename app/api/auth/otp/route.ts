@@ -51,10 +51,29 @@ export async function POST(req: Request) {
     message = e instanceof Error ? e.message : "unknown";
   }
   if (message) {
-    /* Pass through the messages a person can act on — rate limits, and the
-       refusal the signup hook raises — and replace anything else (transport
-       failures, JSON parse errors) with something that isn't internals. */
-    const actionable = /rate limit|only request this after|seconds|not allowed|disabled|approved company/i.test(message);
+    /* Turn Supabase's wording into something the person reading it can act
+       on, and replace anything else (transport failures, parse errors) with
+       a neutral message rather than internals. */
+    if (/rate limit/i.test(message)) {
+      return NextResponse.json(
+        { error: "Too many sign-in codes have been requested recently. Wait a few minutes and try again." },
+        { status: 429 }
+      );
+    }
+    if (/only request this after|(\d+) seconds/i.test(message)) {
+      return NextResponse.json(
+        { error: "A code was just sent. Wait a moment before asking for another." },
+        { status: 429 }
+      );
+    }
+    if (/not authorized/i.test(message)) {
+      // built-in SMTP only delivers to the project team until custom SMTP is set
+      return NextResponse.json(
+        { error: "This address can't be emailed yet. Ask an administrator to finish the email setup." },
+        { status: 502 }
+      );
+    }
+    const actionable = /not allowed|disabled|approved company/i.test(message);
     return NextResponse.json(
       { error: actionable ? message.slice(0, 200) : "Could not send the code just now. Try again in a moment." },
       { status: 502 }

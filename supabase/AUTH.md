@@ -123,11 +123,33 @@ This only matters for the fallback link; the code path doesn't use it.
 
 ## Worth knowing
 
-**The built-in email service is rate limited** (a handful of messages per
-hour across the whole project) and is meant for development. With a team
-signing in, that limit is reached quickly and people simply stop receiving
-codes. Configure **custom SMTP** under Authentication → Emails before real
-use.
+**The built-in email service will not work for a team.** Two hard limits,
+both of which you hit immediately in real use:
+
+- **2 messages per hour** for the whole project.
+- It **only delivers to addresses on the Supabase project's team**. Everyone
+  else gets *"Email address not authorized"* — so colleagues cannot sign in
+  at all, however long you wait.
+
+So **custom SMTP is required, not optional**. It is included on the Supabase
+**Free** plan; no upgrade needed. Authentication → Emails → SMTP Settings.
+
+Any SMTP provider works. [Resend](https://resend.com) pairs with Supabase in
+a few minutes and has a free tier:
+
+1. Create a Resend account and add `revdrive.ai` as a sending domain.
+2. Resend prints DNS records (DKIM/SPF) — add them at Namecheap, the same
+   place the `heartland` A record went.
+3. Create an API key.
+4. In Supabase → Authentication → Emails → SMTP Settings, enable custom SMTP:
+   host `smtp.resend.com`, port `465`, username `resend`, password = the API
+   key, sender `no-reply@revdrive.ai` with a sender name.
+5. Supabase then caps sending at **30/hour** by default to protect a new
+   domain's reputation — raise it under Authentication → Rate Limits once
+   mail is flowing.
+
+Until that is done, only the Supabase project owner's own address can receive
+a code, and only twice an hour.
 
 **Code lifetime** is set under Authentication → Providers → Email (OTP
 expiry). One hour is the default and is reasonable here.
