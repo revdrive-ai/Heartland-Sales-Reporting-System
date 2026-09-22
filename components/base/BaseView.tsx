@@ -932,6 +932,65 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     ? `vs YA (${data.yoy.matchedWeeks} matched wks)` : "vs same weeks YA";
   const metricLabel = data.metric === "units" ? "units" : data.metric === "dollars" ? "retail dollars" : "gross dollars (list price)";
 
+  /* What each line on the chart IS, in a sentence, shown when its legend
+     entry is hovered. Chart.js draws the legend on the canvas, so there is
+     no element to put a title on; instead the legend's own hover events set
+     a small card below the entry. Matched on the label text, because the
+     labels carry the years. */
+  const legendDef = (label: string): string | null => {
+    const sy = data.plan?.sourceYear;
+    if (data.plan) {
+      if (label === `${sy} base model (measured)`)
+        return `NIQ's Base Units for the aligned ${sy} week (364 days back) — the volume NIQ estimates these items would have sold with no promotion — summed over the selection, less any item marked No volume in step 1. Stops where ${sy} stops being measured.`;
+      if (label === `${sy} actuals`)
+        return `Units actually sold in the aligned ${sy} week, promotions included. Sits above the base model in promoted weeks; the gap is the lift.`;
+      if (label === `${sy! - 1} base model`)
+        return `NIQ's base model from two aligned years back (728 days), fully measured — the multi-year base trend across the whole plan year.`;
+      if (label === `${sy} base — projected`)
+        return `The rest of ${sy} as projected: the latest-52-week average base shaped by this selection's month-by-month seasonality index. Nothing decided for ${data.win} is in it.`;
+      if (label === `Plan ${data.win}`)
+        return `The ${data.win} plan: the ${sy} base above, plus the new items on their proxy from their shelf date, with the plan adjustments below applied.`;
+    }
+    switch (label) {
+      case "Actual": return "Units sold each week, promotions included — NIQ's measured sales.";
+      case "NIQ base": return "NIQ's Base Units — what the items would have sold with no promotion. The gap between Actual and this line is the promotional lift.";
+      case "Year ago": return "Actual units in the same weeks a year earlier (364 days back, Saturdays aligned).";
+      case "NIQ base — year ago": return "NIQ's base model from the same weeks a year earlier.";
+      case "NIQ base — 2 yrs ago": return "NIQ's base model from two aligned years back.";
+      case "Forecast actuals": return "Past the NIQ data edge: the year-ago base with the expected lift of each Telus window still open — the forecast to year-end.";
+      case "Forecast base": return "Past the data edge: the year-ago NIQ base carried forward. Dashed because it is not yet measured.";
+      case "LE-adjusted forecast": return "The forecast weeks with the LE adjustments below applied. Measured weeks never move.";
+      case "Index — engine (full history)": return "Average weekly base units per calendar month ÷ the all-weeks average, over every week on file. 1.00 is an average month. This is the shape the projection uses.";
+    }
+    if (/^\d{4}$/.test(label)) return `${label}'s own month index, read from that year's weeks only — how its seasonality compared with the full-history engine.`;
+    return null;
+  };
+  type LegendTip = { chart: "main" | "season"; text: string; x: number; y: number };
+  const [legendTip, setLegendTip] = useState<LegendTip | null>(null);
+  const legendHandlers = (chart: LegendTip["chart"]) => ({
+    onHover: (e: { x?: number | null; y?: number | null; native?: Event | null }, item: { text: string }) => {
+      const text = legendDef(item.text);
+      const el = e.native?.target as HTMLElement | undefined;
+      if (el) el.style.cursor = text ? "help" : "default";
+      setLegendTip(text ? { chart, text, x: e.x ?? 0, y: e.y ?? 0 } : null);
+    },
+    onLeave: (e: { native?: Event | null }) => {
+      const el = e.native?.target as HTMLElement | undefined;
+      if (el) el.style.cursor = "default";
+      setLegendTip(null);
+    },
+  });
+  const LegendTipCard = ({ chart }: { chart: LegendTip["chart"] }) =>
+    legendTip && legendTip.chart === chart ? (
+      <div className="legendtip" style={{ left: legendTip.x, top: legendTip.y + 14 }} role="tooltip">
+        {legendTip.text}
+      </div>
+    ) : null;
+  const seasonOpts = useMemo(() => {
+    const o = gridOptions();
+    return { ...o, plugins: { ...o.plugins, legend: { ...o.plugins.legend, ...legendHandlers("season") } } };
+  }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const opts = useMemo(() => {
     const o = gridOptions();
     const laneSpace = showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0;
@@ -941,6 +1000,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       interaction: { mode: "index" as const, intersect: false },
       plugins: {
         ...o.plugins,
+        legend: { ...o.plugins.legend, ...legendHandlers("main") },
         tooltip: {
           callbacks: {
             afterBody: (items: { dataIndex: number }[]) => {
@@ -1206,6 +1266,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             </div>
           </div>
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
+            <LegendTipCard chart="main" />
             {data.plan ? (
               <Line
                 key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "") + (showYB ? "y" : "") + (showYB2 ? "z" : "") + brandAdjs.map((a) => a.id).join(".")}
@@ -1426,6 +1487,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               <span className="sub">{marketName} · {data.itemName ? "this item" : brandLabel}</span>
             </div>
             <div className="chartbox" style={{ height: 320 }}>
+              <LegendTipCard chart="season" />
               <Line
                 key={"s" + tick + data.mkt + data.brand + data.item}
                 data={{
@@ -1457,7 +1519,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                     }),
                   ],
                 }}
-                options={gridOptions()}
+                options={seasonOpts}
               />
             </div>
             <div className="note">

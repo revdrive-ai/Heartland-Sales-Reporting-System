@@ -136,6 +136,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .minichip.yes:not(.on):hover{border-color:var(--good);color:var(--good)}
 .minichip.no:not(.on):hover{border-color:var(--bad);color:var(--bad)}
 .chartbox{position:relative;height:230px}
+/* The definition of a legend entry, shown under it on hover. The legend is
+   drawn on the canvas, so this is the one HTML element in the box. */
+.legendtip{position:absolute;z-index:5;max-width:340px;padding:8px 11px;border-radius:9px;background:var(--ink);color:#fff;
+  font-size:11.5px;line-height:1.45;font-weight:500;box-shadow:0 8px 24px rgba(15,23,41,.25);pointer-events:none;
+  transform:translateX(-30%)}
 .chartbox.sm{height:190px}
 
 /* Tables */
