@@ -14,7 +14,8 @@ export type DistAddition = {
   brand: string;
   manual?: boolean;       // entered by hand rather than picked from the item master
   proxy_upc: string;      // the item whose weekly base AND seasonality this one copies
-  proxy_pct: number;      // % of that item's base, default 100
+  proxy_pct: number;      // % of that item's base — derived from the two %ACVs
+  est_acv?: number;       // the distribution this item is expected to reach
   ship_date: string;      // the day it ships to the customer — the pipeline fill lands in this week
   shelf_date: string;     // projected first day on shelf — what the forecast starts from
   first_week: string;     // the NIQ Saturday shelf_date falls into; ongoing volume starts here
@@ -47,6 +48,7 @@ function readAddition(a: StoredAddition): DistAddition {
     manual: a.manual,
     proxy_upc: a.proxy_upc ?? "",
     proxy_pct: a.proxy_pct ?? 100,
+    est_acv: a.est_acv,
     ship_date: a.ship_date ?? a.loadin_date ?? shelf,
     shelf_date: shelf,
     first_week: a.first_week ?? shelf,

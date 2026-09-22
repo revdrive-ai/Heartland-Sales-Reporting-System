@@ -64,7 +64,7 @@ export type BaseData = {
     verifiedAt: string | null;
     excluded: number;
     added: number;
-    items: { upc: string; name: string; brand: string; acv: number; lastSale: string; baseWk: number }[];
+    items: { upc: string; name: string; brand: string; acv: number; lastSale: string; baseWk: number; seasonality: number[] }[];
     master: { upc: string; name: string; brand: string }[];
   };
   forecast: null | { weeks: number; from: string; itemShare: Record<string, number> }; // data-edge year: weeks forecast past the edge
@@ -123,6 +123,10 @@ const YB2_KEY = "hhShowYB2"; // two-years-ago BASE overlay
 const LANES_KEY = "hhShowLanes"; // default on
 const INS_KEY = "hhInsightsHide";
 const ENG_KEY = "hhLiftEngineHide";
+
+const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+const MONTH_FULL = ["January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -291,7 +295,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const [dvHandBrand, setDvHandBrand] = useState("");
   const [dvHandUpc, setDvHandUpc] = useState("");
   const [dvProxy, setDvProxy] = useState("");
-  const [dvPct, setDvPct] = useState("100");
+  const [dvAcv, setDvAcv] = useState("");   // the distribution the new item is expected to reach
+  const [dvSeeSeas, setDvSeeSeas] = useState(false);
   const [dvShip, setDvShip] = useState("");      // the day it ships to the customer
   const [dvShelf, setDvShelf] = useState("");    // projected first day on shelf
   const [dvLoadU, setDvLoadU] = useState("");
@@ -427,7 +432,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       </span>) : null;
 
   const dvResetAdd = () => {
-    setDvNew(null); setDvSearch(""); setDvProxy(""); setDvPct("100");
+    setDvNew(null); setDvSearch(""); setDvProxy(""); setDvAcv(""); setDvSeeSeas(false);
     setDvShip(""); setDvShelf(""); setDvLoadU("");
     setDvHand(false); setDvHandName(""); setDvHandBrand(""); setDvHandUpc("");
   };
@@ -454,13 +459,39 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const dvSeedFrom = (brand: string) => {
     const pool = (data.distVer?.items ?? []).filter((i) => (dvDoc?.decisions[i.upc] ?? "in") === "in");
     const sameBrand = pool.find((i) => i.brand === brand);
-    setDvProxy(sameBrand?.upc ?? pool[0]?.upc ?? data.distVer?.items[0]?.upc ?? "");
+    const proxy = sameBrand ?? pool[0] ?? data.distVer?.items[0];
+    setDvProxy(proxy?.upc ?? "");
+    // start like-for-like: exactly the distribution of the item it copies
+    setDvAcv(proxy && proxy.acv > 0 ? String(proxy.acv) : "");
     const firstWeek = data.points[0]?.week ?? "";
     if (firstWeek) {
       setDvShip(firstWeek);
       setDvShelf(data.points[2]?.week ?? firstWeek);
     }
   };
+
+  /* Volume is asked for as DISTRIBUTION, because that is the thing a person
+     selling a new item actually has a view on. An item expected at 40% ACV
+     that copies one sitting at 80% carries half its weekly volume; the ratio
+     of the two is the percentage the forecast has always used, so nothing
+     downstream changes — only the question does. */
+  const dvProxyItem = data.distVer?.items.find((i) => i.upc === dvProxy) ?? null;
+  const dvProxyRatio = (() => {
+    const est = parseFloat(dvAcv) || 0;
+    const base = dvProxyItem?.acv ?? 0;
+    return base > 0 && est > 0 ? est / base : 1;
+  })();
+  const dvProxyPct = Math.max(1, Math.round(dvProxyRatio * 100));
+  const dvEstWk = dvProxyItem ? Math.round(dvProxyItem.baseWk * dvProxyRatio * 10) / 10 : 0;
+  /* 1–4 for a niche launch, then every 5 points to full distribution — plus
+     the copied item's own ACV, so "the same distribution as that one" is an
+     exact choice rather than the nearest five. */
+  const dvAcvSteps = (() => {
+    const steps = [1, 2, 3, 4, ...Array.from({ length: 20 }, (_, i) => (i + 1) * 5)];
+    const own = dvProxyItem?.acv ?? 0;
+    if (own > 0 && !steps.includes(own)) steps.push(own);
+    return steps.sort((a, b) => a - b);
+  })();
 
   const dvAddItem = async () => {
     if (!dvDoc || !dvNew || !dvProxy || !dvShelf || !dvShip) return;
@@ -469,7 +500,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       upc: dvNew.upc, name: dvNew.name, brand: dvNew.brand,
       ...(dvNew.manual ? { manual: true } : {}),
       proxy_upc: dvProxy,
-      proxy_pct: Math.max(1, parseFloat(dvPct) || 100),
+      proxy_pct: dvProxyPct,
+      est_acv: parseFloat(dvAcv) || undefined,
       ship_date: dvShip,
       shelf_date: dvShelf,
       first_week: weekFor(dvShelf),
@@ -2049,8 +2081,14 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                         .map((i) => <option key={i.upc} value={i.upc}>{i.name.length > 40 ? i.name.slice(0, 39) + "…" : i.name} · {i.baseWk} u/wk</option>)}
                     </select>
                   </label>
-                  <label className="fld">% of that item&apos;s volume
-                    <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={1} max={500} value={dvPct} onChange={(e) => setDvPct(e.target.value)} />
+                  <label className="fld">Estimated %ACV
+                    <select style={{ ...selStyle, width: "100%", marginTop: 4 }} value={dvAcv} onChange={(e) => setDvAcv(e.target.value)}>
+                      {dvAcvSteps.map((v) => (
+                        <option key={v} value={String(v)}>
+                          {v}%{dvProxyItem && v === dvProxyItem.acv ? "  · same as the item above" : ""}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="fld">Pipeline fill <span className="dim">(retail units)</span>
                     <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={0} placeholder="0" value={dvLoadU} onChange={(e) => setDvLoadU(e.target.value)} />
@@ -2064,6 +2102,50 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       onChange={(e) => setDvShelf(e.target.value)} />
                   </label>
                 </div>
+
+                {dvProxyItem && (
+                  <div className="derived">
+                    <div className="drow">
+                      <span>
+                        At <b>{dvAcv || "—"}% ACV</b> against {dvProxyItem.acv}% on the item above, this carries{" "}
+                        <b>{dvProxyPct}%</b> of its volume — about <b>{dvEstWk.toLocaleString()} units a week</b>.
+                      </span>
+                      <button className="minichip" style={{ cursor: "pointer" }} onClick={() => setDvSeeSeas((v) => !v)}>
+                        {dvSeeSeas ? "Hide seasonality" : "See its seasonality"}
+                      </button>
+                    </div>
+                    {dvSeeSeas && (() => {
+                      /* Scaled to this item's own range, not to an absolute
+                         axis: a 0.83–1.14 shape is real seasonality but would
+                         be a row of near-identical bars against 0–1.8. The
+                         caption carries the calibration the bars give up. */
+                      const live = dvProxyItem.seasonality.filter((v) => v > 0);
+                      const lo = live.length ? Math.min(...live) : 0;
+                      const hi = live.length ? Math.max(...live) : 1;
+                      const span = hi - lo || 1;
+                      const peak = dvProxyItem.seasonality.indexOf(hi);
+                      const trough = dvProxyItem.seasonality.indexOf(lo);
+                      return (
+                      <div className="seasbars" role="img"
+                        aria-label={`Monthly index for ${dvProxyItem.name}, 1.00 is an average month`}>
+                        {dvProxyItem.seasonality.map((v, i) => (
+                          <span key={i} className={"sb" + (v === 0 ? " none" : v >= 1 ? " up" : "")}
+                            title={v === 0 ? `${MONTH_LABELS[i]} — no weeks on file` : `${MONTH_LABELS[i]} — ${v.toFixed(2)}× an average month`}>
+                            <span className="bar" style={{ height: v > 0 ? `${22 + ((v - lo) / span) * 78}%` : undefined }} />
+                            <span className="ml">{MONTH_LABELS[i]}</span>
+                          </span>
+                        ))}
+                        <span className="seasnote">
+                          <b>{dvProxyItem.name}</b> over every week on file: peaks in{" "}
+                          <b>{MONTH_FULL[peak]} at {hi.toFixed(2)}×</b> an average month, bottoms out in{" "}
+                          <b>{MONTH_FULL[trough]} at {lo.toFixed(2)}×</b>. Bars are scaled to that range. The new
+                          item inherits this shape.
+                        </span>
+                      </div>
+                      );
+                    })()}
+                  </div>
+                )}
                 <div className="note">
                   ◇ The item takes the chosen item&apos;s weekly shape and seasonality × the percentage, starting the
                   plan week its shelf date falls into{dvShelf ? <> — <b>{weekFor(dvShelf)}</b></> : null}. The pipeline

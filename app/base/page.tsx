@@ -22,6 +22,14 @@ const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 
 const FIRST_PLAN_YEAR = 2024;
 const DAY = 86400000;
 
+/** Twelve month indices from per-month sums and week counts, 1.00 = average. */
+function monthIndex(sum: number[], n: number[]): number[] {
+  const avg = sum.map((v, i) => (n[i] ? v / n[i] : 0));
+  const live = avg.filter((v, i) => n[i] > 0 && v > 0);
+  const mean = live.length ? live.reduce((a, v) => a + v, 0) / live.length : 0;
+  return avg.map((v, i) => (mean > 0 && n[i] > 0 ? Math.round((v / mean) * 100) / 100 : 0));
+}
+
 /** Every NIQ week-ending (Saturday) of a calendar year. */
 function saturdaysOfYear(year: number): string[] {
   const out: string[] = [];
@@ -304,17 +312,26 @@ export default async function Page({
        no base into the plan year whichever way they answer, because the
        source year's measured weeks all sit inside this same window. */
     const mktFacts = await getWeeklyFacts({ market_code: mkt });
-    const stats = new Map<string, { lastSale: string; acv: number; acvW: string; base: number; baseN: number; sold52: boolean }>();
+    const stats = new Map<string, {
+      lastSale: string; acv: number; acvW: string; base: number; baseN: number; sold52: boolean;
+      mSum: number[]; mN: number[];   // per-calendar-month base, all weeks on file
+    }>();
     const last52Set2 = new Set(last52);
     for (const r of mktFacts) {
       const meta = itemMetaAll.get(r.upc);
       if (!meta?.is_own) continue;
-      const s = stats.get(r.upc) ?? { lastSale: "", acv: 0, acvW: "", base: 0, baseN: 0, sold52: false };
+      const s = stats.get(r.upc) ?? {
+        lastSale: "", acv: 0, acvW: "", base: 0, baseN: 0, sold52: false,
+        mSum: Array(12).fill(0) as number[], mN: Array(12).fill(0) as number[],
+      };
       const sold = (r.units ?? 0) > 0;
       if (sold && r.week_ending > s.lastSale) s.lastSale = r.week_ending;
       if (sold && last52Set2.has(r.week_ending)) s.sold52 = true;
       if (r.acv_dist !== null && r.week_ending >= s.acvW) { s.acv = Math.max(r.week_ending > s.acvW ? 0 : s.acv, r.acv_dist); s.acvW = r.week_ending; }
       if (last52Set2.has(r.week_ending)) { s.base += r.base_units ?? r.units ?? 0; s.baseN = 52; }
+      const mi = +r.week_ending.slice(5, 7) - 1;
+      s.mSum[mi] += r.base_units ?? r.units ?? 0;
+      s.mN[mi] += 1;
       stats.set(r.upc, s);
     }
     /* Ranked for the decision, not for browsing: widest distribution at the
@@ -331,6 +348,10 @@ export default async function Page({
         acv: Math.round(s.acv * 10) / 10,
         lastSale: s.lastSale,
         baseWk: Math.round((s.base / Math.max(s.baseN, 1)) * 10) / 10,
+        /* Month index: that month's average weekly base over the item's whole
+           history ÷ its own overall average. 1.00 is an average month, so the
+           shape reads the same whatever the item's size. */
+        seasonality: monthIndex(s.mSum, s.mN),
       }))
       .sort((a, b) =>
         b.acv - a.acv ||
