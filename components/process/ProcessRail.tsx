@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { ICONS } from "@/lib/icons";
 import { parseWorkPath, processPath, writeProcCookie } from "@/lib/process";
 import StepChoices from "./StepChoices";
+import StepReset from "./StepReset";
 
 /* The corridor. Inside a process there is no sidebar — just this: which
    process, which year, the steps of THIS process and nothing else, and what
@@ -110,6 +111,14 @@ export default function ProcessRail({
         </span>
         {needsChoice && <span className="pneeds">Choose one to continue</span>}
         {many && <span className="pcount">Step {index + 1} of {proc.steps.length}</span>}
+        {year && (
+          <StepReset
+            year={year}
+            markets={inScope}
+            scopeLabel={scopeLabel}
+            restartHref={processPath(proc.kind, proc.steps[0].key, year)}
+          />
+        )}
       </div>
 
       {many && (
