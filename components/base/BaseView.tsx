@@ -1099,9 +1099,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       <div className="kpis">
         {data.plan ? (<>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">{data.plan.sourceYear} base — actualized</span></div>
+            <div className="k-top"><span className="k-label">{data.plan.sourceYear} base model (measured)</span></div>
             <div className="k-val">{fmtVal(data.plan.totActualized)}</div>
-            <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks measured</div>
+            <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks landed</div>
           </div>
           <div className="kpi">
             <div className="k-top"><span className="k-label">{data.plan.sourceYear} base — projected</span></div>
@@ -1160,7 +1160,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           <div className="c-head">
             <h3>
               {data.plan
-                ? <>Plan {data.win} — {data.plan.sourceYear} actualized base + projected remainder</>
+                ? <>Plan {data.win} — {data.plan.sourceYear} base model (measured) + projected remainder</>
                 : <>Weekly {metricLabel} — actual vs NIQ base · event windows shaded</>}
             </h3>
             <div className="chip-row">
@@ -1171,15 +1171,15 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               >
                 {showPY ? "✓ Year-ago actuals" : "Year-ago actuals"}
               </span>
-              <span
-                className={"minichip" + (showYB ? " on" : "")}
-                onClick={toggleYB}
-                title={data.plan
-                  ? `Overlay the ${data.plan.sourceYear} base model — NIQ's modelled base from the same aligned weeks, as far as it has been measured. The carried segment of the plan sits on exactly this line; where the violet line ends, the projection takes over.`
-                  : "Overlay NIQ's modelled base from the same weeks a year earlier — how the base model looked last year"}
-              >
-                {showYB ? "✓ Year-ago base" : "Year-ago base"}
-              </span>
+              {!data.plan && (
+                <span
+                  className={"minichip" + (showYB ? " on" : "")}
+                  onClick={toggleYB}
+                  title="Overlay NIQ's modelled base from the same weeks a year earlier — how the base model looked last year"
+                >
+                  {showYB ? "✓ Year-ago base" : "Year-ago base"}
+                </span>
+              )}
               <span
                 className={"minichip" + (showYB2 ? " on" : "")}
                 onClick={toggleYB2}
@@ -1213,12 +1213,17 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 data={{
                   labels: data.points.map((p) => p.week.slice(5)),
                   datasets: [
+                    /* The carried segment IS the source year's measured base
+                       model — NIQ's promo-stripped base from the aligned weeks,
+                       less the items verification took out — so it is named and
+                       coloured as that model, and the separate "year-ago base"
+                       overlay is not offered here: it would draw the same line. */
                     {
-                      label: `${data.plan.sourceYear} base — actualized`,
+                      label: `${data.plan.sourceYear} base model (measured)`,
                       data: data.plan.actualized,
-                      borderColor: cssToken("--accent"),
-                      backgroundColor: cssToken("--accent"),
-                      borderWidth: 2,
+                      borderColor: "#8b5cf6",
+                      backgroundColor: "#8b5cf6",
+                      borderWidth: 2.2,
                       tension: 0.25,
                       spanGaps: false,
                       pointRadius: 0,
@@ -1232,18 +1237,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       borderColor: cssToken("--good"),
                       backgroundColor: cssToken("--good"),
                       borderWidth: 1.6,
-                      tension: 0.25,
-                      spanGaps: false,
-                      pointRadius: 0,
-                      pointHoverRadius: 4,
-                    }] : []),
-                    ...(showYB ? [{
-                      label: `${data.plan.sourceYear} base model (measured)`,
-                      data: data.points.map((p) => p.baseLY),
-                      borderColor: "#8b5cf6",
-                      backgroundColor: "#8b5cf6",
-                      borderDash: [2, 3],
-                      borderWidth: 1.8,
                       tension: 0.25,
                       spanGaps: false,
                       pointRadius: 0,
@@ -1397,8 +1390,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           </div>
           <div className="note">
             {data.plan
-              ? <>◇ The blue and amber lines are <b>{data.plan.sourceYear} as it stands</b>: the blue is its <b>measured NIQ base</b>
-                ({data.plan.actualizedWeeks} weeks, through {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}), the amber dashed
+              ? <>◇ The violet and amber lines are <b>{data.plan.sourceYear} as it stands</b>: the violet is its <b>measured base
+                model</b> — NIQ&apos;s promo-stripped base from the aligned weeks ({data.plan.actualizedWeeks} weeks, through{" "}
+                {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}), less any items verification took out — and the amber dashed
                 line its <b>projected base</b> for the rest of the year — the latest-52-week average shaped by this selection&apos;s
                 seasonality engine. Nothing decided for {data.win} moves either of them; both firm up as {data.plan.sourceYear} weeks land.
                 The dark <b>Plan {data.win}</b> line is that base with the plan year&apos;s <b>new items</b> on top and the
