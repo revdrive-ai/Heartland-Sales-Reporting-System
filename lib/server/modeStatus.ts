@@ -5,6 +5,7 @@ import type { DistVerification, PlanAdjustment } from "@/lib/repo/client";
 import type { WorkMode } from "@/lib/mode";
 import { daysUntilLock, dueCycle, openCycle, type LeCycle } from "@/lib/leSchedule";
 import { readLeCycle, leAnswerFor, type LeAnswer } from "@/lib/lecycle";
+import { readBaseReview } from "@/lib/basereview";
 
 /* Where the work stands for the mode year, across the customers IN SCOPE —
    the rollup behind the step rail, the strip under the top bar and the
@@ -35,6 +36,8 @@ export type CustomerStatus = {
   /** LE only: this cycle's answer to "did anything move this month". Null
       until the month is answered — last month's answer does not carry. */
   leAnswer: LeAnswer | null;
+  /** plan years: the Base Business Review was submitted for this account */
+  baseReviewedAt: string | null;
 };
 
 export type ModeStatus = {
@@ -57,6 +60,7 @@ export type ModeStatus = {
     adjustments: number;
     events: number;              // plan events in the year document
     leAnswered: number;          // LE: customers who answered the DUE cycle
+    baseReviewed: number;        // plan: customers whose Base Business Review was submitted
   };
 };
 
@@ -80,6 +84,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     `adj:${m.code}:${year}`,
     `distver:${m.code}:${year}`,
     `lecycle:${m.code}:${year}`,
+    `basereview:${m.code}:${year}`,
   ]);
   keys.push(`events:${year}`);
   const docs = await getStates(keys);
@@ -108,6 +113,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
         newItemsAnswered: !!dv?.no_additions || (dv?.additions ?? []).length > 0,
       },
       leAnswer: leAnswerFor(readLeCycle(docs.get(`lecycle:${m.code}:${year}`)), due.key),
+      baseReviewedAt: readBaseReview(docs.get(`basereview:${m.code}:${year}`)).verified_at,
     };
   });
   const events = docs.get(`events:${year}`);
@@ -129,6 +135,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       adjustments: customers.reduce((a, c) => a + c.adjustments, 0),
       events: Array.isArray(events) ? events.length : 0,
       leAnswered: customers.filter((c) => c.leAnswer).length,
+      baseReviewed: customers.filter((c) => c.baseReviewedAt).length,
     },
   };
 }

@@ -12,6 +12,7 @@
 import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
 import { readDistVerification, type DistVerification } from "@/lib/distver";
 import { readLeCycle, type LeAnswer, type LeCycleDoc } from "@/lib/lecycle";
+import { readBaseReview, type BaseReview } from "@/lib/basereview";
 
 /* ---- shared-document plumbing ---- */
 
@@ -359,4 +360,20 @@ export async function setLeCycleAnswer(
     ...doc,
     answers: { ...doc.answers, [cycle]: { answer, at: new Date().toISOString() } },
   });
+}
+
+/* ---- the Base Business Review's submission (plan years) ----
+   Per customer × plan year: when the base was reviewed and submitted from
+   the Base Business Review step, and a summary of what was on the table. */
+
+export type { BaseReview } from "@/lib/basereview";
+
+const brKey = (market_code: string, plan_year: number) => `basereview:${market_code}:${plan_year}`;
+
+export async function getBaseReview(market_code: string, plan_year: number): Promise<BaseReview> {
+  return readBaseReview(await loadDoc<BaseReview>(brKey(market_code, plan_year), () => null));
+}
+
+export async function saveBaseReview(market_code: string, plan_year: number, doc: BaseReview): Promise<void> {
+  await saveDoc(brKey(market_code, plan_year), doc);
 }

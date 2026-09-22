@@ -24,8 +24,9 @@ import StepReset from "./StepReset";
    actually knows: distribution verification, the new-items answer and the
    Plan of Record submission are all recorded per customer, so those steps can say
    "9 of 13" — and they count the customers the TOP BAR has in scope, not
-   every customer on file. Reviewing the base leaves no trace, so that step
-   shows progress rather than a tick it has not earned. */
+   every customer on file. The base review is submitted from its own card on
+   that screen, so it ticks too; building the plan leaves events but no
+   finish line, so that step shows progress rather than a tick. */
 
 export type RailStatus = {
   customers: number;
@@ -34,6 +35,7 @@ export type RailStatus = {
   added: number;      // items added across those customers
   signed: number;     // Plan of Record signed (from anywhere)
   submitted: number;  // submitted from the Review & submit step — the only thing step 5 ticks on
+  baseReviewed: number; // the Base Business Review submitted from its own card
   events: number;
   taken: number;      // LE: locked for the due cycle
   leAnswered: number; // LE: answered "did anything move" for the due cycle
@@ -62,6 +64,10 @@ function stateOf(stepKey: string, s: RailStatus | null): StepState {
       return all && s.newItems === s.customers
         ? { done: true, note: s.added ? `${s.added} added` : "none this year" }
         : { done: false, note: `${s.newItems} of ${s.customers} answered` };
+    case "base":
+      return all && s.baseReviewed === s.customers
+        ? { done: true, note: s.customers === 1 ? "reviewed" : `all ${s.customers} accounts` }
+        : { done: false, note: `${s.baseReviewed} of ${s.customers} reviewed` };
     case "planner":
       /* Building the plan leaves events behind but has no finish line of its
          own — the finish line is the submit step after it. So this shows

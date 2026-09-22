@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { EVENT_MAX_DAYS } from "@/lib/data/nonPerformanceTypes";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ADD_ITEM_EVENT, OPEN_DISTRIBUTION_EVENT, parseWorkPath, processPath, viewUrlWithin } from "@/lib/process";
+import Link from "next/link";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -11,6 +12,7 @@ import {
   deletePlanAdjustment, getDistVerification, getPlanAdjustments, getPlanRegistry, getPriceEdits,
   registerPlanYear, saveDistVerification, savePlanAdjustment,
   type DistAddition, type DistVerification, type PlanAdjustment,
+  getBaseReview, saveBaseReview, type BaseReview,
 } from "@/lib/repo/client";
 import { writeModeCookie, type ModeKind } from "@/lib/mode";
 import { STATUS_STYLE } from "@/components/planner/lines";
@@ -494,6 +496,20 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     distver: { out: number; added: number };
     adjustments: unknown[];
   };
+  /* The Base Business Review's own record — submitted from the card below,
+     which is what turns step 3 green. Loaded with the distribution doc, so
+     the card can read back steps 1 and 2 as well as the levers. */
+  const [reviewState, setReviewState] = useState<{ mkt: string; year: number; doc: BaseReview } | null>(null);
+  // keyed by account × year, so a record fetched for one selection is never shown for another
+  const review = reviewState && reviewState.mkt === data.mkt && reviewState.year === planYear ? reviewState.doc : null;
+  const setReview = (doc: BaseReview) => { if (planYear) setReviewState({ mkt: data.mkt, year: planYear, doc }); };
+  const [reviewBusy, setReviewBusy] = useState(false);
+  useEffect(() => {
+    if (!planYear) return;
+    const mkt = data.mkt, year = planYear;
+    getBaseReview(mkt, year).then((doc) => setReviewState({ mkt, year, doc })).catch(() => setReviewState({ mkt, year, doc: { verified_at: null } }));
+    getDistVerification(mkt, year).then(setDvDoc).catch(() => {});
+  }, [data.mkt, planYear]);
   const [snaps, setSnaps] = useState<SnapVersion[] | null>(null);
   const [snapCur, setSnapCur] = useState<{ totals: { base: number; adjusted: number } } | null>(null);
   const [snapNote, setSnapNote] = useState("");
@@ -1807,7 +1823,131 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       </div>
       </>)}
 
-      {(data.plan || data.forecast) && (
+      {/* ── The Base Business Review card: steps 1 and 2 read back, the levers on
+            the base, and the submit that turns the step green. Plan years only;
+            the in-flight year keeps its Latest Estimates card below. ── */}
+      {data.plan && planYear && (() => {
+        const dvAll = dvDoc;
+        const outUpcs = dvAll ? Object.entries(dvAll.decisions).filter(([, d]) => d === "out").map(([u]) => u) : [];
+        const nameOf = (u: string) =>
+          data.distVer?.items.find((i) => i.upc === u)?.name ?? data.distVer?.master.find((i) => i.upc === u)?.name ?? u;
+        const distVerified = data.distVer?.verifiedAt ?? dvAll?.verified_at ?? null;
+        const answered = !!dvAll && (!!dvAll.no_additions || dvAll.additions.length > 0);
+        const adds = dvAll?.additions ?? [];
+        const owed: { step: string; text: string }[] = [];
+        if (!distVerified) owed.push({ step: "distribution", text: "Distribution has not been verified" });
+        if (!answered) owed.push({ step: "new-items", text: "The new-items question has not been answered" });
+        const ready = owed.length === 0 && !!snapCur;
+        const cur = snapCur ? { out: outUpcs.length, added: adds.length, adjustments: adjs.length, base: Math.round(snapCur.totals.base), adjusted: Math.round(snapCur.totals.adjusted) } : null;
+        const prev = review?.summary;
+        const moved = !!(review?.verified_at && prev && cur && (
+          prev.out !== cur.out || prev.added !== cur.added || prev.adjustments !== cur.adjustments
+          || Math.abs(prev.adjusted - cur.adjusted) > Math.max(cur.adjusted * 0.002, 5)));
+        const byBrand = new Map<string, PlanAdjustment[]>();
+        for (const x of adjs) (byBrand.get(x.brand) ?? byBrand.set(x.brand, []).get(x.brand)!).push(x);
+        const stepHref = (key: string) => (inPlanProcess ? processPath("plan", key, planYear) : null);
+        const submit = async () => {
+          if (!ready || !cur || reviewBusy) return;
+          setReviewBusy(true);
+          try {
+            const doc: BaseReview = { verified_at: new Date().toISOString(), summary: cur };
+            await saveBaseReview(data.mkt, planYear, doc);
+            setReview(doc);
+            router.refresh();
+          } finally {
+            setReviewBusy(false);
+          }
+        };
+        return (
+          <div className={"card brev" + (review?.verified_at && !moved ? " done" : "")} style={{ padding: 0, marginTop: 16 }}>
+            <div className="brev-head">
+              <div>
+                <b>Base Business Review — {marketName} · {data.win}</b>
+                <span>
+                  What the two steps before this recorded, and what has been done to the base — read it back, then
+                  submit it. All Heartland brands at this account, units.
+                </span>
+              </div>
+              {review?.verified_at
+                ? <span className="pill" style={{ borderColor: moved ? "var(--warn)" : "var(--good)", color: moved ? "var(--warn)" : "var(--good)" }}>
+                    {moved ? `⚠ moved since submitted ${review.verified_at.slice(0, 10)}` : `✓ Submitted ${review.verified_at.slice(0, 10)}`}
+                  </span>
+                : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>not yet submitted</span>}
+            </div>
+            <div className="brev-grid">
+              <section>
+                <header><span className="n">1</span><b>Distribution review</b></header>
+                {distVerified
+                  ? <p>Verified {distVerified.slice(0, 10)} · <b>{outUpcs.length}</b> item{outUpcs.length === 1 ? "" : "s"} marked No volume
+                      {data.distVer ? <> of {data.distVer.items.length} on the list</> : null}.</p>
+                  : <p className="owe">Not verified yet — every item is carried until it is.{stepHref("distribution") && <> <Link href={stepHref("distribution")!}>Open step 1 →</Link></>}</p>}
+                {outUpcs.length > 0 && (
+                  <ul className="revlist">
+                    {outUpcs.map((u) => <li key={u}><span className="minichip on no">No volume</span> {nameOf(u)}</li>)}
+                  </ul>
+                )}
+              </section>
+              <section>
+                <header><span className="n">2</span><b>New items</b></header>
+                {!dvAll
+                  ? <p>Loading…</p>
+                  : adds.length
+                    ? <p><b>{adds.length}</b> new item{adds.length === 1 ? "" : "s"} riding into the {data.win} base on a proxy.</p>
+                    : dvAll.no_additions
+                      ? <p>Recorded: <b>no new items</b> for {data.win}.</p>
+                      : <p className="owe">Not answered yet.{stepHref("new-items") && <> <Link href={stepHref("new-items")!}>Open step 2 →</Link></>}</p>}
+                {adds.length > 0 && (
+                  <ul className="revlist">
+                    {adds.map((x) => (
+                      <li key={x.id}><b>{x.name}</b> <span className="dim">· {x.brand} · {x.proxy_pct}% of {nameOf(x.proxy_upc)} · on shelf {x.shelf_date.slice(0, 10)}</span></li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+              <section>
+                <header><span className="n">3</span><b>Changes to the base</b></header>
+                {snapCur
+                  ? <p>Plan base <b>{fmtU(snapCur.totals.base)}</b>{Math.round(snapCur.totals.adjusted) !== Math.round(snapCur.totals.base)
+                      ? <> → <b>{fmtU(snapCur.totals.adjusted)}</b> after {adjs.length} lever{adjs.length === 1 ? "" : "s"} and the new items
+                          {" "}(<span style={{ color: snapCur.totals.adjusted >= snapCur.totals.base ? "var(--good)" : "var(--bad)", fontWeight: 700 }}>
+                            {snapCur.totals.adjusted >= snapCur.totals.base ? "+" : "−"}{fmtU(Math.abs(snapCur.totals.adjusted - snapCur.totals.base))}
+                          </span>)</>
+                      : <> · no levers — the carried base as it stands</>}.</p>
+                  : <p>Loading…</p>}
+                {adjs.length > 0 && (
+                  <ul className="revlist">
+                    {[...byBrand.entries()].map(([b, list]) => (
+                      <li key={b}>
+                        <b>{b}</b>
+                        <div className="dim">
+                          {list.map((x) => `${x.pct >= 0 ? "+" : "−"}${Math.abs(x.pct)}% ${x.kind === "distribution" ? "distribution" : x.kind === "price" ? "base price" : "trend"} · ${x.upc === "ALL" ? "all items" : (data.items.find((i) => i.upc === x.upc)?.name ?? x.upc).slice(0, 34)} · ${x.from} → ${x.to}`).join(" ; ")}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            </div>
+            <div className="brev-foot">
+              <span>
+                {review?.verified_at && !moved
+                  ? <>Submitted {review.verified_at.slice(0, 10)}. Submitting again records the current read.</>
+                  : moved
+                    ? <>The plan has moved since this was submitted — read it back and submit again.</>
+                    : owed.length
+                      ? <>Finish {owed.map((o) => o.text.toLowerCase()).join(" and ")} first.</>
+                      : <>Submitting records this read and marks the step done.</>}
+              </span>
+              <button className={"btn" + (ready ? " primary" : "")} onClick={submit} disabled={!ready || reviewBusy}
+                title={ready ? "Record the base review for this account" : owed.map((o) => o.text).join(" · ") || "Loading…"}>
+                {reviewBusy ? "Submitting…" : review?.verified_at ? "Submit again" : "Submit review"}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {data.forecast && (
       <div className="card" style={{ padding: 0, marginTop: 16 }}>
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
           <b>{data.plan ? "Plan sign-off & Latest Estimates" : "Latest Estimates"} — {marketName} · {data.win}</b>

@@ -48,6 +48,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     events: status.totals.events,
     taken: status.totals.taken,
     leAnswered: status.totals.leAnswered,
+    baseReviewed: status.totals.baseReviewed,
     /* The estimate's question is only ever asked of one account, so the
        answer is only meaningful when the top bar is on one. */
     leAnswer: status.customers.length === 1 ? status.customers[0].leAnswer : null,

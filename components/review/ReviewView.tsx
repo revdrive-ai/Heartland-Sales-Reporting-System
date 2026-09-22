@@ -45,6 +45,8 @@ export type ReviewData = {
       id: string; brand: string; item: string | null;
       kind: "distribution" | "price" | "trend"; pct: number; from: string; to: string; note: string;
     }[];
+    /** when the Base Business Review was submitted from its own card, if it has been */
+    baseReviewedAt: string | null;
     base: null | { total: number; adjusted: number; byBrand: { brand: string; base: number; adjusted: number }[] };
     events: {
       count: number; spend: number; manual: number; carried: number;
@@ -95,6 +97,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
   const owed: { step: string; text: string }[] = [];
   if (!a.distribution.verifiedAt) owed.push({ step: "distribution", text: "Distribution has not been verified for this account" });
   if (!a.newItems.answered) owed.push({ step: "new-items", text: "The new-items question has not been answered" });
+  if (!a.baseReviewedAt) owed.push({ step: "base", text: "The Base Business Review has not been submitted" });
   const ready = owed.length === 0;
   /* "Submitted" is a submission from this page. A version taken elsewhere
      (the sign-off card, the LE screen) is listed with the others, but it is
@@ -247,9 +250,10 @@ export default function ReviewView({ data }: { data: ReviewData }) {
             <div>
               <b>Base Business Review</b>
               <span>
+                {a.baseReviewedAt ? `Submitted ${a.baseReviewedAt.slice(0, 10)} · ` : "Not submitted yet · "}
                 {a.adjustments.length
                   ? `${a.adjustments.length} lever${a.adjustments.length === 1 ? "" : "s"} on the plan base`
-                  : "No adjustments — the plan base is the carried base as measured"}
+                  : "no adjustments — the plan base is the carried base"}
               </span>
             </div>
             {stepHref("base") && <Link className="btn" href={stepHref("base")!}>Open →</Link>}
@@ -333,7 +337,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
                  Submitting again records a revision alongside it — versions are never overwritten.</>
               : ready
                 ? <>Freezes the plan base above as a version{elsewhere.length ? "" : " — v1, the Plan of Record"}. The monthly Latest Estimates are then read against it.</>
-                : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the plan has its distribution answers and its new-items answer.</>}
+                : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the distribution is verified, the new-items question is answered and the base review is submitted.</>}
           </span>
           {elsewhere.length > 0 && !sub && (
             <span className="dim" style={{ marginTop: 4 }}>

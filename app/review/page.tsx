@@ -5,6 +5,7 @@ import { getModeStatus } from "@/lib/server/modeStatus";
 import { getState } from "@/lib/server/appstate";
 import { computePlanBase } from "@/lib/server/planSnapshot";
 import { readDistVerification } from "@/lib/distver";
+import { readBaseReview } from "@/lib/basereview";
 import { CROSSWALK } from "@/lib/scope";
 import type { PlanAdjustment, PlanEvent } from "@/lib/repo/client";
 import ReviewView, { type ReviewData } from "@/components/review/ReviewView";
@@ -41,12 +42,14 @@ export default async function Page() {
     return <ReviewView data={{ year, customers: status.customers.length, scopeLabel: scope.label, account: null }} />;
   }
 
-  const [dvRaw, adjRaw, evRaw, live] = await Promise.all([
+  const [dvRaw, adjRaw, evRaw, live, brRaw] = await Promise.all([
     getState(`distver:${one.code}:${year}`).catch(() => undefined),
     getState(`adj:${one.code}:${year}`).catch(() => undefined),
     getState(`events:${year}`).catch(() => undefined),
     computePlanBase(one.code, year).catch(() => null),
+    getState(`basereview:${one.code}:${year}`).catch(() => undefined),
   ]);
+  const baseReview = readBaseReview(brRaw);
   const dv = readDistVerification(dvRaw);
   const adjs = (Array.isArray(adjRaw) ? adjRaw : []) as PlanAdjustment[];
   const ids = telusIdsFor(one.code);
@@ -88,6 +91,7 @@ export default async function Page() {
           id: a.id, brand: a.brand, item: a.upc === "ALL" ? null : (nameOf.get(a.upc) ?? a.upc),
           kind: a.kind, pct: a.pct, from: a.from, to: a.to, note: a.note,
         })),
+      baseReviewedAt: baseReview.verified_at,
       base: live
         ? {
             total: live.totals.base,
