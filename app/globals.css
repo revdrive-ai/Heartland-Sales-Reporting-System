@@ -119,6 +119,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 .chip-row{display:flex;gap:7px;flex-wrap:wrap}
 .minichip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:7px;background:var(--surface-2);border:1px solid var(--line);color:var(--ink-2);cursor:pointer}
 .minichip.on{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+/* The distribution answer, in the colour of the answer: in plan is green,
+   no volume is red. The words still carry the meaning — the fill is there so
+   a hundred rows can be read at a glance. */
+.minichip.on.yes{background:var(--good);border-color:transparent;color:#fff}
+.minichip.on.no{background:var(--bad);border-color:transparent;color:#fff}
+.minichip.yes:not(.on):hover{border-color:var(--good);color:var(--good)}
+.minichip.no:not(.on):hover{border-color:var(--bad);color:var(--bad)}
 .chartbox{position:relative;height:230px}
 .chartbox.sm{height:190px}
 

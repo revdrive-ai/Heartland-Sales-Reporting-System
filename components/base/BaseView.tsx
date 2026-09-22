@@ -136,6 +136,9 @@ const ADJ_REASONS: Record<PlanAdjustment["kind"], string[]> = {
           "Prior-year anomaly", "Thin history — AM judgment", "Other"],
 };
 
+/** Rows taken out of the plan read quieter — everywhere but their decision. */
+const dvDim = (d: "in" | "out"): React.CSSProperties => (d === "out" ? { opacity: 0.5 } : {});
+
 const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
@@ -2017,18 +2020,23 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                     const d = dvDoc.decisions[it.upc] ?? "in";
                     const stale = it.lastSale === "—" || it.lastSale < new Date(Date.parse(data.distVer!.dataEdge) - 56 * 86400000).toISOString().slice(0, 10);
                     return (
-                      <tr key={it.upc} style={{ opacity: d === "out" ? 0.55 : 1 }}>
-                        <td style={{ padding: "7px 14px" }}>
+                      /* The row dims when an item is taken out, but the
+                         decision cell does not: a faded red reads as neither,
+                         and the colour is the thing being scanned for. */
+                      <tr key={it.upc}>
+                        <td style={{ padding: "7px 14px", ...dvDim(d) }}>
                           {it.name}
                           <span style={{ color: "var(--ink-3)", fontFamily: "ui-monospace, Menlo, monospace", fontSize: 11 }}> {it.upc}</span>
                         </td>
-                        <td style={{ padding: "7px 14px" }}>{it.brand}</td>
-                        <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: it.acv < 10 ? "var(--bad)" : undefined }}>{it.acv}%</td>
-                        <td style={{ padding: "7px 14px", whiteSpace: "nowrap", color: stale ? "var(--bad)" : undefined }}>{it.lastSale}</td>
-                        <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{it.baseWk}</td>
+                        <td style={{ padding: "7px 14px", ...dvDim(d) }}>{it.brand}</td>
+                        <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", color: it.acv < 10 ? "var(--bad)" : undefined, ...dvDim(d) }}>{it.acv}%</td>
+                        <td style={{ padding: "7px 14px", whiteSpace: "nowrap", color: stale ? "var(--bad)" : undefined, ...dvDim(d) }}>{it.lastSale}</td>
+                        <td style={{ padding: "7px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", ...dvDim(d) }}>{it.baseWk}</td>
                         <td style={{ padding: "7px 14px", textAlign: "center", whiteSpace: "nowrap" }}>
-                          <span className={"minichip" + (d === "in" ? " on" : "")} style={{ cursor: "pointer", marginRight: 4 }} onClick={() => dvDecide(it.upc, "in")}>In plan</span>
-                          <span className={"minichip" + (d === "out" ? " on" : "")} style={{ cursor: "pointer" }} onClick={() => dvDecide(it.upc, "out")}>No volume</span>
+                          <span className={"minichip yes" + (d === "in" ? " on" : "")} style={{ cursor: "pointer", marginRight: 4 }}
+                            title={`Carry this item's base into ${data.distVer!.year}`} onClick={() => dvDecide(it.upc, "in")}>In plan</span>
+                          <span className={"minichip no" + (d === "out" ? " on" : "")} style={{ cursor: "pointer" }}
+                            title={`Take this item out of the ${data.distVer!.year} base`} onClick={() => dvDecide(it.upc, "out")}>No volume</span>
                         </td>
                       </tr>
                     );
