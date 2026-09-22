@@ -37,7 +37,7 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
   division × brand with the Telus promotion windows overlaid — event windows shaded on the
   chart, always-on programs listed, NIQ-detected promo weeks dotted, URL-driven controls.
   Division ↔ Telus-customer mapping in `lib/data/albertsonsPromoMap.ts` (+ migration 00003).
-- ✅ **Sales Dashboard rebuilt** (`/reporting`, the landing view): own-brand retail dollars /
+- ✅ **Sales Dashboard rebuilt** (`/reporting`, the landing view): Heartland branded retail dollars /
   units / price / share-of-measured-set with true YoY (last 13/26/52 weeks vs the same NIQ
   weeks a year earlier), weekly TY-vs-LY trend, brand and division/category cuts, and
   item-level movers. All divisions or one; URL-driven controls.

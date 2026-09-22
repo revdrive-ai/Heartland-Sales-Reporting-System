@@ -33,7 +33,7 @@ function allocateByMonth(totalByMonth: number[], amount: number, startISO: strin
   }
 }
 
-const OWN_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
+const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
 
 export default async function Page() {
   const [allPromos, allCustomers, meta, enums, gscope, mode] = await Promise.all([
@@ -167,7 +167,7 @@ export default async function Page() {
       dvAdded += (d.additions ?? []).length;
     }
     const priorPrefix = `${bookYear}-`;
-    for (const brand of OWN_BRANDS) {
+    for (const brand of HEARTLAND_BRANDS) {
       // week → sums across the scoped divisions, plus per-item base totals and
       // per-tactic lift sums measured from the Telus windows on each division
       const wk = new Map<string, { bu: number; bd: number; au: number; promo: boolean }>();
@@ -365,7 +365,7 @@ export default async function Page() {
     // Brand and items per promo, from its Telus component lines: exactly one
     // own NIQ brand → that brand; the item crosswalk resolves line item
     // numbers to NIQ UPCs on file, so carried events score at item level.
-    const ownByNorm = new Map(OWN_BRANDS.map((b) => [normBrand(b), b]));
+    const ownByNorm = new Map(HEARTLAND_BRANDS.map((b) => [normBrand(b), b]));
     const xwalk = await getItemCrosswalk();
     const promoBrandSets = new Map<string, Set<string>>();
     const promoUpcs = new Map<string, Set<string>>();
@@ -406,7 +406,7 @@ export default async function Page() {
       .map((r) => ({ upc: r.upc!, unit_price: r.unit_price!, effective_from: r.effective_from }));
     const jan1 = `${year}-01-01`;
     const brandListPrice: Record<string, number | null> = {};
-    for (const b of OWN_BRANDS) {
+    for (const b of HEARTLAND_BRANDS) {
       let pw = 0, w = 0;
       for (const it of brandStats[b].items) {
         const p = priceAsOf(priceRows, jan1, { upc: it.upc })?.unit_price ?? null;

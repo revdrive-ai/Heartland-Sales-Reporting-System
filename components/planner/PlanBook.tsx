@@ -142,7 +142,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // the item catalog behind the item selector: every own-brand item with NIQ
+  // the item catalog behind the item selector: every Heartland branded item with NIQ
   // volume in scope, grouped by brand, plus name/brand lookups by UPC
   const itemCatalog = useMemo(
     () => Object.entries(plan.brandStats)

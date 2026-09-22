@@ -19,7 +19,11 @@ export type Item = {
   super_category: string;
   category: string;
   sub_category: string;
-  is_own: boolean;         // Heartland Food Products Group vs the competitive set
+  /* Heartland Food Products Group vs the competitive set. The column name
+     predates the wording: in the UI these are "Heartland brands", never
+     "own brand" — that phrase means private label to the retailers and the
+     co-manufacturing customers we also make for. */
+  is_own: boolean;
 };
 
 /** One NIQ retail week for one item in one market — the fact-table row.

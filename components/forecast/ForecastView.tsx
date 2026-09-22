@@ -14,7 +14,7 @@ import type { LeCompare } from "@/lib/server/leCompare";
 
 export type ForecastData = {
   markets: { code: string; name: string }[];
-  ownBrands: string[];
+  heartlandBrands: string[];
   mkt: string;
   brand: string;
   item: string;                 // "ALL" or a UPC — narrows the whole review
@@ -84,7 +84,7 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
   const [showValues, setShowValues] = useState(false);
   const le = data.le;
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
-  const brandName = data.itemName ?? (data.brand === "ALL" ? "all own brands" : data.brand);
+  const brandName = data.itemName ?? (data.brand === "ALL" ? "all Heartland brands" : data.brand);
   const pct = (cur: number, ly: number) => (ly > 0 ? ((cur - ly) / ly) * 100 : null);
   const yoy = pct(data.totals.fy, data.totals.prior);
   const toGo = data.totals.fy - data.totals.measuredApprox;
@@ -120,8 +120,8 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
           {data.markets.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
         </select>
         <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value, item: "ALL" })}>
-          <option value="ALL">All own brands</option>
-          {data.ownBrands.map((b) => <option key={b}>{b}</option>)}
+          <option value="ALL">All Heartland brands</option>
+          {data.heartlandBrands.map((b) => <option key={b}>{b}</option>)}
         </select>
         <select
           style={{ ...selStyle, maxWidth: 340 }}

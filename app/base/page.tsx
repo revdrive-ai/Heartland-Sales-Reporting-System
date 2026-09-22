@@ -16,7 +16,7 @@ import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
    including future years, which render as a planning view until their NIQ
    weeks land. Controls travel in the URL. */
 
-const OWN_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"]; // NIQ brands with own-side data
+const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"]; // the Heartland brands NIQ carries
 const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
 const FIRST_PLAN_YEAR = 2024;
@@ -50,7 +50,7 @@ export default async function Page({
   }
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt!
     : markets.some((m) => m.code === "ALB-JEWEL") ? "ALB-JEWEL" : markets[0].code;
-  const brand = OWN_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
+  const brand = HEARTLAND_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
   // units | dollars (NIQ retail) | gross (units × the dated list price in force)
   const metric = sp.metric === "dollars" ? "dollars" : sp.metric === "gross" ? "gross" : "units";
 
@@ -299,7 +299,7 @@ export default async function Page({
       }
     }
 
-    /* the verification popup's inventory: every own-brand item this customer
+    /* the verification popup's inventory: every Heartland branded item this customer
        sold in the source year, with distribution health */
     const mktFacts = await getWeeklyFacts({ market_code: mkt });
     const stats = new Map<string, { lastSale: string; acv: number; acvW: string; base: number; baseN: number }>();
@@ -565,7 +565,7 @@ export default async function Page({
 
   const data: BaseData = {
     markets: markets.map((m) => ({ code: m.code, name: m.name })),
-    brands: OWN_BRANDS,
+    brands: HEARTLAND_BRANDS,
     items,
     mkt,
     brand,

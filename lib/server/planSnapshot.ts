@@ -62,7 +62,7 @@ export type PlanSnapshotVersion = Omit<PlanBaseNow, "computed_at"> & {
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {
   const items = await listItems();
-  const ownBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
+  const heartlandBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
   const allWeeks = await listWeekEndings(mkt);
   const latest = allWeeks[allWeeks.length - 1];
   const last52 = allWeeks.slice(-52);
@@ -78,7 +78,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
     const itemName = new Map(items.map((i) => [i.upc, i.name]));
     let tot = 0;
     const dvRawIY = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
-    for (const brand of ownBrands) {
+    for (const brand of heartlandBrands) {
       const perItem = await fyWeeklyByItem(mkt, brand, weeks, allWeeks, latest);
       if (!perItem.size) continue;
       const bm = Array(12).fill(0);
@@ -127,7 +127,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
   const byItem: PlanBaseNow["byItem"] = {};
   let totBase = 0, totAdj = 0;
 
-  for (const brand of ownBrands) {
+  for (const brand of heartlandBrands) {
     const facts = await getWeeklyFacts({ market_code: mkt, brand });
     if (!facts.length) continue;
     const adds = additions.filter((a) => a.brand === brand);

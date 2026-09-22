@@ -39,11 +39,11 @@ export default async function Page({
         message="No Nielsen trading areas in this scope have data on file — only the 13 ALBSCO divisions are loaded so far." />
     );
   }
-  const ownBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
+  const heartlandBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
 
   const sp = await searchParams;
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt! : "ALL";
-  const brand = ownBrands.includes(sp.brand ?? "") ? sp.brand! : "ALL";
+  const brand = heartlandBrands.includes(sp.brand ?? "") ? sp.brand! : "ALL";
   const itemSel = sp.item && items.some((i) => i.upc === sp.item && i.is_own) ? sp.item : "ALL";
   const scopeMarkets = mkt === "ALL" ? markets.map((m) => m.code) : [mkt];
 
@@ -61,7 +61,7 @@ export default async function Page({
   const itemName = new Map(items.map((i) => [i.upc, i.name]));
   const itemVol = new Map<string, { upc: string; name: string; brand: string; fy: number }>();
   for (const code of scopeMarkets) {
-    for (const b of ownBrands) {
+    for (const b of heartlandBrands) {
       if (brand !== "ALL" && b !== brand) continue;
       const perItem = await fyWeeklyByItem(code, b, fyWeeks, allWeeks, latestWeek);
       let bFy = 0, bPrior = 0;
@@ -120,7 +120,7 @@ export default async function Page({
 
   const data: ForecastData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
-    ownBrands,
+    heartlandBrands,
     mkt, brand,
     item: itemSel,
     itemName: itemSel === "ALL" ? null : itemName.get(itemSel) ?? itemSel,

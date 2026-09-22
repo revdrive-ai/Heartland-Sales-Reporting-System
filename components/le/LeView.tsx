@@ -286,7 +286,7 @@ export default function LeView({ data }: { data: LeData }) {
               : <>No automated run has locked a cycle yet; the button above locks one by hand.</>}
             <br />
           </>)}
-          ◇ <b>Full year — latest</b> is the last frozen version&apos;s adjusted units (all own brands); <b>Working now</b> is the same
+          ◇ <b>Full year — latest</b> is the last frozen version&apos;s adjusted units (all Heartland brands); <b>Working now</b> is the same
           construction computed live — {plan ? "the carried + projected plan base with distribution verification and adjustments" : "actuals through the NIQ edge plus the forecast to year-end with LE adjustments"}.
           A Δ in color means the working forecast has moved more than 0.2% (or 5 units) since that account&apos;s last locked
           version — that drift is what the next lock will capture. Versions are never edited or deleted.

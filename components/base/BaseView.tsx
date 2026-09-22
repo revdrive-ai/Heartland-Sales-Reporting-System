@@ -1403,7 +1403,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
           <b>{data.plan ? "Plan sign-off & Latest Estimates" : "Latest Estimates"} — {marketName} · {data.win}</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {data.plan ? "all own brands, units · v1 = the base sign-off (Plan of Record) · later versions = the monthly LE cycle" : "all own brands, units · each LE freezes actuals to date + the forecast to year-end"}
+            {data.plan ? "all Heartland brands, units · v1 = the base sign-off (Plan of Record) · later versions = the monthly LE cycle" : "all Heartland brands, units · each LE freezes actuals to date + the forecast to year-end"}
           </span>
         </div>
         {snaps === null ? (
@@ -1794,7 +1794,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               <div>
                 <div className="mt">Distribution verification — {marketName} · Plan {data.distVer.year}</div>
                 <div className="ms">
-                  Every own-brand item this customer sold, with distribution health. <b>In plan</b> carries its base
+                  Every Heartland branded item this customer sold, with distribution health. <b>In plan</b> carries its base
                   into {data.distVer.year}; <b>No volume</b> takes it out. Items quiet for 8+ weeks are pre-set to No
                   volume — override anything. Shared with everyone once saved.
                 </div>

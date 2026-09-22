@@ -8,7 +8,7 @@ import ReportingView, { type ReportingData } from "@/components/reporting/Report
 import type { NielsenWeeklyRow } from "@/lib/types/db";
 
 /* Sales Dashboard — workflow step 3, the landing view. Tracks the measured
-   retail business on the real NIQ pull: own-brand dollars/units/price with
+   retail business on the real NIQ pull: Heartland branded dollars/units/price with
    true year-over-year (last W weeks vs the same weeks a year earlier), share
    of the measured competitive set, brand and division cuts, and item-level
    movers. Controls travel in the URL. */
@@ -44,12 +44,12 @@ export default async function Page({
         message="No Nielsen trading areas in this scope have data on file — only the 13 ALBSCO divisions are loaded so far." />
     );
   }
-  const ownBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
+  const heartlandBrands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
   const itemMeta = new Map(items.map((i) => [i.upc, i]));
 
   const sp = await searchParams;
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt! : "ALL";
-  const brand = ownBrands.includes(sp.brand ?? "") ? sp.brand! : "ALL";
+  const brand = heartlandBrands.includes(sp.brand ?? "") ? sp.brand! : "ALL";
   // single-item scope: own item, within the brand scope when one is chosen
   const itemSel = items.some((i) => i.upc === sp.item && i.is_own && (brand === "ALL" || i.brand === brand))
     ? sp.item! : "ALL";
@@ -74,13 +74,13 @@ export default async function Page({
   if (planYear) {
     return renderPlanYear({
       planYear, years, markets, marketList: scopeMarkets, allWeeks, latestWeek,
-      ownBrands, mkt, brand, gscope, items,
+      heartlandBrands, mkt, brand, gscope, items,
     });
   }
   if (mode.kind === "le") {
     return renderForecastYear({
       fyYear: latestDataYear, years, markets, marketList: scopeMarkets, allWeeks, latestWeek,
-      ownBrands, mkt, brand, gscope, items, itemSel,
+      heartlandBrands, mkt, brand, gscope, items, itemSel,
     });
   }
 
@@ -143,7 +143,7 @@ export default async function Page({
     const side = isCur ? "cur" : "ly";
 
     if (own && brand === "ALL") {
-      // brand cut always spans all own brands (plus the competitive set row)
+      // brand cut always spans every Heartland brand (plus the competitive set row)
     }
     if (own) {
       const b = byBrand.get(r.brand) ?? { cur: zero(), ly: zero() };
@@ -246,7 +246,7 @@ export default async function Page({
       insights.push({
         kind: "volume", severity: chg < 0 ? "bad" : "good", impact: Math.abs(cw - pw),
         title: `Base volume ${chg < 0 ? "down" : "up"} ${Math.abs(chg).toFixed(0)}% at ${name.replace("Albertsons ", "")}`,
-        detail: `~${Math.round(pw)} → ~${Math.round(cw)} base units/wk across ${brand === "ALL" ? "own brands" : brand} (latest 8 wks vs same wks YA). Open the division in Base & Lift to see which items are driving it.`,
+        detail: `~${Math.round(pw)} → ~${Math.round(cw)} base units/wk across ${brand === "ALL" ? "Heartland brands" : brand} (latest 8 wks vs same wks YA). Open the division in Base & Lift to see which items are driving it.`,
         href: `/base?mkt=${code}${brand !== "ALL" ? `&brand=${encodeURIComponent(brand)}` : ""}`,
       });
     }
@@ -255,7 +255,7 @@ export default async function Page({
 
   const data: ReportingData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
-    ownBrands,
+    heartlandBrands,
     items: [...itemVol]
       .map((u) => ({ upc: u, name: itemMeta.get(u)?.name ?? u, brand: itemMeta.get(u)?.brand ?? "" }))
       .sort((a, b) => a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name)),
@@ -300,12 +300,12 @@ export default async function Page({
    windows take the strongest read). Compared against prior-year actuals on
    the same aligned weeks. */
 async function renderForecastYear({
-  fyYear, years, markets, marketList, allWeeks, latestWeek, ownBrands, mkt, brand, gscope, items, itemSel,
+  fyYear, years, markets, marketList, allWeeks, latestWeek, heartlandBrands, mkt, brand, gscope, items, itemSel,
 }: {
   fyYear: number; years: number[];
   markets: { code: string; name: string }[];
   marketList: string[]; allWeeks: string[]; latestWeek: string;
-  ownBrands: string[]; mkt: string; brand: string;
+  heartlandBrands: string[]; mkt: string; brand: string;
   gscope: { active: boolean; label: string };
   items: { upc: string; name: string; brand: string; is_own: boolean }[];
   itemSel: string;
@@ -334,7 +334,7 @@ async function renderForecastYear({
   }
 
   for (const code of marketList) {
-    for (const b of ownBrands) {
+    for (const b of heartlandBrands) {
       const series = await fyWeeklySeries(code, b, fyWeeks, allWeeks, latestWeek, itemSel === "ALL" ? undefined : itemSel);
       if (!series) continue;
       const inBrandScope = brand === "ALL" || b === brand;
@@ -364,7 +364,7 @@ async function renderForecastYear({
   const pct = (cur: number, ly: number) => (ly > 0 ? ((cur - ly) / ly) * 100 : null);
   const data: ReportingData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
-    ownBrands,
+    heartlandBrands,
     items: [...itemVol]
       .map((u) => ({ upc: u, name: itemMeta.get(u)?.name ?? u, brand: itemMeta.get(u)?.brand ?? "" }))
       .sort((a, b) => a.brand.localeCompare(b.brand) || a.name.localeCompare(b.name)),
@@ -414,12 +414,12 @@ async function renderForecastYear({
    prior-year actuals on the same aligned weeks, with brand and division cuts
    against the latest 52 measured weeks. */
 async function renderPlanYear({
-  planYear, years, markets, marketList, allWeeks, latestWeek, ownBrands, mkt, brand, gscope, items,
+  planYear, years, markets, marketList, allWeeks, latestWeek, heartlandBrands, mkt, brand, gscope, items,
 }: {
   planYear: number; years: number[];
   markets: { code: string; name: string }[];
   marketList: string[]; allWeeks: string[]; latestWeek: string;
-  ownBrands: string[]; mkt: string; brand: string;
+  heartlandBrands: string[]; mkt: string; brand: string;
   gscope: { active: boolean; label: string };
   items: { upc: string; brand: string; is_own: boolean }[];
 }) {
@@ -441,7 +441,7 @@ async function renderPlanYear({
   const matchedIdx = new Set<number>(); // plan weeks whose prior-year week is measured
 
   for (const code of marketList) {
-    for (const b of ownBrands) {
+    for (const b of heartlandBrands) {
       const facts = await getWeeklyFacts({ market_code: code, brand: b });
       if (!facts.length) continue;
       const wB$ = new Map<string, number>(), wBU = new Map<string, number>();
@@ -522,7 +522,7 @@ async function renderPlanYear({
 
   const data: ReportingData = {
     markets: [{ code: "ALL", name: gscope.active ? `All in scope — ${gscope.label}` : "All divisions (Albertsons total)" }, ...markets.map((m) => ({ code: m.code, name: m.name }))],
-    ownBrands,
+    heartlandBrands,
     mkt, brand, win: 52,
     metric: "retail",
     grossCoverage: null,

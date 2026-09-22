@@ -10,7 +10,7 @@ import { getScope } from "@/lib/server/scope";
    seasonality-shaped projection after (marked * in the column header).
    Planner adjustments are browser-local and are NOT applied here. */
 
-const OWN_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
+const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
 const DAY = 86400000;
 
@@ -62,7 +62,7 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
   const mkt = sp.get("mkt") ?? "";
   const market = allowed.find((m) => m.code === mkt);
   if (!market) return NextResponse.json({ error: "unknown or out-of-scope market" }, { status: 400 });
-  const brand = OWN_BRANDS.includes(sp.get("brand") ?? "") ? sp.get("brand")! : "SPLENDA";
+  const brand = HEARTLAND_BRANDS.includes(sp.get("brand") ?? "") ? sp.get("brand")! : "SPLENDA";
   const gran = sp.get("gran") === "month" ? "month" : "week";
   const fmt = sp.get("fmt") === "xlsx" ? "xlsx" : "csv";
 

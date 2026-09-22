@@ -12,7 +12,7 @@ swap, not a rewrite — migrations `00001`–`00009` are already authored under
 
 | Source | Contents |
 | --- | --- |
-| NIQ ALBSCO weekly pull | 157 weeks (Jul 2023 → Jul 2026) across 13 Albertsons divisions · 100 items (82 own-brand) · base/actual units & dollars, base price, ACV, feature/display/TPR measures |
+| NIQ ALBSCO weekly pull | 157 weeks (Jul 2023 → Jul 2026) across 13 Albertsons divisions · 100 items (82 Heartland branded) · base/actual units & dollars, base price, ACV, feature/display/TPR measures |
 | Telus FY2026 promo book | 1,187 promotions · 5,117 component lines · planned & actual spend |
 | Item crosswalk workbook | 209 Telus item # ↔ NIQ UPC pairs · 403 NIQ item attribute rows |
 | Price list workbook | 213 dated list-price records, initial list effective 2026-01-01 |

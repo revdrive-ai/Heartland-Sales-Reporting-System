@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import { Bar, Line } from "react-chartjs-2";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 
-/* Sales Dashboard, draft 1 on the real NIQ pull. Headline = own brands in
+/* Sales Dashboard, draft 1 on the real NIQ pull. Headline = Heartland brands in
    measured Albertsons retail; the competitive set appears as share and as a
    context row on the brand cut, never mixed into the headline. */
 
 export type ReportingData = {
   markets: { code: string; name: string }[];
-  ownBrands: string[];
-  /** own items with volume in the window — the item dropdown (empty in plan mode) */
+  heartlandBrands: string[];
+  /** Heartland branded items with volume in the window — the item dropdown (empty in plan mode) */
   items: { upc: string; name: string; brand: string }[];
   item: string;                          // "ALL" or a UPC
   itemName: string | null;
@@ -104,7 +104,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
   };
 
   const scopeName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
-  const brandName = data.itemName ?? (data.brand === "ALL" ? "all own brands" : data.brand);
+  const brandName = data.itemName ?? (data.brand === "ALL" ? "all Heartland brands" : data.brand);
   const itemBrands = [...new Set(data.items.map((i) => i.brand))];
 
   const opts = useMemo(() => {
@@ -146,8 +146,8 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           {data.markets.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
         </select>
         <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value })}>
-          <option value="ALL">All own brands</option>
-          {data.ownBrands.map((b) => <option key={b}>{b}</option>)}
+          <option value="ALL">All Heartland brands</option>
+          {data.heartlandBrands.map((b) => <option key={b}>{b}</option>)}
         </select>
         {!data.plan && (
           <select
@@ -233,7 +233,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
               ? <span className="k-sub flat">the measured set isn&apos;t mapped per item — share reads at all-items scope</span>
               : data.brand === "ALL"
               ? <YoY v={data.kpis.sharePts} suffix=" pts YoY" />
-              : <span className="k-sub flat">share reads at all-own-brands scope</span>}
+              : <span className="k-sub flat">share reads at all-Heartland-brands scope</span>}
           </div>
         )}
       </div>
@@ -321,7 +321,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
               ? <>◇ Full-year plan base per brand against the most recent complete 52 weeks of measured sales.</>
               : data.fy
               ? <>◇ Full-year FY{data.fy.year} (measured + forecast) per brand against {data.fy.priorYear} actuals on the same aligned weeks.</>
-              : <>◇ The brand cut always spans every own brand; the grey competitive row is context for the share number.</>}
+              : <>◇ The brand cut always spans every Heartland brand; the grey competitive row is context for the share number.</>}
           </div>
         </div>
 

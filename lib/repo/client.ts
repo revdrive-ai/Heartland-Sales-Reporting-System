@@ -169,7 +169,7 @@ export type PlanEvent = {
   plan_year: number;
   customer_id: string;      // Telus customer id ("" when imported name didn't match)
   customer: string;
-  brand: string;            // own brand, or "MIXED" when unknown (carried events)
+  brand: string;            // Heartland brand, or "MIXED" when unknown (carried events)
   title: string;
   perf: string;             // performance type
   start: string;            // ISO dates
