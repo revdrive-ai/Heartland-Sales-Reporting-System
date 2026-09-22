@@ -59,6 +59,12 @@ export type PlanSnapshotVersion = Omit<PlanBaseNow, "computed_at"> & {
   cycle?: string;          // "2026-09"
   scheduled_lock?: string; // that cycle's lock instant, ISO
   locked_late?: boolean;   // written after the scheduled instant had passed
+  /** Where the version was taken from. The plan's Review & submit step
+      counts only its own submissions as "submitted": a version taken from
+      the sign-off card or the LE screen is the same frozen record, but it
+      was not the act of submitting the plan, and the step must not read as
+      done on the strength of it. */
+  submitted_from?: "review";
 };
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {
@@ -230,7 +236,13 @@ export async function getSnapshots(mkt: string, year: number): Promise<PlanSnaps
 
 /** Freeze the current plan base as the next version: v1 = Plan of Record
     (the base sign-off), later versions = Latest Estimates. */
-export async function takeSnapshot(mkt: string, year: number, note: string, cycleKey?: string): Promise<PlanSnapshotVersion> {
+export async function takeSnapshot(
+  mkt: string,
+  year: number,
+  note: string,
+  cycleKey?: string,
+  from?: "review",
+): Promise<PlanSnapshotVersion> {
   const [versions, now] = await Promise.all([getSnapshots(mkt, year), computePlanBase(mkt, year)]);
   const seq = versions.length + 1;
   const when = new Date();
@@ -263,6 +275,7 @@ export async function takeSnapshot(mkt: string, year: number, note: string, cycl
     totals: now.totals,
     adjustments: now.adjustments,
     distver: now.distver,
+    ...(from ? { submitted_from: from } : {}),
   };
   await setState(snapKey(mkt, year), { versions: [...versions, version] });
   return version;

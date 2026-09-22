@@ -23,6 +23,7 @@ export type CustomerStatus = {
   lockedForDue: boolean;         // locked for the cycle whose scheduled lock has passed
   lockedCycle: string | null;    // the cycle its newest version belongs to
   signedOff: boolean;            // plan years: a Plan of Record exists
+  submitted: boolean;            // plan years: a version was taken from the Review & submit step
   adjustments: number;
   distver: {
     out: number;
@@ -50,6 +51,7 @@ export type ModeStatus = {
     customers: number;
     taken: number;               // LE: customers locked for the due cycle; Plan: customers with any version
     signed: number;              // Plan of Record count (plan years)
+    submitted: number;           // customers submitted from the Review & submit step
     verified: number;            // distribution verified
     newItems: number;            // the new-items question answered either way
     adjustments: number;
@@ -97,6 +99,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       lockedForDue: versions.some((v) => (v.cycle ?? v.taken_at.slice(0, 7)) === due.key),
       lockedCycle: versions.length ? (versions[versions.length - 1].cycle ?? versions[versions.length - 1].taken_at.slice(0, 7)) : null,
       signedOff: versions.some((v) => v.kind === "por"),
+      submitted: versions.some((v) => v.submitted_from === "review"),
       adjustments: adjs.length,
       distver: {
         out: Object.values(dv?.decisions ?? {}).filter((d) => d === "out").length,
@@ -120,6 +123,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       customers: customers.length,
       taken: mode.kind === "le" ? customers.filter((c) => c.lockedForDue).length : customers.filter((c) => c.versions.length > 0).length,
       signed: customers.filter((c) => c.signedOff).length,
+      submitted: customers.filter((c) => c.submitted).length,
       verified: customers.filter((c) => c.distver.verifiedAt).length,
       newItems: customers.filter((c) => c.distver.newItemsAnswered).length,
       adjustments: customers.reduce((a, c) => a + c.adjustments, 0),

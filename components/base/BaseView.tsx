@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EVENT_MAX_DAYS } from "@/lib/data/nonPerformanceTypes";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ADD_ITEM_EVENT, OPEN_DISTRIBUTION_EVENT, processPath, viewUrlWithin } from "@/lib/process";
+import { ADD_ITEM_EVENT, OPEN_DISTRIBUTION_EVENT, parseWorkPath, processPath, viewUrlWithin } from "@/lib/process";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -489,6 +489,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       setSnapBusy(false);
     }
   };
+  /* Inside the plan corridor the plan is submitted from its last step, so
+     this card shows the versions but does not take one — two places to
+     press "sign off" is how a step reads as done before anyone did it. */
+  const inPlanProcess = parseWorkPath(pathname)?.proc.kind === "plan";
   const lastSnap = snaps && snaps.length ? snaps[snaps.length - 1] : null;
   const snapDrift = lastSnap && snapCur ? snapCur.totals.adjusted - lastSnap.totals.adjusted : 0;
   const snapChanged = !!lastSnap && Math.abs(snapDrift) > Math.max(lastSnap.totals.adjusted * 0.002, 5);
@@ -505,7 +509,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           ✓ {lastSnap.label} · v{lastSnap.seq}
         </span>
     : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-        title={planYear ? "No Plan of Record yet — finish distribution verification and adjustments, then Mark base complete below" : `No ${snapYear} LE on record yet — take the baseline in the sign-off & LE card below`}>
+        title={planYear
+          ? (inPlanProcess ? "No Plan of Record yet — it is taken on the Review & submit step" : "No Plan of Record yet — finish distribution verification and adjustments, then Mark base complete below")
+          : `No ${snapYear} LE on record yet — take the baseline in the sign-off & LE card below`}>
         {planYear ? "base not signed off" : "no LE taken yet"}
       </span>) : null;
 
@@ -1759,6 +1765,12 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               </table>
             </div>
           )}
+          {inPlanProcess && data.plan ? (
+            <div className="note" style={{ margin: 0, padding: "12px 16px", borderTop: snaps.length ? "1px solid var(--line)" : "none", fontSize: 12.5 }}>
+              ◇ The plan is submitted from the <b>Review &amp; submit</b> step, once everything above has been read back.
+              {snaps.length === 0 ? " No version has been taken yet." : ""}
+            </div>
+          ) : (
           <div style={{ padding: "12px 16px", borderTop: snaps.length ? "1px solid var(--line)" : "none", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <input
               style={{ ...selStyle, flex: "1 1 260px" }}
@@ -1770,6 +1782,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               {snapBusy ? "Freezing…" : snaps.length === 0 ? (data.plan ? "✓ Mark base complete — take Plan of Record" : "Take baseline Latest Estimate") : "Take Latest Estimate"}
             </button>
           </div>
+          )}
           <div className="note" style={{ margin: 0, padding: "0 16px 12px" }}>
             ◇ Each version freezes the full plan base (per brand by month, in units), the adjustment list, and the
             distribution rollup — nothing here is ever edited or deleted, so any two versions can be compared. The

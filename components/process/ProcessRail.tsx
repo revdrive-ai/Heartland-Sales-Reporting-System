@@ -32,7 +32,8 @@ export type RailStatus = {
   verified: number;   // distribution verified
   newItems: number;   // new-items question answered either way
   added: number;      // items added across those customers
-  signed: number;     // Plan of Record signed
+  signed: number;     // Plan of Record signed (from anywhere)
+  submitted: number;  // submitted from the Review & submit step — the only thing step 5 ticks on
   events: number;
   taken: number;      // LE: locked for the due cycle
   leAnswered: number; // LE: answered "did anything move" for the due cycle
@@ -67,9 +68,12 @@ function stateOf(stepKey: string, s: RailStatus | null): StepState {
          progress, never a tick. */
       return { done: false, note: `${s.events} event${s.events === 1 ? "" : "s"}` };
     case "submit":
-      return all && s.signed === s.customers
+      /* Only a submission made FROM this step counts. A Plan of Record
+         taken from the sign-off card or the LE screen is a real version,
+         but nobody submitted the plan — so the pill stays open. */
+      return all && s.submitted === s.customers
         ? { done: true, note: s.customers === 1 ? "submitted" : `all ${s.customers} accounts` }
-        : { done: false, note: `${s.signed} of ${s.customers} submitted` };
+        : { done: false, note: `${s.submitted} of ${s.customers} submitted` };
     case "adjust": {
       if (!all || s.leAnswered < s.customers) return { done: false, note: `${s.leAnswered} of ${s.customers} answered` };
       /* Answered is not the same as unchanged: "adjusting" with nothing moved

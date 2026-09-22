@@ -51,8 +51,10 @@ export type ReviewData = {
       rows: { id: string; title: string; brand: string; perf: string; start: string; end: string;
               spend: number; lift: number | null; origin: string }[];
     };
-    versions: { seq: number; kind: "por" | "le"; label: string; takenAt: string; note: string; total: number }[];
+    versions: { seq: number; kind: "por" | "le"; label: string; takenAt: string; note: string; total: number; fromReview: boolean }[];
     signedOff: boolean;
+    /** a version was taken from THIS page — the only thing that reads as submitted */
+    submitted: boolean;
   };
 };
 
@@ -94,7 +96,11 @@ export default function ReviewView({ data }: { data: ReviewData }) {
   if (!a.distribution.verifiedAt) owed.push({ step: "distribution", text: "Distribution has not been verified for this account" });
   if (!a.newItems.answered) owed.push({ step: "new-items", text: "The new-items question has not been answered" });
   const ready = owed.length === 0;
-  const por = a.versions.find((v) => v.kind === "por") ?? null;
+  /* "Submitted" is a submission from this page. A version taken elsewhere
+     (the sign-off card, the LE screen) is listed with the others, but it is
+     not the plan being submitted, so it does not close the step. */
+  const sub = a.versions.find((v) => v.fromReview) ?? null;
+  const elsewhere = a.versions.filter((v) => !v.fromReview);
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -102,7 +108,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
     try {
       const r = await fetch(`/api/plansnap/${a.code}/${data.year}`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ note: note.trim() }),
+        body: JSON.stringify({ note: note.trim(), from: "review" }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
       setNote("");
@@ -137,8 +143,8 @@ export default function ReviewView({ data }: { data: ReviewData }) {
         </div>
         <div className="actions">
           <span className="pill">NIQ through {a.dataEdge}</span>
-          {por
-            ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Plan of Record · {por.takenAt.slice(0, 10)}</span>
+          {sub
+            ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {sub.takenAt.slice(0, 10)}</span>
             : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>not yet submitted</span>}
         </div>
       </div>
@@ -320,26 +326,39 @@ export default function ReviewView({ data }: { data: ReviewData }) {
       {/* 5 · submit */}
       <section className={"card revsubmit" + (ready ? " ready" : "")}>
         <div>
-          <b>{por ? "Submitted as the Plan of Record" : `Submit Plan ${data.year} for ${a.name}`}</b>
+          <b>{sub ? `Plan ${data.year} submitted for ${a.name}` : `Submit Plan ${data.year} for ${a.name}`}</b>
           <span>
-            {por
-              ? <>v1 taken {por.takenAt.slice(0, 16).replace("T", " ")} UTC · {fmtK(por.total)} units{por.note ? <> · &ldquo;{por.note}&rdquo;</> : null}.
+            {sub
+              ? <>Submitted {sub.takenAt.slice(0, 16).replace("T", " ")} UTC as v{sub.seq} · {fmtK(sub.total)} units{sub.note ? <> · &ldquo;{sub.note}&rdquo;</> : null}.
                  Submitting again records a revision alongside it — versions are never overwritten.</>
               : ready
-                ? <>Freezes the plan base above as v1. The monthly Latest Estimates are then read against it.</>
+                ? <>Freezes the plan base above as a version{elsewhere.length ? "" : " — v1, the Plan of Record"}. The monthly Latest Estimates are then read against it.</>
                 : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the plan has its distribution answers and its new-items answer.</>}
           </span>
-          {a.versions.length > 1 && (
+          {elsewhere.length > 0 && !sub && (
+            <span className="dim" style={{ marginTop: 4 }}>
+              ◇ {elsewhere.length === 1 ? "A version was" : `${elsewhere.length} versions were`} taken for this account outside this step
+              (the sign-off card or the LE screen). {elsewhere.length === 1 ? "It is" : "They are"} listed below and kept, but the plan has not been
+              submitted from here.
+            </span>
+          )}
+          {a.versions.length > 0 && (
             <ul className="revlist" style={{ marginTop: 8 }}>
               {a.versions.map((v) => (
-                <li key={v.seq}><b>v{v.seq}</b> {v.label} · {v.takenAt.slice(0, 10)} · {fmtK(v.total)} units{v.note ? <span className="dim"> · {v.note}</span> : null}</li>
+                <li key={v.seq}>
+                  <b>v{v.seq}</b> {v.label} · {v.takenAt.slice(0, 10)} · {fmtK(v.total)} units
+                  {v.fromReview
+                    ? <span className="minichip on yes" style={{ marginLeft: 6 }}>submitted here</span>
+                    : <span className="dim"> · taken from the {v.kind === "por" ? "sign-off card" : "LE screen"}</span>}
+                  {v.note ? <span className="dim"> · {v.note}</span> : null}
+                </li>
               ))}
             </ul>
           )}
         </div>
         <div className="revact">
           <input
-            placeholder={por ? "Revision note (optional)" : "Submission note (optional) — travels with the version"}
+            placeholder={sub ? "Revision note (optional)" : "Submission note (optional) — travels with the version"}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             disabled={!ready || busy}
@@ -348,9 +367,9 @@ export default function ReviewView({ data }: { data: ReviewData }) {
             className={"btn" + (ready ? " primary" : "")}
             onClick={submit}
             disabled={!ready || busy}
-            title={ready ? (por ? "Take a revised version of the plan" : "Take the Plan of Record for this account") : "Finish the steps listed above first"}
+            title={ready ? (sub ? "Take a revised version of the plan" : "Submit this account's plan") : "Finish the steps listed above first"}
           >
-            {busy ? "Submitting…" : por ? "Submit a revision" : "Submit the plan"}
+            {busy ? "Submitting…" : sub ? "Submit a revision" : "Submit the plan"}
           </button>
           {err && <span className="dim" style={{ color: "var(--bad)" }}>{err}</span>}
         </div>

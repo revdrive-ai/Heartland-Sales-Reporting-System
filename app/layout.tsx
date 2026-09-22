@@ -44,6 +44,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     newItems: status.totals.newItems,
     added: status.customers.reduce((a, c) => a + c.distver.added, 0),
     signed: status.totals.signed,
+    submitted: status.totals.submitted,
     events: status.totals.events,
     taken: status.totals.taken,
     leAnswered: status.totals.leAnswered,

@@ -37,14 +37,15 @@ export async function POST(req: Request, ctx: Ctx) {
   const { mkt, year } = await ctx.params;
   const p = await valid(mkt, year);
   if (!p) return NextResponse.json({ error: "unknown market or year" }, { status: 400 });
-  let note = "", cycle: string | undefined;
+  let note = "", cycle: string | undefined, from: "review" | undefined;
   try {
-    const body = (await req.json()) as { note?: string; cycle?: string };
+    const body = (await req.json()) as { note?: string; cycle?: string; from?: string };
     note = (body.note ?? "").slice(0, 500);
     if (typeof body.cycle === "string" && /^\d{4}-\d{2}$/.test(body.cycle)) cycle = body.cycle;
+    if (body.from === "review") from = "review";
   } catch { /* empty body is fine */ }
   try {
-    const version = await takeSnapshot(p.mkt, p.year, note, cycle);
+    const version = await takeSnapshot(p.mkt, p.year, note, cycle, from);
     return NextResponse.json({ version }, { headers: { "cache-control": "no-store" } });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message.slice(0, 200) : "unknown" }, { status: 502 });

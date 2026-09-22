@@ -114,8 +114,10 @@ export default async function Page() {
       },
       versions: one.versions.map((v) => ({
         seq: v.seq, kind: v.kind, label: v.label, takenAt: v.taken_at, note: v.note, total: v.totals.adjusted,
+        fromReview: v.submitted_from === "review",
       })),
       signedOff: one.signedOff,
+      submitted: one.submitted,
     },
   };
   return <ReviewView data={data} />;
