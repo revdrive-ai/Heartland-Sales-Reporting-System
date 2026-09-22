@@ -11,6 +11,7 @@
 
 import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
 import { readDistVerification, type DistVerification } from "@/lib/distver";
+import { readLeCycle, type LeAnswer, type LeCycleDoc } from "@/lib/lecycle";
 
 /* ---- shared-document plumbing ---- */
 
@@ -331,4 +332,30 @@ export async function getDistVerification(market_code: string, plan_year: number
 
 export async function saveDistVerification(market_code: string, plan_year: number, dv: DistVerification): Promise<void> {
   await saveDoc(dvKey(market_code, plan_year), dv);
+}
+
+/* ---- the estimate's monthly answer (LE years) ----
+   Per customer × year, one entry per cycle: did anything move this month, or
+   does the forecast on record still stand. Shared like the rest of the
+   planner's work, and read back by the step rail. */
+
+export type { LeAnswer, LeCycleDoc } from "@/lib/lecycle";
+
+const leKey = (market_code: string, le_year: number) => `lecycle:${market_code}:${le_year}`;
+
+export async function getLeCycle(market_code: string, le_year: number): Promise<LeCycleDoc> {
+  return readLeCycle(await loadDoc<LeCycleDoc>(leKey(market_code, le_year), () => null));
+}
+
+export async function setLeCycleAnswer(
+  market_code: string,
+  le_year: number,
+  cycle: string,
+  answer: LeAnswer,
+): Promise<void> {
+  const doc = await getLeCycle(market_code, le_year);
+  await saveDoc(leKey(market_code, le_year), {
+    ...doc,
+    answers: { ...doc.answers, [cycle]: { answer, at: new Date().toISOString() } },
+  });
 }

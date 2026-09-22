@@ -4,11 +4,12 @@ import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 import type { DistVerification, PlanAdjustment } from "@/lib/repo/client";
 import type { WorkMode } from "@/lib/mode";
 import { daysUntilLock, dueCycle, openCycle, type LeCycle } from "@/lib/leSchedule";
+import { readLeCycle, leAnswerFor, type LeAnswer } from "@/lib/lecycle";
 
 /* Where the work stands for the mode year, across the customers IN SCOPE —
    the rollup behind the step rail, the strip under the top bar and the
    Latest Estimate view. One batched app_state read: plansnap / adj / distver
-   per customer.
+   / lecycle per customer.
 
    Scope is the top bar's five selectors. Narrowing to one account has to
    narrow the process with it: "1 of 13 accounts" is the wrong thing to tell
@@ -30,6 +31,9 @@ export type CustomerStatus = {
     /** the new-items question has an answer — items added, or "none this year" */
     newItemsAnswered: boolean;
   };
+  /** LE only: this cycle's answer to "did anything move this month". Null
+      until the month is answered — last month's answer does not carry. */
+  leAnswer: LeAnswer | null;
 };
 
 export type ModeStatus = {
@@ -50,6 +54,7 @@ export type ModeStatus = {
     newItems: number;            // the new-items question answered either way
     adjustments: number;
     events: number;              // plan events in the year document
+    leAnswered: number;          // LE: customers who answered the DUE cycle
   };
 };
 
@@ -68,7 +73,12 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     const last = w[w.length - 1];
     if (last && last > dataEdge) dataEdge = last;
   }
-  const keys = markets.flatMap((m) => [`plansnap:${m.code}:${year}`, `adj:${m.code}:${year}`, `distver:${m.code}:${year}`]);
+  const keys = markets.flatMap((m) => [
+    `plansnap:${m.code}:${year}`,
+    `adj:${m.code}:${year}`,
+    `distver:${m.code}:${year}`,
+    `lecycle:${m.code}:${year}`,
+  ]);
   keys.push(`events:${year}`);
   const docs = await getStates(keys);
 
@@ -94,6 +104,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
         verifiedAt: dv?.verified_at ?? null,
         newItemsAnswered: !!dv?.no_additions || (dv?.additions ?? []).length > 0,
       },
+      leAnswer: leAnswerFor(readLeCycle(docs.get(`lecycle:${m.code}:${year}`)), due.key),
     };
   });
   const events = docs.get(`events:${year}`);
@@ -113,6 +124,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       newItems: customers.filter((c) => c.distver.newItemsAnswered).length,
       adjustments: customers.reduce((a, c) => a + c.adjustments, 0),
       events: Array.isArray(events) ? events.length : 0,
+      leAnswered: customers.filter((c) => c.leAnswer).length,
     },
   };
 }

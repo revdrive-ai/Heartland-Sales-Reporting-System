@@ -15,7 +15,12 @@ import type { ModeKind } from "@/lib/mode";
    Steps 1-3 of Plan all render the SAME view. Only the modal differs, and
    step 3 is that view with the modals shut — which is the point: by then it
    is showing a base that already reflects the two steps before it. The
-   distribution doc is saved per customer x year and BaseView reads it. */
+   distribution doc is saved per customer x year and BaseView reads it.
+
+   LE is the same shape over the in-flight year: its first two steps are both
+   the Promotional Planner, and the third is the versions screen where the
+   cycle is locked. Its question is asked once a MONTH rather than once a
+   year, because an estimate is taken every cycle against the same year. */
 
 /** A modal on the underlying view that a step opens on arrival. */
 export type StepModal = "distribution" | "newitem";
@@ -29,7 +34,16 @@ export type ProcessStep = {
   view: string;
   open?: StepModal;
   /** This step asks a question in the rail rather than advancing blindly. */
-  chooser?: "new-items";
+  chooser?: "new-items" | "le-changes";
+  /** How long the page below is held while this step is on screen.
+
+      "step"   — the whole time, answered or not. The answer's work happens in
+                 a modal that sits above the scrim, so there is never anything
+                 on the page itself to reach for.
+      "answer" — until the question has an answer. One of the answers IS the
+                 page (adjust the estimate on the planner), so holding past
+                 the answer would hold them off the work they just chose. */
+  holdsUntil?: "step" | "answer";
   /** Its work belongs to one customer, so it cannot start until the top bar
       names one. Everything a plan year is built from — the distribution
       answers, the new items, the adjustments, the events and the sign-off —
@@ -74,17 +88,35 @@ export const PROCESSES: ProcessDef[] = [
     kind: "le",
     label: "Latest Estimate",
     tagline: "The in-flight year",
-    detail: "Actuals through the data edge plus the forecast to year-end — the monthly estimate.",
+    detail: "Three steps: review where the year stands, adjust the estimate, then lock the month.",
     icon: "refresh",
     needsYear: false,
     accountWhy:
       "An estimate is taken one account at a time — the forecast you are adjusting is that customer's, and each month's version locks against it",
     steps: [
       {
-        key: "estimate",
-        label: "Update the estimate",
-        blurb: "Adjust the in-flight year's promotions and forecast to today's best view.",
+        key: "review",
+        label: "Review the estimate",
+        blurb: "Actuals through the data edge plus the forecast to year-end — what this month starts from.",
         view: "planner",
+        perAccount: true,
+      },
+      {
+        key: "adjust",
+        label: "Adjust the estimate",
+        blurb: "Move the promotions and the forecast to today's best view — or say nothing changed this month.",
+        view: "planner",
+        chooser: "le-changes",
+        /* Choosing to adjust hands the planner back, so the hold ends with
+           the answer rather than with the step. */
+        holdsUntil: "answer",
+        perAccount: true,
+      },
+      {
+        key: "lock",
+        label: "Lock the month",
+        blurb: "Take this cycle's version. The forecast on record freezes and the month is closed.",
+        view: "le",
         perAccount: true,
       },
     ],
@@ -113,6 +145,9 @@ export const PROCESSES: ProcessDef[] = [
         blurb: "Anything launching in the plan year — or say there are none, and move on.",
         view: "base",
         chooser: "new-items",
+        /* Both answers are settled in the rail or in the add-item modal, so
+           the page below is held for as long as this is the step. */
+        holdsUntil: "step",
         perAccount: true,
       },
       {

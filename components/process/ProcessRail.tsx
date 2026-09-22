@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { ICONS } from "@/lib/icons";
 import { parseWorkPath, processPath, writeProcCookie } from "@/lib/process";
 import StepChoices from "./StepChoices";
+import LeChoices from "./LeChoices";
+import type { LeAnswer } from "@/lib/lecycle";
 import StepReset from "./StepReset";
 
 /* The corridor. Inside a process there is no sidebar — just this: which
@@ -33,6 +35,15 @@ export type RailStatus = {
   signed: number;     // Plan of Record signed
   events: number;
   taken: number;      // LE: locked for the due cycle
+  leAnswered: number; // LE: answered "did anything move" for the due cycle
+  /** LE: that answer itself, but only when the top bar is on one account —
+      which is the only time the question is asked. */
+  leAnswer: LeAnswer | null;
+  adjustments: number;
+  /** LE: the due cycle — its key, which the answer is filed under, and the
+      label to call it by. */
+  cycle: string;
+  cycleLabel: string;
   year: number;
 };
 
@@ -54,8 +65,25 @@ function stateOf(stepKey: string, s: RailStatus | null): StepState {
       return all && s.signed === s.customers
         ? { done: true, note: "signed off" }
         : { done: false, note: `${s.events} event${s.events === 1 ? "" : "s"} · ${s.signed} of ${s.customers} signed` };
-    case "estimate":
-      return { done: false, note: `${s.taken} of ${s.customers} accounts locked` };
+    case "adjust": {
+      if (!all || s.leAnswered < s.customers) return { done: false, note: `${s.leAnswered} of ${s.customers} answered` };
+      /* Answered is not the same as unchanged: "adjusting" with nothing moved
+         yet is a month in progress, and calling that "nothing changed" would
+         put words in their mouth. */
+      const note =
+        s.leAnswer === "none"
+          ? "nothing changed"
+          : s.adjustments
+            ? `${s.adjustments} adjustment${s.adjustments === 1 ? "" : "s"}`
+            : s.leAnswer === "adjusting"
+              ? "adjusting"
+              : `all ${s.customers} accounts`;
+      return { done: true, note };
+    }
+    case "lock":
+      return all && s.taken === s.customers
+        ? { done: true, note: `${s.cycleLabel} locked` }
+        : { done: false, note: `${s.taken} of ${s.customers} accounts locked` };
     default:
       return { done: false };
   }
@@ -98,8 +126,17 @@ export default function ProcessRail({
      The urging — the ring, the pulse, the "choose one" badge — is only for
      while the question is still open. */
   const onChooser = !!step.chooser && oneAccount;
-  const unanswered = onChooser && !!status && status.newItems < status.customers;
-  const hold = needsAccount || onChooser;
+  const answered = !status
+    ? false
+    : step.chooser === "le-changes"
+      ? status.leAnswered >= status.customers
+      : status.newItems >= status.customers;
+  const unanswered = onChooser && !!status && !answered;
+  /* How long the hold lasts is the step's to say. Plan's question is settled
+     in the rail or in a modal above the page, so it holds for the whole step;
+     the estimate's "adjust" answer hands the planner back, so that one holds
+     only until it is answered. */
+  const hold = needsAccount || (onChooser && (step.holdsUntil !== "answer" || unanswered));
   const urge = needsAccount || unanswered;
   const prev = index > 0 ? proc.steps[index - 1] : null;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
@@ -177,6 +214,20 @@ export default function ProcessRail({
             scopeLabel={scopeLabel}
             nextHref={processPath(proc.kind, next?.key ?? step.key, year)}
             added={status?.added ?? 0}
+          />
+        </div>
+      ) : step.chooser === "le-changes" && status ? (
+        <div className="prail-foot chooser">
+          <span className="pblurb">{step.blurb}</span>
+          <LeChoices
+            year={status.year}
+            cycle={status.cycle}
+            cycleLabel={status.cycleLabel}
+            markets={inScope}
+            scopeLabel={scopeLabel}
+            nextHref={processPath(proc.kind, next?.key ?? step.key)}
+            answer={status.leAnswer}
+            adjustments={status.adjustments}
           />
         </div>
       ) : (

@@ -46,6 +46,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     signed: status.totals.signed,
     events: status.totals.events,
     taken: status.totals.taken,
+    leAnswered: status.totals.leAnswered,
+    /* The estimate's question is only ever asked of one account, so the
+       answer is only meaningful when the top bar is on one. */
+    leAnswer: status.customers.length === 1 ? status.customers[0].leAnswer : null,
+    adjustments: status.totals.adjustments,
+    cycle: status.schedule?.due.key ?? "",
+    cycleLabel: status.schedule?.due.label ?? status.month,
     year: status.year,
   };
 
