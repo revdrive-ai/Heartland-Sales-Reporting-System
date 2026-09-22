@@ -25,6 +25,13 @@ import type { ModeKind } from "@/lib/mode";
 /** A modal on the underlying view that a step opens on arrival. */
 export type StepModal = "distribution" | "newitem";
 
+/* The plan's last step is a read-back. Everything the four steps before it
+   wrote — the distribution answers, the new items, the levers, the events —
+   is shown together for the one account, and only then is the Plan of Record
+   taken. Signing off used to sit inside step 4 as a side action on the
+   planner; a plan is submitted once, deliberately, from a page that shows
+   what is being submitted, not from a button beside the calendar. */
+
 export type ProcessStep = {
   key: string;
   label: string;
@@ -125,7 +132,7 @@ export const PROCESSES: ProcessDef[] = [
     kind: "plan",
     label: "Plan a new year",
     tagline: "Build next year",
-    detail: "Four steps: confirm distribution, add new items, review the base business, then build the promotion plan.",
+    detail: "Five steps: confirm distribution, add new items, review the base business, build the promotion plan, then review and submit.",
     icon: "calendar",
     needsYear: true,
     accountWhy:
@@ -160,8 +167,15 @@ export const PROCESSES: ProcessDef[] = [
       {
         key: "planner",
         label: "Build the plan",
-        blurb: "Lay the promotion calendar on that base and sign off the Plan of Record.",
+        blurb: "Lay the promotion calendar on that base — events, lift and trade spend for the year.",
         view: "planner",
+        perAccount: true,
+      },
+      {
+        key: "submit",
+        label: "Review & submit the plan",
+        blurb: "Read back everything entered for this account, then submit it as the Plan of Record.",
+        view: "review",
         perAccount: true,
       },
     ],

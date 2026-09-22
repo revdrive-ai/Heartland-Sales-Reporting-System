@@ -21,8 +21,8 @@ import StepReset from "./StepReset";
 
    Counts come from the last server render, which is refreshed whenever
    something is written. Completion is only claimed where the platform
-   actually knows: distribution verification, the new-items answer and Plan
-   of Record sign-off are all recorded per customer, so those steps can say
+   actually knows: distribution verification, the new-items answer and the
+   Plan of Record submission are all recorded per customer, so those steps can say
    "9 of 13" — and they count the customers the TOP BAR has in scope, not
    every customer on file. Reviewing the base leaves no trace, so that step
    shows progress rather than a tick it has not earned. */
@@ -62,9 +62,14 @@ function stateOf(stepKey: string, s: RailStatus | null): StepState {
         ? { done: true, note: s.added ? `${s.added} added` : "none this year" }
         : { done: false, note: `${s.newItems} of ${s.customers} answered` };
     case "planner":
+      /* Building the plan leaves events behind but has no finish line of its
+         own — the finish line is the submit step after it. So this shows
+         progress, never a tick. */
+      return { done: false, note: `${s.events} event${s.events === 1 ? "" : "s"}` };
+    case "submit":
       return all && s.signed === s.customers
-        ? { done: true, note: "signed off" }
-        : { done: false, note: `${s.events} event${s.events === 1 ? "" : "s"} · ${s.signed} of ${s.customers} signed` };
+        ? { done: true, note: s.customers === 1 ? "submitted" : `all ${s.customers} accounts` }
+        : { done: false, note: `${s.signed} of ${s.customers} submitted` };
     case "adjust": {
       if (!all || s.leAnswered < s.customers) return { done: false, note: `${s.leAnswered} of ${s.customers} answered` };
       /* Answered is not the same as unchanged: "adjusting" with nothing moved

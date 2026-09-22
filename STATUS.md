@@ -243,7 +243,7 @@ downstream opens in the right year with nothing else to set.
 | **Plan a new year** | Base Business Review, after a year is picked | 4 |
 | **Admin** | the full sidebar, every view — admins only | — |
 
-**The plan process** is four steps over views that already exist:
+**The plan process** is five steps over views that already exist (the fifth, Review & submit, is its own page):
 review distribution → add new items → Base Business Review → build the plan. Steps
 1–3 all render `/base`; only the modal differs, and step 3 is that view with
 the modals shut, showing a base that already reflects the two steps before

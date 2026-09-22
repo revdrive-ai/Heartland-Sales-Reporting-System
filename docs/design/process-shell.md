@@ -66,7 +66,7 @@ Not really a process yet. It becomes one when there is more data to analyze.
 | --- | --- | --- |
 | 1 | Update the estimate | `planner`, LE variant |
 
-### Plan a new year — 4 steps
+### Plan a new year — 5 steps
 
 | # | Step | View | Modal on arrival | Finished when |
 | --- | --- | --- | --- | --- |
@@ -82,7 +82,7 @@ it is showing a base that already reflects the two steps before it. Nothing
 needs to be recomputed or passed along; the distribution doc is saved per
 customer × year and `BaseView` already reads it.
 
-Two of the four steps have a genuine completion signal today. The other two
+Three of the five steps have a genuine completion signal today (distribution, new items, submit). The other two
 need an explicit acknowledgement. Worth being honest about that rather than
 inventing a fake progress bar.
 

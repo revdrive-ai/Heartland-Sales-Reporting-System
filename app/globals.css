@@ -737,3 +737,35 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .adjguide .gclose{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--ink-3);
   font-size:13px;line-height:1;padding:2px 4px}
 .adjguide .gclose:hover{color:var(--ink)}
+
+/* ── Review & submit — the plan's read-back ─────────────────────────────── */
+.revowed{padding:14px 18px;margin-bottom:16px;border-color:var(--warn);background:#fff8e6}
+.revowed b{display:block;margin-bottom:6px}
+.revowed ul{margin:0;padding-left:18px;font-size:13px;line-height:1.7}
+.revgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:16px}
+@media (max-width:1100px){.revgrid{grid-template-columns:1fr}}
+.revsec{padding:0;overflow:hidden}
+.revsec>header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+.revsec>header .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;
+  background:var(--accent-soft);color:var(--accent);flex:none}
+.revsec>header>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.revsec>header b{font-size:14px}
+.revsec>header span{font-size:12px;color:var(--ink-2)}
+.revsec>header .btn{flex:none}
+.revlist{list-style:none;margin:0;padding:8px 16px 12px;font-size:13px}
+.revlist li{padding:6px 0;border-bottom:1px dashed var(--line)}
+.revlist li:last-child{border-bottom:0}
+.revlist .dim,.revtable .dim{color:var(--ink-3);font-size:12px}
+.revtable{width:100%;border-collapse:collapse;font-size:13px}
+.revtable th{text-align:left;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);padding:8px 16px;border-bottom:1px solid var(--line)}
+.revtable td{padding:8px 16px;border-bottom:1px solid var(--line)}
+.revtable tr:last-child td{border-bottom:0}
+.revtable .num{text-align:right;font-variant-numeric:tabular-nums}
+.revsubmit{display:flex;gap:18px;align-items:flex-start;padding:16px 18px;flex-wrap:wrap}
+.revsubmit>div:first-child{flex:1 1 380px;display:flex;flex-direction:column;gap:4px}
+.revsubmit>div:first-child>b{font-size:15px}
+.revsubmit>div:first-child>span{font-size:12.5px;color:var(--ink-2);line-height:1.5}
+.revsubmit.ready{border-color:var(--good)}
+.revact{display:flex;gap:8px;align-items:center;flex:1 1 360px;flex-wrap:wrap}
+.revact input{flex:1 1 220px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
+.revact input:disabled{opacity:.6}
