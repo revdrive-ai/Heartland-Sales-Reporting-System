@@ -10,7 +10,7 @@ how customers with **no** consumption data get a weekly base projection built
 backwards from shipments + Telus, and how the monthly feedback loop changes.
 
 The guiding principle: **one planning loop, two measurement lenses.**
-Base & Lift → Planner → Dashboard → Monthly Review → LE stays exactly as built.
+Base Business Review → Planner → Dashboard → Monthly Review → LE stays exactly as built.
 What changes per customer is the lens the numbers are read through:
 
 | | NIQ customers (Albertsons divisions) | Shipment-only customers (everyone else) |
@@ -114,7 +114,7 @@ as `adj:` and `distver:`), then normalized:
 ## 2. Translating the NIQ plan into shipment months (Albertsons)
 
 The consumption plan for a division is a weekly series of base + incremental
-units (what Base & Lift and the Planner already produce, including LE
+units (what Base Business Review and the Planner already produce, including LE
 adjustments). The shipment forecast is a **re-timing** of that same volume,
 driven by the customer's supply parameters — no new volume is invented and
 the full-year totals reconcile (consumption units = shipped units over the
@@ -186,7 +186,7 @@ For each customer × item, over the weekly shipment history:
 The result is persisted in the *same shape* as `nielsen_weekly`
 (`week_ending, upc, market_code, units, base_units, dollars, base_dollars`
 plus `source = 'shipments'`) so `getWeeklyFacts` serves it through the repo
-seam and Base & Lift, the Planner's event scoring, the lift engine, the
+seam and Base Business Review, the Planner's event scoring, the lift engine, the
 export, distribution verification and the sign-off/LE snapshots all work
 unchanged. The `markets` table grows to hold these customers (code = crosswalk
 id, `source` column: `niq` | `shipments`).
@@ -240,7 +240,7 @@ say so.
   stock, dip; suggested values with evidence; effective-dated history).
 - **Tie List** — FG ↔ UPC ↔ case pack (`fg_items`) beside the Telus ↔ NIQ
   crosswalk; unmapped FGs from the exception queue land here.
-- **Base & Lift** — lens toggle *Consumption (NIQ)* / *Shipments (cases)* for
+- **Base Business Review** — lens toggle *Consumption (NIQ)* / *Shipments (cases)* for
   Albertsons; shipment-only customers open in the shipments lens with the
   derived base, buy-in bumps shaded on the Telus windows; units/cases display
   toggle. Total-year and LE adjustments work as they do today.
@@ -259,9 +259,9 @@ say so.
 | Phase | Deliverable | Depends on |
 | --- | --- | --- |
 | **0 — Contract** | Sample SYSPRO export → field mapping, natural key, returns handling agreed; `shipments_daily` migration + fixture | Decisions 1–3 |
-| **1 — Land & reconcile** | Loader + Integrations card + exception queue; `crosswalk_syspro_customers`, `fg_items`; `shipments_weekly` view; shipments overlay (cases) on Base & Lift for Albertsons; reconciliation report: shipments vs NIQ consumption by month per division (sanity check on the mapping) | Phase 0, ≥ 1 year of history |
+| **1 — Land & reconcile** | Loader + Integrations card + exception queue; `crosswalk_syspro_customers`, `fg_items`; `shipments_weekly` view; shipments overlay (cases) on Base Business Review for Albertsons; reconciliation report: shipments vs NIQ consumption by month per division (sanity check on the mapping) | Phase 0, ≥ 1 year of history |
 | **2 — Translate** | `customer_supply_params` + Alignment Key panel; consumption → shipment re-timing; shipments basis on Dashboard + Monthly Forecast Review; per-event buy-in override in the Planner; O/I spend timed to ship weeks | Phase 1 |
-| **3 — Shipment-only customers** | Base/promo decomposition → `source='shipments'` weekly facts; those customers appear in the market selectors; Base & Lift, Planner, sign-off & LE work for them | Phase 1, Telus customer mapping |
+| **3 — Shipment-only customers** | Base/promo decomposition → `source='shipments'` weekly facts; those customers appear in the market selectors; Base Business Review, Planner, sign-off & LE work for them | Phase 1, Telus customer mapping |
 | **4 — Calibrate & close the loop** | Suggested parameters from history; LE versions freeze both series; "timing vs demand" callouts in the Monthly Review; quarterly re-fit as an Agent Run | Phases 2–3, ≥ 2 years of history |
 
 Phase 1 is valuable on its own (shipments visible against consumption, with

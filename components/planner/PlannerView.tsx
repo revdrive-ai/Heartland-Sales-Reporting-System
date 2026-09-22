@@ -11,7 +11,7 @@ import type { PromoLine, PromoMeta } from "@/lib/types/db";
 /* Promotion Planner, draft 1 on the real Telus FY2026 snapshot.
    Two modes over the same filtered book: the table ("Book") and the Gantt
    calendar ("Calendar"). Read-only for now — planning actions (new event
-   wizard, amendments, guardrails) layer on once the Base & Lift side exists. */
+   wizard, amendments, guardrails) layer on once the Base Business Review side exists. */
 
 export type PromoRow = {
   id: string; title: string; status: string; perf: string; template: string;
@@ -56,7 +56,7 @@ export type PlannerData = {
         and gross $ (dated list price), pu/pg = the promoted-week slices */
     priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;
     dataEdge: string;                                    // latest NIQ week on file
-    /** distribution verification rollup (per-division docs from Base & Lift) */
+    /** distribution verification rollup (per-division docs from Base Business Review) */
     distVer: { verified: number; customers: number; excluded: number; added: number };
     customers: { id: string; name: string }[];
     copySource: {

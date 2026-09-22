@@ -402,7 +402,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   /* month-by-month TOTAL VOLUME: the plan's expected total sales — the
      seasonality-engine base (year-ago base carried where measured, shaped
-     projection after — the same construction as the Base & Lift plan view)
+     projection after — the same construction as the Base Business Review plan view)
      plus each scored event's incremental — vs the prior year's total measured
      NIQ volume, with promoted-week volume as the dashed context line.
      "dollars" prices both sides at the dated list price. */
@@ -716,18 +716,18 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           <span className="pill">{visible.length} events in scope · {year}</span>
           {plan.distVer.verified > 0 ? (
             <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
-              title={`Distribution verified at ${plan.distVer.verified} of ${plan.distVer.customers} divisions (in Base & Lift's plan year): ${plan.distVer.excluded} item${plan.distVer.excluded === 1 ? "" : "s"} carry no volume, ${plan.distVer.added} added on a proxy — event bases and the volume chart reflect it`}>
+              title={`Distribution verified at ${plan.distVer.verified} of ${plan.distVer.customers} divisions (in Base Business Review's plan year): ${plan.distVer.excluded} item${plan.distVer.excluded === 1 ? "" : "s"} carry no volume, ${plan.distVer.added} added on a proxy — event bases and the volume chart reflect it`}>
               ✓ distribution: {plan.distVer.verified}/{plan.distVer.customers} divisions · {plan.distVer.excluded} out · {plan.distVer.added} added
             </span>
           ) : (
             <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-              title={`No division has been through distribution verification for ${year} yet — plan bases carry every item from last year. Verify in the Base & Lift Lab's Total year ${year} view.`}>
+              title={`No division has been through distribution verification for ${year} yet — plan bases carry every item from last year. Verify in the Base Business Review's Total year ${year} view.`}>
               ⚠ distribution unverified
             </span>
           )}
           {plan.adjustments > 0 && (
             <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
-              title={`${plan.adjustments} plan adjustment${plan.adjustments === 1 ? "" : "s"} from Base & Lift (distribution / price / trend levers) are applied to the ${year} bases here — event volume and rate-funded spend follow them`}>
+              title={`${plan.adjustments} plan adjustment${plan.adjustments === 1 ? "" : "s"} from Base Business Review (distribution / price / trend levers) are applied to the ${year} bases here — event volume and rate-funded spend follow them`}>
               ⇅ {plan.adjustments} adjustment{plan.adjustments === 1 ? "" : "s"} applied
             </span>
           )}
@@ -1156,7 +1156,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
         <div className="note">
           ◇ Plan bars are the plan&apos;s expected <b>total</b> {volMode === "units" ? "sales units" : "gross sales $"} —
-          the <b>seasonality-engine base</b> (the same construction as the Base &amp; Lift plan view: each week carries
+          the <b>seasonality-engine base</b> (the same construction as the Base Business Review plan view: each week carries
           the year-ago measured base, and weeks not yet measured project as the latest-52-week run-rate shaped by that
           division × brand&apos;s monthly index) plus each scored event&apos;s incremental (base × lift across its
           window){volMode === "dollars" ? ", all at the dated list price" : ""}. An item view scales its brand&apos;s

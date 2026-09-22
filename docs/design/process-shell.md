@@ -73,7 +73,7 @@ Not really a process yet. It becomes one when there is more data to analyze.
 | 0 | Pick the plan year | front door | — | a year is chosen |
 | 1 | Review distribution | `base` | **Verify distribution** | `distVer.verifiedAt` is set — **a real signal today** |
 | 2 | Add new items | `base` | **Add new item** | needs an explicit "no new items this year" — zero additions is a valid answer, so the count alone can't say |
-| 3 | Base & Lift for the plan year | `base` | — | needs an explicit Continue |
+| 3 | Base Business Review for the plan year | `base` | — | needs an explicit Continue |
 | 4 | Build the promotion plan | `planner`, plan variant | — | Plan of Record signed — **a real signal today** |
 
 Steps 1–3 all land on the same view. Only the modal differs, and step 3 is
@@ -177,7 +177,7 @@ routing, role gate. Every view renders exactly as it did; only the chrome
 around them changed. Judge it on the layout alone.
 
 **Phase 2 — the views per process.** The LE-variant planner and the
-plan-variant planner diverge. Base & Lift gets its plan-cycle treatment.
+plan-variant planner diverge. Base Business Review gets its plan-cycle treatment.
 This is where option B above gets done.
 
 **Phase 3 — the steps get real.** Enhanced New Item modal, step gating,
@@ -196,9 +196,9 @@ spreadsheets turn out to demand.
 
 ## Still open
 
-- **Step 3 of Plan shows Base & Lift's own "Verify distribution" and "Add new
+- **Step 3 of Plan shows Base Business Review's own "Verify distribution" and "Add new
   item" buttons**, which duplicate steps 1 and 2. Harmless — arguably useful
   as a way back — but it is the kind of thing phase 2 should decide
   deliberately rather than inherit.
-- **The two steps with no completion signal** (new items, Base & Lift) need
+- **The two steps with no completion signal** (new items, Base Business Review) need
   an explicit acknowledgement before the rail can honestly tick them.

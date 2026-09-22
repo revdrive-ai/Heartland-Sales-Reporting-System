@@ -16,7 +16,7 @@ export const NON_PERFORMANCE_TYPES = new Set(["EDLP", "Slotting"]);
 export const isNonPerformance = (perf: string | null | undefined) =>
   perf != null && NON_PERFORMANCE_TYPES.has(perf);
 
-/* Always-on programs. A window longer than 12 weeks (the Base & Lift rule
+/* Always-on programs. A window longer than 12 weeks (the Base Business Review rule
    for what draws as an event band vs a lane) is a condition the NIQ base
    already lives under — year-round signage, AMP fees, EDLP — so it carries
    no lift of its own in a plan: crediting it with the tactic average would

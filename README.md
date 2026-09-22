@@ -33,7 +33,7 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
   calendar (customer-grouped lanes, status colors, consumption fill, snapshot marker) —
   both with drill-down to component
   lines (`/api/promos/[id]/lines`).
-- ✅ **Base & Lift Lab rebuilt** (`/base`): the Nielsen weekly trend (actual vs NIQ base) per
+- ✅ **Base Business Review rebuilt** (`/base`): the Nielsen weekly trend (actual vs NIQ base) per
   division × brand with the Telus promotion windows overlaid — event windows shaded on the
   chart, always-on programs listed, NIQ-detected promo weeks dotted, URL-driven controls.
   Division ↔ Telus-customer mapping in `lib/data/albertsonsPromoMap.ts` (+ migration 00003).

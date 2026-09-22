@@ -261,7 +261,7 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
         </div>
         <div className="note" style={{ padding: "10px 16px" }}>
           ◇ Months split by NIQ week-endings (a Saturday belongs to the month it falls in). The forecast is the same
-          construction as the Sales Dashboard&apos;s FY mode and the Base &amp; Lift Total-year view: year-ago NIQ base
+          construction as the Sales Dashboard&apos;s FY mode and the Base Business Review Total-year view: year-ago NIQ base
           carried forward × the expected lift of the Telus performance windows still open (EDLP/Slotting fund price, no
           lift). Each month firms up as its NIQ weeks land.
         </div>

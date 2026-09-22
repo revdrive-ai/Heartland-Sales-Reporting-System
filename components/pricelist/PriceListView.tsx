@@ -131,7 +131,7 @@ export default function PriceListView({ rows }: { rows: PriceRow[] }) {
           <p>
             Dated list prices per item — the pricing basis every analysis ties back to. Each price carries an
             effective date, so changes over time stay visible: plan-year ROI scores on the list price in force at
-            the event, and price-change dates mark on the Base &amp; Lift trend to read their effects.
+            the event, and price-change dates mark on the Base Business Review trend to read their effects.
           </p>
         </div>
         <div className="actions">

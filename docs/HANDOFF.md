@@ -33,7 +33,7 @@ Target, Costco, Albertsons, Sprouts, Publix.
 
 | Group | Views |
 |---|---|
-| Trade Workflow | `base` Base & Lift Lab (step 1) · `planner` Promotion Planner (2) · `reporting` Sales Dashboard (3, default) · `analysis` Promo Analysis (4) · `deductions` Deduction Center (badge 50) |
+| Trade Workflow | `base` Base Business Review (step 1) · `planner` Promotion Planner (2) · `reporting` Sales Dashboard (3, default) · `analysis` Promo Analysis (4) · `deductions` Deduction Center (badge 50) |
 | Segments | `foodservice` Foodservice |
 | Planning Tools | `objectives` Objectives & KPIs · `approvals` Approvals (live badge) · `le` Latest Estimate (LE) |
 | Leadership | `leader` Sales Leader View |
@@ -75,7 +75,7 @@ Target, Costco, Albertsons, Sprouts, Publix.
 - `DEDQ` / `DED_*` — Deduction Center: AI review queue (badge 50), dispositions, tiers,
   tolerances, grace windows, flow diagram.
 - `FLOW_*` — “System data flow — interactive” diagram (feeds → platform → consumers).
-- `PUBLIX_*` — a worked base/lift dataset (Publix × Splenda) powering Base & Lift Lab and the
+- `PUBLIX_*` — a worked base/lift dataset (Publix × Splenda) powering Base Business Review and the
   Sales Dashboard examples; `BADJ`/`SADJ` base & seasonality adjustment logs;
   `CONF_*`/`PROJ_*` base-engine confidence/projection constants.
 - `ASKS` — canned “Ask” assistant responses.
@@ -103,7 +103,7 @@ Target, Costco, Albertsons, Sprouts, Publix.
 2. Alignment Key + Nielsen Pull Spec views with the Albertsons division TA list — the two
    places the 13 divisions already live in the demo.
 3. Then per division (e.g. start ALBSCO Jewel Div TA, matching the demo’s `ALB-JEWEL` sample
-   rows): seed Nielsen-shaped weekly data, wire it through Sales Dashboard → Base & Lift Lab →
+   rows): seed Nielsen-shaped weekly data, wire it through Sales Dashboard → Base Business Review →
    Planner scopes for that division; repeat division by division.
 4. Workflow views (planner/approvals/LE/deductions) once the data spine holds.
 

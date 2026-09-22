@@ -9,7 +9,7 @@ import LeView, { type LeData, type LeRow, type VersionLite } from "@/components/
 /* Latest Estimate (LE) — the home of the monthly LE cycle and, in Plan mode,
    of the plan sign-off: every customer's versions side by side, the live
    working number against the last frozen one, and the take-LE / sign-off
-   actions in one place. The same plansnap documents Base & Lift writes per
+   actions in one place. The same plansnap documents Base Business Review writes per
    customer; this view is the cross-customer read of them. */
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

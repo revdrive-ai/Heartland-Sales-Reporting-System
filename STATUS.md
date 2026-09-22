@@ -38,7 +38,7 @@ falls, NIQ edge, adjustments in play; Plan: distribution verified, Plan of Recor
 adjustments, events — and links to the Latest Estimate view
 (`lib/server/modeStatus.ts`, one batched `app_state` read).
 
-## Base & Lift Lab
+## Base Business Review
 
 - Weekly base/actual trend with promo bands and lanes, seasonality engine,
   alignment controls; the item picker offers only items with volume in the
@@ -100,7 +100,7 @@ adjustments, events — and links to the Latest Estimate view
   a step-through event wizard with a live economics rail.
 - **Rate-funded spend follows volume.** Event bases are the plan-year weekly
   series at the event's customer (year-ago carried, engine-shaped after, with
-  distribution verification and the Base & Lift plan adjustments applied,
+  distribution verification and the Base Business Review plan adjustments applied,
   per item), summed over the event window. O/I and scan dollars are computed
   live from that base × (1 + lift) × $/unit plus fixed fees — so verifying
   distribution, adding an item, or a −20% trend lever moves EDLP O/I spend,
@@ -111,7 +111,7 @@ adjustments, events — and links to the Latest Estimate view
   on the units other events at that customer lift on the same items in the
   same weeks (shown as "⊕ N u from overlapping events"); scan pays only on
   the deal's own units. **Always-on programs** (windows > 12 weeks — the
-  Base & Lift lane rule: year-round signage, AMP fees, EDLP) carry 0 lift
+  Base Business Review lane rule: year-round signage, AMP fees, EDLP) carry 0 lift
   like funding vehicles, since their effect is already inside the base, and
   are excluded from the tactic-lift averages (`lib/data/nonPerformanceTypes.ts`).
   Tactic chips show measured lift per performance type.
@@ -125,13 +125,13 @@ adjustments, events — and links to the Latest Estimate view
   comparing Plan 2027/2028 to the latest measured year, an FY2026
   actuals + forecast mode (measured through the NIQ edge, then year-ago base
   × expected Telus window lift to year-end), and a Key insights section with
-  deep links into the Base & Lift Lab.
+  deep links into the Base Business Review.
 
 ## Monthly Forecast Review (workflow step 4)
 
 - The FY forecast by calendar month vs prior-year actuals: status per month
   (actual / landing / forecast), Δ$ and Δ%, full-year totals, and a brand
-  cut. Same construction as the dashboard FY mode and the Base & Lift
+  cut. Same construction as the dashboard FY mode and the Base Business Review
   Total-year view (shared `lib/server/fyForecast.ts`). Promo Analysis is now
   step 5 and Deduction Center step 6.
 - **Item selector** narrows the whole review — KPIs, chart, month table and
@@ -175,7 +175,7 @@ adjustments, events — and links to the Latest Estimate view
   accounts are locked for it and when the next lock falls; the primary
   action locks every account still open in one pass.
 - The LE-mode home: every customer's frozen versions side by side with the
-  live working number (the same construction Base & Lift and the snapshot
+  live working number (the same construction Base Business Review and the snapshot
   API use), Δ since the last version, adjustments, distribution rollup, and
   the lock action for the whole portfolio ("Lock LE Sep 2026 · N accounts")
   with a shared note, plus a per-account re-lock to catch one up. In Plan mode the same page is the **plan sign-off**:
@@ -240,11 +240,11 @@ downstream opens in the right year with nothing else to set.
 | --- | --- | --- |
 | **Analyze** | Sales Dashboard | 1 |
 | **Latest Estimate** | Promotion Planner | 1 |
-| **Plan a new year** | Base & Lift, after a year is picked | 4 |
+| **Plan a new year** | Base Business Review, after a year is picked | 4 |
 | **Admin** | the full sidebar, every view — admins only | — |
 
 **The plan process** is four steps over views that already exist:
-review distribution → add new items → Base & Lift → build the plan. Steps
+review distribution → add new items → Base Business Review → build the plan. Steps
 1–3 all render `/base`; only the modal differs, and step 3 is that view with
 the modals shut, showing a base that already reflects the two steps before
 it. Nothing is recomputed or handed along — the distribution doc is saved
@@ -303,7 +303,7 @@ Design plan and the phases still ahead: `docs/design/process-shell.md`.
   Approvals, and Sales Leader View.
 - **Process phases 2 and 3** — the views themselves are untouched so far, so
   the LE planner and the plan planner are still the same screen, and the two
-  steps without a completion signal (new items, Base & Lift) have no explicit
+  steps without a completion signal (new items, Base Business Review) have no explicit
   acknowledgement yet. `docs/design/process-shell.md` has both.
 - **Data gaps to close on the business side** — the RC Taylor territory
   assignment, the Telus "Safeway Mountain West" ↔ NIQ "Safeway IMW" name

@@ -246,7 +246,7 @@ export default async function Page({
       insights.push({
         kind: "volume", severity: chg < 0 ? "bad" : "good", impact: Math.abs(cw - pw),
         title: `Base volume ${chg < 0 ? "down" : "up"} ${Math.abs(chg).toFixed(0)}% at ${name.replace("Albertsons ", "")}`,
-        detail: `~${Math.round(pw)} → ~${Math.round(cw)} base units/wk across ${brand === "ALL" ? "Heartland brands" : brand} (latest 8 wks vs same wks YA). Open the division in Base & Lift to see which items are driving it.`,
+        detail: `~${Math.round(pw)} → ~${Math.round(cw)} base units/wk across ${brand === "ALL" ? "Heartland brands" : brand} (latest 8 wks vs same wks YA). Open the division in Base Business Review to see which items are driving it.`,
         href: `/base?mkt=${code}${brand !== "ALL" ? `&brand=${encodeURIComponent(brand)}` : ""}`,
       });
     }
@@ -293,7 +293,7 @@ export default async function Page({
 
 /* Forecast-year dashboard (FY = the NIQ data-edge year): measured actuals
    through the data edge, then a forecast to year-end built the same way the
-   Base & Lift tab builds it — the year-ago NIQ base carried 364 days forward
+   Base Business Review tab builds it — the year-ago NIQ base carried 364 days forward
    (engine-shaped run-rate where a source week is unmeasured) times the
    expected lift of whichever Telus performance window covers the week (the
    windows' predicted lift; EDLP/Slotting fund price, no lift; overlapping

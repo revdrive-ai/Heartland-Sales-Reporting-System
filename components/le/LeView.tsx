@@ -261,9 +261,9 @@ export default function LeView({ data }: { data: LeData }) {
                           href={`/base?mkt=${encodeURIComponent(r.code)}`}
                           className="minichip"
                           style={{ textDecoration: "none", whiteSpace: "nowrap" }}
-                          title="Open this customer in Base & Lift — the year follows the top-bar mode"
+                          title="Open this customer in Base Business Review — the year follows the top-bar mode"
                         >
-                          Base &amp; Lift →
+                          Base Business Review →
                         </a>
                       </div>
                     </td>

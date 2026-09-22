@@ -9,7 +9,7 @@ const DAY = 86400000;
 const utc = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
 
 /** Indices of the plan-year Saturdays a window covers (a week-ending
-    Saturday covers the 7 days ending that day — the Base & Lift rule). */
+    Saturday covers the 7 days ending that day — the Base Business Review rule). */
 export function windowIdx(plan: PlanPayload, start: string, end: string): number[] {
   const s = utc(start), e = utc(end);
   const out: number[] = [];

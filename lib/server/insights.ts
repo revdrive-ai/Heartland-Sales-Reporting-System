@@ -5,7 +5,7 @@ import type { PriceRow } from "@/lib/repo";
    that should move a plan: per-item distribution and base-price changes
    (latest 8 weeks vs the same weeks a year ago), likely delistings,
    promo-support swings, dated list-price changes near the data edge, and
-   residual base-volume breaks. Shared by the Base & Lift Lab and the Sales
+   residual base-volume breaks. Shared by the Base Business Review and the Sales
    Dashboard; ranked by how much weekly base volume each shift moves. */
 
 const DAY = 86400000;

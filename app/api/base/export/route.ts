@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 
-/* Base-units export — the Base & Lift selection as a brand-by-item table,
+/* Base-units export — the Base Business Review selection as a brand-by-item table,
    weekly or monthly columns, CSV or Excel. Works for every timeframe the Lab
    offers, plan years included: measured weeks carry the NIQ base; a plan
    year's weeks carry the year-ago base as far as it has actualized and the

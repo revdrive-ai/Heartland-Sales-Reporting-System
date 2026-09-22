@@ -5,7 +5,7 @@ import type { NielsenWeeklyRow } from "@/lib/types/db";
 import type { PlanAdjustment } from "@/lib/repo/client";
 
 /* The FY forecast construction, shared by the Sales Dashboard's FY mode and
-   the Monthly Forecast Review (and matching the Base & Lift Total-year view):
+   the Monthly Forecast Review (and matching the Base Business Review Total-year view):
    measured actuals through the NIQ data edge, then, per division × brand,
    each week's year-ago NIQ base carried 364 days forward (engine-shaped
    latest-52-week run rate where a source week is unmeasured) × the expected

@@ -17,7 +17,7 @@ export const NAV: NavGroup[] = [
   {
     heading: "Trade Workflow",
     items: [
-      { view: "base", label: "Base & Lift Lab", icon: "trend", tag: "1", title: "Base & Lift Lab — step 1 of the loop" },
+      { view: "base", label: "Base Business Review", icon: "trend", tag: "1", title: "Base Business Review — step 1 of the loop" },
       { view: "planner", label: "Promotion Planner", icon: "calendar", tag: "2", title: "Promotion Planner — step 2 of the loop" },
       { view: "reporting", label: "Sales Dashboard", icon: "chart", tag: "3", title: "Sales Dashboard — step 3 of the loop" },
       { view: "forecast", label: "Monthly Forecast Review", icon: "clock", tag: "4", title: "Monthly Forecast Review — step 4 of the loop" },

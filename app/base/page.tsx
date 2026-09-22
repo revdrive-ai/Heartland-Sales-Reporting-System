@@ -9,7 +9,7 @@ import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseV
 import type { NielsenWeeklyRow } from "@/lib/types/db";
 import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 
-/* Base & Lift Lab — the Nielsen weekly trend (actual vs NIQ base) for one
+/* Base Business Review — the Nielsen weekly trend (actual vs NIQ base) for one
    division × brand (or a single item), with the Telus promotion windows
    overlaid and the seasonality-index card beside the chart. Timeframes:
    rolling windows (4/13/26/52 weeks, year-to-date) or a total calendar year —
@@ -51,7 +51,7 @@ export default async function Page({
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
   if (gscope.active && markets.length === 0) {
     return (
-      <ScopeEmpty current="base" crumb="Trade Workflow · Step 1" title="Base & Lift Lab"
+      <ScopeEmpty current="base" crumb="Trade Workflow · Step 1" title="Base Business Review"
         label={gscope.label}
         message="No Nielsen trading areas in this scope have data on file — only the 13 ALBSCO divisions are loaded so far." />
     );

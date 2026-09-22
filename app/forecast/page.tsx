@@ -9,7 +9,7 @@ import ForecastView, { type ForecastData } from "@/components/forecast/ForecastV
 /* Monthly Forecast Review — workflow step 4. The FY forecast (measured
    actuals through the NIQ data edge + the year-ago-base × expected-Telus-lift
    forecast to year-end, the same construction as the Sales Dashboard FY mode
-   and the Base & Lift Total-year view) rolled up to calendar months and read
+   and the Base Business Review Total-year view) rolled up to calendar months and read
    against prior-year actuals, month by month — the review cadence: which
    months are locked (fully measured), which are landing, and what the rest
    of the year is expected to do. */

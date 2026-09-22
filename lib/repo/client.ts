@@ -319,7 +319,7 @@ export async function setPlanBudget(key: string, value: number): Promise<void> {
    the previous year sold is confirmed In plan or No volume, and genuinely new
    items are added with a proxy for base volume plus a load-in. Carried by
    default until verified (the plan view shows an "unverified" pill); the doc
-   is shared, like all planner work. Consumed server-side by the Base & Lift
+   is shared, like all planner work. Consumed server-side by the Base Business Review
    plan-year series. */
 
 export type { DistAddition, DistVerification } from "@/lib/distver";

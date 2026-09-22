@@ -109,7 +109,7 @@ export default async function Page() {
     const divBrandWk: Record<string, Record<string, number>> = {};
     const divItemWk: Record<string, Record<string, number>> = {};
     // plan-year monthly BASE per division × brand, built the same way as the
-    // Base & Lift plan view: year-ago weekly base carried where measured,
+    // Base Business Review plan view: year-ago weekly base carried where measured,
     // seasonality-shaped run-rate projection for the rest
     const divBrandBaseM: Record<string, Record<string, number[]>> = {};
 
@@ -134,13 +134,13 @@ export default async function Page() {
     let dataEdge = "";
 
     /* Distribution verification (per customer division × plan year, shared
-       docs from the Base & Lift verify flow): items marked "no volume" drop
+       docs from the Base Business Review verify flow): items marked "no volume" drop
        out of the plan bases — the engine chart, the brand run-rate events
        score on, and the per-item bases — and verified additions ride in on
        their proxy's run-rate (× %) from their first week, plus the load-in. */
     const dvByMkt: Record<string, { out: Set<string>; adds: DistAddition[] }> = {};
     let dvVerified = 0, dvOut = 0, dvAdded = 0;
-    /* Plan adjustments (per division × plan year, the Base & Lift levers):
+    /* Plan adjustments (per division × plan year, the Base Business Review levers):
        distribution / price / trend % on an item or the whole brand over a
        window. They multiply the plan-year weekly series below, so events —
        and their rate-funded O/I dollars — score on the adjusted base. */
@@ -221,7 +221,7 @@ export default async function Page() {
           m52.reduce((a, w) => a + (mB.get(w) ?? 0), 0) / Math.max(m52.length, 1);
 
         /* Plan-year WEEKLY base per item through the seasonality engine — the
-           construction the Base & Lift plan view uses, at this division: each
+           construction the Base Business Review plan view uses, at this division: each
            plan-year Saturday carries the item's year-ago measured base (364
            days back keeps Saturdays aligned); weeks whose source hasn't been
            measured yet project as the item's latest-52w average shaped by the

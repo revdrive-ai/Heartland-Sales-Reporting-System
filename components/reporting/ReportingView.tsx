@@ -28,14 +28,14 @@ export type ReportingData = {
     title: string;
     detail: string;
     impact: number;
-    href?: string;             // a Base & Lift deep link when the shift is division-shaped
+    href?: string;             // a Base Business Review deep link when the shift is division-shaped
   }[];
   insightsTotal: number;
   years: number[];                       // plan years looking forward (2027, 2028, …)
   plan: { year: number; priorYear: number; matchedWeeks: number; gross: number | null } | null;
   /** FY forecast mode — the data-edge year to calendar year-end: measured
       actuals through the edge, then year-ago-carried base × expected Telus
-      window lift (same construction as the Base & Lift forecast). */
+      window lift (same construction as the Base Business Review forecast). */
   fy: {
     year: number; priorYear: number;
     forecastFromIdx: number;             // first forecast index in weeks/series
@@ -291,7 +291,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             ? <>◇ Solid = measured NIQ retail through the data edge. Dashed = the <b>forecast to year-end</b>: each
               week&apos;s year-ago NIQ base carried forward × the expected lift of the Telus performance windows still
               open at that division × brand (EDLP/Slotting fund price, so they add no lift). Same construction as the
-              Base &amp; Lift Total-year view; both firm up as NIQ weeks land.</>
+              Base Business Review Total-year view; both firm up as NIQ weeks land.</>
             : <>◇ Year-ago is the identical NIQ weeks shifted 52 — holiday weeks line up with holiday weeks.
               {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}
               {data.grossCoverage.priced} of {data.grossCoverage.total} items in this scope are priced; unpriced
@@ -405,10 +405,10 @@ export default function ReportingView({ data }: { data: ReportingData }) {
                       <span
                         className="minichip"
                         style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
-                        title="Open this division in the Base & Lift Lab"
+                        title="Open this division in the Base Business Review"
                         onClick={() => router.push(url)}
                       >
-                        Open in Base &amp; Lift →
+                        Open in Base Business Review →
                       </span>
                     ) : null;
                   })()}
@@ -417,7 +417,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
             })}
           </div>
           <div className="note" style={{ marginTop: 8 }}>
-            ◇ Same detector as the Base & Lift Lab, run across every division in scope, plus division-level base
+            ◇ Same detector as the Base Business Review, run across every division in scope, plus division-level base
             moves ≥ 15%. Small items and divisions stay quiet.
             {data.insightsTotal > data.insights.length && <> Showing the top {data.insights.length} of {data.insightsTotal} by impact.</>}
           </div>
@@ -430,7 +430,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <b>Item-level planning</b>
           <div className="note" style={{ marginTop: 8 }}>
             ◇ This dashboard plans at brand × division altitude. For item-level plan curves and adjustments
-            (distribution, price, trend) open the <b>Base &amp; Lift Lab</b> and pick Total year {data.plan.year}; the
+            (distribution, price, trend) open the <b>Base Business Review</b> and pick Total year {data.plan.year}; the
             promotional book for {data.plan.year} builds in the <b>Promotion Planner</b>&apos;s plan mode.
           </div>
         </div>
@@ -439,7 +439,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
           <b>Item-level forecast</b>
           <div className="note" style={{ marginTop: 8 }}>
             ◇ This view forecasts at brand × division altitude. For the item-level version of the same forecast open
-            the <b>Base &amp; Lift Lab</b>, pick a division and item, and choose Total year {data.fy.year} — the dashed
+            the <b>Base Business Review</b>, pick a division and item, and choose Total year {data.fy.year} — the dashed
             weeks there use the identical construction.
           </div>
         </div>

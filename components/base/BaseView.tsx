@@ -16,7 +16,7 @@ import { writeModeCookie, type ModeKind } from "@/lib/mode";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
 
-/* Base & Lift Lab: the division's weekly trend (actual vs NIQ base) with the
+/* Base Business Review: the division's weekly trend (actual vs NIQ base) with the
    Telus promotion windows overlaid, and — as in the reference mockup — the
    seasonality-index card beside the chart, hideable via the chip in the
    chart's header (hiding it widens the trend to the full row). Event windows
@@ -915,7 +915,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
 
       <div className="pagehead">
         <div>
-          <h1>Base &amp; Lift Lab</h1>
+          <h1>Base Business Review</h1>
           <p>
             NIQ weekly {metricLabel} for {scopeName} at {marketName} — actual against NIQ&apos;s modelled base,
             with the Telus promotion windows for this division overlaid. Event windows are shaded;
