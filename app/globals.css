@@ -708,3 +708,16 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pickfirst{display:flex;gap:8px;font-size:12.5px;color:var(--ink-2);line-height:1.55;
   padding:11px 13px;border-radius:10px;background:var(--surface-2);border:1px dashed var(--line)}
 .pickfirst b{color:var(--ink)}
+
+/* Stepping someone through an adjustment: what is needed next, in order. */
+.adjguide{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding:9px 16px;
+  background:var(--accent-soft);border-bottom:1px solid #cddbfb;font-size:12.5px;color:var(--ink-2)}
+.adjguide.ready{background:var(--good-soft);border-bottom-color:#bfe6d0}
+.adjguide b{color:var(--ink);font-size:13px}
+.adjguide .gstep{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;
+  color:#fff;background:var(--accent);border-radius:20px;padding:2px 9px;white-space:nowrap}
+.adjguide .gstep.done{background:var(--good)}
+.adjguide .ghint{flex:1 1 260px;line-height:1.45}
+.adjguide .gclose{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--ink-3);
+  font-size:13px;line-height:1;padding:2px 4px}
+.adjguide .gclose:hover{color:var(--ink)}

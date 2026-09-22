@@ -124,6 +124,18 @@ const LANES_KEY = "hhShowLanes"; // default on
 const INS_KEY = "hhInsightsHide";
 const ENG_KEY = "hhLiftEngineHide";
 
+/* Why the base is moving. An adjustment without one is a number nobody can
+   defend at sign-off, so it is required — and a list rather than a box, so
+   the same cause reads the same way across accounts. */
+const ADJ_REASONS: Record<PlanAdjustment["kind"], string[]> = {
+  distribution: ["Lost distribution", "New distribution", "Delisted item", "Shelf reset",
+                 "Supply / out of stock", "Other"],
+  price: ["List price increase", "List price decrease", "Competitive price move",
+          "Pack or size change", "Other"],
+  trend: ["Category trend", "Competitive activity", "Consumer shift",
+          "Prior-year anomaly", "Thin history — AM judgment", "Other"],
+};
+
 const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 const MONTH_FULL = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
@@ -245,7 +257,12 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const [aPct, setAPct] = useState("");
   const [aFrom, setAFrom] = useState("");
   const [aTo, setATo] = useState("");
+  const [aReason, setAReason] = useState("");
   const [aNote, setANote] = useState("");
+  /* Armed when someone starts an adjustment — from an insight's "Adjust in
+     plan", or by touching a field. Off by default: a card that nags before
+     anyone has engaged with it is noise. */
+  const [adjGuide, setAdjGuide] = useState(false);
   useEffect(() => {
     if (snapYear) {
       getPlanAdjustments(data.mkt, snapYear).then(setAdjs);
@@ -267,7 +284,19 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const prefillAdj = (kind: string, upc?: string) => {
     setAKind(ADJ_KIND[kind] ?? "trend");
     setAUpc(upc && data.items.some((i) => i.upc === upc) ? upc : "ALL");
-    setTimeout(() => adjCard.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    setAReason("");
+    setAdjGuide(true);   // the insight filled in what it knows; say what is left
+    /* Not scrollIntoView: the step rail is sticky under the top bar, so
+       "block: start" parks the card's header — the callout and the fields it
+       points at — underneath it. Scroll to clear whatever chrome is actually
+       there. */
+    setTimeout(() => {
+      const el = adjCard.current;
+      if (!el) return;
+      const chrome = 60 + (document.querySelector(".prail")?.getBoundingClientRect().height ?? 0);
+      const y = el.getBoundingClientRect().top + window.scrollY - chrome - 14;
+      window.scrollTo({ top: Math.max(y, 0), behavior: "smooth" });
+    }, 80);
   };
   const searchParams = useSearchParams();
   const adjParam = searchParams.get("adj");
@@ -537,16 +566,45 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     }
   };
 
+  /* What is still needed, in the order someone would fill it. The item and
+     the lever arrive prefilled from the insight, so the work that remains is
+     the size of the move, when it applies, and why. */
+  const adjSteps = [
+    { key: "pct", label: "Set the expected impact",
+      hint: "How much base volume moves — negative for a loss, say −12 for distribution lost in the largest stores.",
+      done: !!parseFloat(aPct) },
+    { key: "dates", label: "Set when it applies",
+      hint: "The first and last day the change is in effect. Only weeks inside it move.",
+      done: !!aFrom && !!aTo && aTo >= aFrom },
+    { key: "reason", label: "Pick a reason",
+      hint: "Why the base is moving. It travels with the adjustment into the plan and the sign-off.",
+      done: !!aReason },
+  ];
+  const adjNext = adjSteps.find((st) => !st.done) ?? null;
+  /* Two weights: a light ring on everything still required, a strong one on
+     the step being asked for. The first says what the form needs, the second
+     says where to put your cursor. */
+  const adjRing = (key: string): React.CSSProperties => {
+    const st = adjSteps.find((x) => x.key === key);
+    if (!st || st.done || !adjGuide) return {};
+    return adjNext?.key === key
+      ? { borderColor: "var(--accent)", boxShadow: "0 0 0 3px rgba(37,99,235,.20)" }
+      : { borderColor: "#cddbfb" };
+  };
+  const touchAdj = () => { if (!adjGuide) setAdjGuide(true); };
+
   const addAdj = async () => {
     const pct = parseFloat(aPct);
-    if (!snapYear || !pct || !aFrom || !aTo || aTo < aFrom) return;
+    if (!snapYear || !pct || !aFrom || !aTo || aTo < aFrom || !aReason) return;
     setAdjs(await savePlanAdjustment({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       market_code: data.mkt, plan_year: snapYear, brand: data.brand,
       upc: aUpc, kind: aKind, pct, from: aFrom, to: aTo,
-      note: aNote.trim(), created_at: new Date().toISOString(),
+      // one stored field: the reason, with any detail after it
+      note: aNote.trim() ? `${aReason} — ${aNote.trim()}` : aReason,
+      created_at: new Date().toISOString(),
     }));
-    setAPct(""); setANote("");
+    setAPct(""); setANote(""); setAReason(""); setAdjGuide(false);
   };
   const brandAdjs = adjs.filter((a) => a.brand === data.brand);
 
@@ -1394,41 +1452,77 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               : "levers on the forecast to year-end — measured weeks don't move"}
           </span>
         </div>
+        {adjGuide && (
+          <div className={"adjguide" + (adjNext ? "" : " ready")}>
+            {adjNext ? (<>
+              {/* How many are left, not which number this is: the dates come
+                  pre-filled for the plan year, so numbering jumps from 1 to 3
+                  and reads like a bug. */}
+              <span className="gstep">
+                {adjSteps.filter((st) => !st.done).length === 1
+                  ? "Last one"
+                  : `${adjSteps.filter((st) => !st.done).length} left`}
+              </span>
+              <b>{adjNext.label}</b>
+              <span className="ghint">{adjNext.hint}</span>
+            </>) : (<>
+              <span className="gstep done">Ready</span>
+              <b>Add the adjustment</b>
+              <span className="ghint">The plan base moves the moment you do, and the chart follows.</span>
+            </>)}
+            <button className="gclose" onClick={() => setAdjGuide(false)} title="Hide this">✕</button>
+          </div>
+        )}
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <select style={selStyle} value={aUpc} onChange={(e) => setAUpc(e.target.value)} title="Which item the adjustment applies to">
+          <select style={selStyle} value={aUpc} onChange={(e) => { setAUpc(e.target.value); touchAdj(); }} title="Which item the adjustment applies to">
             <option value="ALL">All {data.brand} items</option>
             {data.items.map((i) => (
               <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
             ))}
           </select>
-          <select style={selStyle} value={aKind} onChange={(e) => setAKind(e.target.value as PlanAdjustment["kind"])}>
+          <select style={selStyle} value={aKind}
+            onChange={(e) => { setAKind(e.target.value as PlanAdjustment["kind"]); setAReason(""); touchAdj(); }}>
             <option value="distribution">Distribution change</option>
             <option value="price">Base price change</option>
             <option value="trend">Trend override</option>
           </select>
           <input
-            style={{ ...selStyle, width: 110 }}
+            style={{ ...selStyle, width: 110, ...adjRing("pct") }}
             type="number"
             step="0.5"
             placeholder="Impact %"
             title="Expected % impact on base volume — negative for a loss (e.g. -12 for lost distribution in the largest stores)"
             value={aPct}
-            onChange={(e) => setAPct(e.target.value)}
+            onChange={(e) => { setAPct(e.target.value); touchAdj(); }}
           />
-          <input style={{ ...selStyle, width: 140 }} type="date" value={aFrom} onChange={(e) => setAFrom(e.target.value)} title="Takes effect" />
+          <input style={{ ...selStyle, width: 140, ...adjRing("dates") }} type="date" value={aFrom}
+            onChange={(e) => { setAFrom(e.target.value); touchAdj(); }} title="Takes effect" />
           <span style={{ color: "var(--ink-3)", fontSize: 12 }}>→</span>
-          <input style={{ ...selStyle, width: 140 }} type="date" value={aTo} onChange={(e) => setATo(e.target.value)} title="Ends" />
+          <input style={{ ...selStyle, width: 140, ...adjRing("dates") }} type="date" value={aTo}
+            onChange={(e) => { setATo(e.target.value); touchAdj(); }} title="Ends" />
+          <select
+            style={{ ...selStyle, width: 190, ...adjRing("reason") }}
+            value={aReason}
+            onChange={(e) => { setAReason(e.target.value); touchAdj(); }}
+            title="Why the base is moving — required, and it travels with the adjustment"
+          >
+            <option value="">Reason…</option>
+            {ADJ_REASONS[aKind].map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
           <input
-            style={{ ...selStyle, flex: "1 1 200px", minWidth: 160 }}
-            placeholder="Why — e.g. lost distribution in largest stores, price increase in April…"
+            style={{ ...selStyle, flex: "1 1 160px", minWidth: 140 }}
+            placeholder="Detail (optional)"
+            title="Anything the reason alone does not say — the store count, the competitor, the month"
             value={aNote}
-            onChange={(e) => setANote(e.target.value)}
+            onChange={(e) => { setANote(e.target.value); touchAdj(); }}
           />
           <button
             className="btn"
-            style={{ ...selStyle, cursor: "pointer", opacity: parseFloat(aPct) ? 1 : 0.5 }}
+            style={{ ...selStyle, cursor: adjNext ? "default" : "pointer", opacity: adjNext ? 0.5 : 1,
+                     ...(adjNext ? {} : { background: "var(--brand)", borderColor: "transparent", fontWeight: 800 }) }}
             onClick={addAdj}
-            disabled={!parseFloat(aPct)}
+            disabled={!!adjNext}
+            title={adjNext ? `Still needed: ${adjNext.label.toLowerCase()}` : "Add this adjustment to the plan"}
           >
             + Add adjustment
           </button>
