@@ -62,8 +62,8 @@ export default function StepChoices({
           {busy
             ? "Recording…"
             : added
-              ? `They ride into the ${year} base. On to Base & Lift.`
-              : `Recorded for ${scopeLabel}, and Base & Lift opens next.`}
+              ? `They ride into the ${year} base. On to the Base Business Review.`
+              : `Recorded for ${scopeLabel}, and the Base Business Review opens next.`}
         </span>
       </button>
       <button

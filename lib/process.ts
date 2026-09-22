@@ -125,7 +125,7 @@ export const PROCESSES: ProcessDef[] = [
     kind: "plan",
     label: "Plan a new year",
     tagline: "Build next year",
-    detail: "Four steps: confirm distribution, add new items, review the base, then build the promotion plan.",
+    detail: "Four steps: confirm distribution, add new items, review the base business, then build the promotion plan.",
     icon: "calendar",
     needsYear: true,
     accountWhy:
@@ -152,7 +152,7 @@ export const PROCESSES: ProcessDef[] = [
       },
       {
         key: "base",
-        label: "Base & Lift",
+        label: "Base Business Review",
         blurb: "Review the plan-year base. It already reflects the distribution and new-item decisions above.",
         view: "base",
         perAccount: true,
