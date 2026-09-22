@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EVENT_MAX_DAYS } from "@/lib/data/nonPerformanceTypes";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { ADD_ITEM_EVENT, processPath, viewUrlWithin } from "@/lib/process";
+import { ADD_ITEM_EVENT, OPEN_DISTRIBUTION_EVENT, processPath, viewUrlWithin } from "@/lib/process";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -373,14 +373,32 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
      the list for whichever account that happened to be is worse than opening
      nothing. The rail holds the page and asks for one; narrowing the top bar
      re-renders this with a single market, and the effect fires then. */
-  const openedFor = useRef<string | null>(null);
+  /* Keyed on the step's URL, and cleared the moment that URL changes.
+
+     Arriving at a step opens its modal; being on the step and having closed
+     it does not reopen it, however many times the page re-renders around a
+     save. The two are told apart by WHERE, not by whether a modal has ever
+     opened: a flag that only ever went one way meant leaving step 1 and
+     coming back left the list shut for good, because every step of this
+     process renders the same underlying view and the component never
+     unmounts to reset it. */
+  const openedAt = useRef<string | null>(null);
   useEffect(() => {
+    if (openedAt.current !== pathname) openedAt.current = null;   // moved: a modal may open here again
     if (!autoOpen || !data.distVer || data.markets.length !== 1) return;
-    if (openedFor.current === autoOpen) return;
-    openedFor.current = autoOpen;
+    if (openedAt.current === pathname) return;                    // already opened here
+    openedAt.current = pathname;
     if (autoOpen === "distribution") void openDv();
     else void openDvAdd();
-  }, [autoOpen, data.distVer]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pathname, autoOpen, data.distVer, data.markets.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Starting over lands on step 1, which may be the step already showing —
+     the same URL, so nothing above fires. The rail says so directly. */
+  useEffect(() => {
+    const open = () => { openedAt.current = pathname; void openDv(); };
+    window.addEventListener(OPEN_DISTRIBUTION_EVENT, open);
+    return () => window.removeEventListener(OPEN_DISTRIBUTION_EVENT, open);
+  }, [pathname, data.distVer, data.mkt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* The rail draws step 2's "Add a new item" and lives in the layout, a
      different tree from this page, so it asks for the form with an event. */

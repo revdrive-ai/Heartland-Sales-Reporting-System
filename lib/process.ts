@@ -260,3 +260,8 @@ export function viewUrlWithin(pathname: string, view: string, query?: string): s
    change the URL to fire twice, and "open the form again" is not a different
    place. */
 export const ADD_ITEM_EVENT = "hh:add-item";
+
+/* Starting over ends on step 1 with the list open, even when step 1 is the
+   step it started from — a navigation to the URL you are already on does
+   nothing, so the rail asks for the list rather than relying on arriving. */
+export const OPEN_DISTRIBUTION_EVENT = "hh:open-distribution";

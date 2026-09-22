@@ -10,6 +10,7 @@ import {
   type PlanEvent,
 } from "@/lib/repo/client";
 import { DV_EMPTY } from "@/lib/distver";
+import { OPEN_DISTRIBUTION_EVENT } from "@/lib/process";
 
 /* Start over — for when a step was answered wrongly and unpicking it one
    decision at a time is worse than beginning again.
@@ -101,6 +102,9 @@ export default function StepReset({
       setOpen(false);
       router.push(restartHref);
       router.refresh();
+      /* Land with the list open. Starting over from step 1 navigates to the
+         URL it is already on, which does nothing on its own. */
+      window.dispatchEvent(new CustomEvent(OPEN_DISTRIBUTION_EVENT));
     } finally {
       setBusy(false);
     }
