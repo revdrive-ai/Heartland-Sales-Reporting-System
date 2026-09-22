@@ -137,7 +137,7 @@ export default async function Page() {
        docs from the Base Business Review verify flow): items marked "no volume" drop
        out of the plan bases — the engine chart, the brand run-rate events
        score on, and the per-item bases — and verified additions ride in on
-       their proxy's run-rate (× %) from their first week, plus the load-in. */
+       their proxy's run-rate (× %) from their first week. */
     const dvByMkt: Record<string, { out: Set<string>; adds: DistAddition[] }> = {};
     let dvVerified = 0, dvOut = 0, dvAdded = 0;
     /* Plan adjustments (per division × plan year, the Base Business Review levers):
@@ -228,7 +228,7 @@ export default async function Page() {
            division × brand's monthly index over its full history. Items the
            distribution verification marked "no volume" are left out; verified
            additions ride in on their proxy's series (× %) from their first
-           week, plus the load-in. The plan adjustments multiply each week.
+           week. The plan adjustments multiply each week.
            The brand series is the sum of its items, so an item-level lever is
            weighted exactly by that item's volume. */
         {
@@ -279,10 +279,9 @@ export default async function Page() {
               if (!pim) continue;
               const proxy = rawSeries(pim);
               const ser = planWeeks.map((w, i) => {
-                let v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
-                if (a.loadin_units > 0 && w >= a.ship_date && utcOf(w) - utcOf(a.ship_date.slice(0, 10)) < 7 * DAY) {
-                  v += a.loadin_units; // one-time pipeline fill in this week
-                }
+                /* Consumption only — the pipeline fill is a shipment, not a
+                   sale, so it is not in the base the events score against. */
+                const v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
                 return Math.max(0, v) * adjFactor(a.upc, utcOf(w));
               });
               itemWkly[a.upc] = ser.map((v, i) => +(v + (itemWkly[a.upc]?.[i] ?? 0)).toFixed(1));

@@ -16,10 +16,14 @@ export type DistAddition = {
   proxy_upc: string;      // the item whose weekly base AND seasonality this one copies
   proxy_pct: number;      // % of that item's base — derived from the two %ACVs
   est_acv?: number;       // the distribution this item is expected to reach
-  ship_date: string;      // the day it ships to the customer — the pipeline fill lands in this week
+  ship_date: string;      // the day it ships to the customer — when the pipeline fill leaves the plant
   shelf_date: string;     // projected first day on shelf — what the forecast starts from
   first_week: string;     // the NIQ Saturday shelf_date falls into; ongoing volume starts here
-  loadin_units: number;   // one-time pipeline fill, retail units
+  /* One-time pipeline fill, retail units: the stock bought to fill the
+     shelves before the item ever sells. Deliberately NOT part of the base,
+     which is a consumption model; it is carried here for the shipment
+     forecast to lay on by month once the plan is built. */
+  loadin_units: number;
 };
 
 export type DistVerification = {

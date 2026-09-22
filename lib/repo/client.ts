@@ -317,7 +317,8 @@ export async function setPlanBudget(key: string, value: number): Promise<void> {
 /* ---- distribution verification (plan years) ----
    The new-year gate on carried volume, per customer × plan year: every item
    the previous year sold is confirmed In plan or No volume, and genuinely new
-   items are added with a proxy for base volume plus a load-in. Carried by
+   items are added with a proxy for base volume, and a pipeline fill that is
+   recorded but kept out of the consumption base. Carried by
    default until verified (the plan view shows an "unverified" pill); the doc
    is shared, like all planner work. Consumed server-side by the Base Business Review
    plan-year series. */

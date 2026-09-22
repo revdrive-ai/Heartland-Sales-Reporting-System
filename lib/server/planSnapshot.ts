@@ -11,7 +11,7 @@ import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
    plan base in UNITS per brand by month, with everything the plan view
    applies: the year-ago-carried weekly base (engine-shaped projection where
    the source week is unmeasured), distribution verification (excluded items
-   out, additions on their proxy + load-in), and the planner adjustments
+   out, additions on their proxy), and the planner adjustments
    (distribution / price / trend levers, item rows weighted by base share).
 
    Snapshot versions append to the shared doc plansnap:<mkt>:<year> —
@@ -114,7 +114,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
      comparison can say which items moved. Each item carries its year-ago
      weekly base forward (engine-shaped run rate where the source week was
      never measured); items the distribution verification took out carry
-     nothing, verified additions ride their proxy's shape plus the load-in,
+     nothing, verified additions ride their proxy's shape,
      and the plan adjustments multiply the weeks they cover — in full on the
      item they name, so an item-level lever is exact rather than weighted.
      Each brand total is the sum of its items. */
@@ -200,13 +200,9 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
       const pim = mI.get(a.proxy_upc);
       if (!pim) continue;
       const proxy = rawOf(pim);
-      addItem(a.upc, weeks.map((w, i) => {
-        let v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
-        if (a.loadin_units > 0 && w >= a.ship_date && utcOf(w) - utcOf(a.ship_date.slice(0, 10)) < 7 * DAY) {
-          v += a.loadin_units; // one-time pipeline fill in this week
-        }
-        return v;
-      }));
+      /* Consumption only: the pipeline fill ships into the warehouse, it is
+         not taken off the shelf, so it is not part of the frozen base. */
+      addItem(a.upc, weeks.map((w, i) => (w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0)));
     }
 
     byBrand[brand] = { base: bBase.map(Math.round), adjusted: bAdj.map(Math.round) };

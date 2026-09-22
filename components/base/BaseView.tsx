@@ -2111,7 +2111,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                           {a.proxy_pct}% of {data.distVer!.items.find((i) => i.upc === a.proxy_upc)?.name ?? a.proxy_upc}
                           {" · ships "}{a.ship_date.slice(0, 10)}
                           {" · on shelf "}{a.shelf_date.slice(0, 10)}
-                          {a.loadin_units > 0 ? ` · pipeline fill ${Math.round(a.loadin_units).toLocaleString()} u` : ""}
+                          {a.loadin_units > 0
+                            ? ` · pipeline fill ${Math.round(a.loadin_units).toLocaleString()} u (not in the base)`
+                            : ""}
                         </span>
                       </span>
                       <span className="minichip" style={{ cursor: "pointer" }} title="Remove this item from the plan" onClick={() => dvRemoveAdd(a.id)}>✕</span>
@@ -2243,7 +2245,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       ))}
                     </select>
                   </label>
-                  <label className="fld">Pipeline fill <span className="dim">(retail units)</span>
+                  <label className="fld">Pipeline fill <span className="dim">(retail units · not in the base)</span>
                     <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={0} placeholder="0" value={dvLoadU} onChange={(e) => setDvLoadU(e.target.value)} />
                   </label>
                   <label className="fld">Ship date
@@ -2301,9 +2303,11 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 )}
                 <div className="note">
                   ◇ The item takes the chosen item&apos;s weekly shape and seasonality × the percentage, starting the
-                  plan week its shelf date falls into{dvShelf ? <> — <b>{weekFor(dvShelf)}</b></> : null}. The pipeline
-                  fill lands as a one-time spike in the week it ships. Both in retail units, so the O/I rate math and
-                  trade spend read them in the Promotion Planner.
+                  plan week its shelf date falls into{dvShelf ? <> — <b>{weekFor(dvShelf)}</b></> : null}. That is the
+                  base: consumption, what the shopper takes off the shelf, in retail units — so the O/I rate math and
+                  trade spend read it in the Promotion Planner. The <b>pipeline fill</b> is a shipment into the
+                  warehouse, not a sale, so it stays out of the base and is recorded here for the shipment forecast,
+                  which lays it on by month once the plan is built.
                 </div>
                 <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 12 }}>
                   <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => { setDvAddOpen(false); dvResetAdd(); }}>Cancel</button>

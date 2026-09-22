@@ -244,8 +244,15 @@ export default async function Page({
     /* Distribution verification (per customer × plan year, shared doc):
        items marked "no volume" drop out of the carried base and projection;
        verified additions ride in on their proxy's weekly shape from their
-       first week, plus a one-time load-in. Carry-by-default until verified. */
-    const utc2 = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+       first week. Carry-by-default until verified.
+
+       The pipeline fill is NOT in here. The base is a consumption model —
+       what the shopper takes off the shelf — and a pipeline fill is a
+       shipment into the customer's warehouse, bought once to stock the
+       stores. Putting it in the base would say the item sold a quarter's
+       worth in its first week and then shape every promotion off that
+       spike. It is recorded on the addition and belongs to the shipment
+       forecast, which lays it on by month once the plan is built. */
     const itemMetaAll = new Map(allItems.map((i) => [i.upc, i]));
     const dv = readDistVerification(await getState(`distver:${mkt}:${+win}`).catch(() => undefined));
     const outSet = new Set(Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => u));
@@ -260,12 +267,9 @@ export default async function Page({
 
     // per-item weekly base (chosen metric + units) — proxy shapes for additions
     const upcWeek = new Map<string, Map<string, number>>();
-    const upcWeekU = new Map<string, Map<string, number>>();
     for (const r of factsAll) {
       (upcWeek.get(r.upc) ?? upcWeek.set(r.upc, new Map()).get(r.upc)!)
         .set(r.week_ending, ((upcWeek.get(r.upc)!.get(r.week_ending)) ?? 0) + bVal(r));
-      (upcWeekU.get(r.upc) ?? upcWeekU.set(r.upc, new Map()).get(r.upc)!)
-        .set(r.week_ending, ((upcWeekU.get(r.upc)!.get(r.week_ending)) ?? 0) + (r.base_units ?? r.units ?? 0));
     }
     const avg52Of = (m: Map<string, number> | undefined) =>
       m ? last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1) : 0;
@@ -274,12 +278,6 @@ export default async function Page({
       if (!m) return 0;
       const src = yearAgoWeek(w);
       return src <= latestWeek ? (m.get(src) ?? 0) : avg52Of(m) * (engine[+w.slice(5, 7) - 1] ?? 1);
-    };
-    // load-in is entered in retail units; convert with the proxy's base value/unit
-    const perUnitOf = (upc: string) => {
-      if (metric === "units") return 1;
-      const u = avg52Of(upcWeekU.get(upc));
-      return u > 0 ? avg52Of(upcWeek.get(upc)) / u : 0;
     };
     const adds = item === "ALL" ? dv.additions.filter((a) => a.brand === brand) : [];
 
@@ -291,10 +289,6 @@ export default async function Page({
       let extra = 0;
       for (const a of adds) {
         if (w >= a.first_week) extra += planValOf(a.proxy_upc, w) * (a.proxy_pct / 100);
-        // the load-in lands in the plan week covering its purchase date
-        if (a.loadin_units > 0 && w >= a.ship_date && utc2(w) - utc2(a.ship_date.slice(0, 10)) < 7 * DAY) {
-          extra += a.loadin_units * perUnitOf(a.proxy_upc);
-        }
       }
       if (src <= latestWeek) {
         actualized.push(Math.round((weekBaseM.get(src) ?? 0) + extra));
