@@ -157,9 +157,8 @@ export default function ProcessRail({
           <div className="pickfirst">
             ◇ <span>
               The top bar is on <b>{scopeLabel}</b>
-              {inScope.length ? <>, which is {inScope.length} accounts</> : null}. A plan is built one account at a
-              time — the distribution answers, the new items, the adjustments, the events and the sign-off all
-              belong to a customer — so pick one under <b>Account</b> in the top bar. It is the only thing still lit.
+              {inScope.length ? <>, which is {inScope.length} accounts</> : null}. {proc.accountWhy} — so pick one
+              under <b>Account</b> in the top bar. It is the only thing still lit.
             </span>
           </div>
         </div>

@@ -47,6 +47,9 @@ export type ProcessDef = {
   icon: string; // key into lib/icons
   /** Plan works a forward year, so the front door asks for one first. */
   needsYear: boolean;
+  /** Why this process is worked one account at a time — shown while the top
+      bar names more than one. Set on any process with per-account steps. */
+  accountWhy?: string;
   steps: ProcessStep[];
 };
 
@@ -74,12 +77,15 @@ export const PROCESSES: ProcessDef[] = [
     detail: "Actuals through the data edge plus the forecast to year-end — the monthly estimate.",
     icon: "refresh",
     needsYear: false,
+    accountWhy:
+      "An estimate is taken one account at a time — the forecast you are adjusting is that customer's, and each month's version locks against it",
     steps: [
       {
         key: "estimate",
         label: "Update the estimate",
         blurb: "Adjust the in-flight year's promotions and forecast to today's best view.",
         view: "planner",
+        perAccount: true,
       },
     ],
   },
@@ -90,6 +96,8 @@ export const PROCESSES: ProcessDef[] = [
     detail: "Four steps: confirm distribution, add new items, review the base, then build the promotion plan.",
     icon: "calendar",
     needsYear: true,
+    accountWhy:
+      "A plan is built one account at a time — the distribution answers, the new items, the adjustments, the events and the sign-off all belong to a customer",
     steps: [
       {
         key: "distribution",
