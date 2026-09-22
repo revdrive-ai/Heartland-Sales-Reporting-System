@@ -126,6 +126,18 @@ export type BaseData = {
 
 const DAY = 86400000;
 const ALL_BRANDS = "ALL"; // the brand selector's roll-up entry
+
+/* The definition of a hovered legend entry, drawn under it. The legend is
+   painted on the canvas, so this is the one HTML element in the chart box. */
+type LegendTip = { chart: "main" | "season"; text: string; x: number; y: number };
+function LegendTipCard({ tip, chart }: { tip: LegendTip | null; chart: LegendTip["chart"] }) {
+  if (!tip || tip.chart !== chart) return null;
+  return (
+    <div className="legendtip" style={{ left: tip.x, top: tip.y + 14 }} role="tooltip">
+      {tip.text}
+    </div>
+  );
+}
 // ≤ 12 weeks = an event window; longer = always-on (lib/data/nonPerformanceTypes)
 const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
@@ -965,7 +977,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     if (/^\d{4}$/.test(label)) return `${label}'s own month index, read from that year's weeks only — how its seasonality compared with the full-history engine.`;
     return null;
   };
-  type LegendTip = { chart: "main" | "season"; text: string; x: number; y: number };
   const [legendTip, setLegendTip] = useState<LegendTip | null>(null);
   const legendHandlers = (chart: LegendTip["chart"]) => ({
     onHover: (e: { x?: number | null; y?: number | null; native?: Event | null }, item: { text: string }) => {
@@ -980,12 +991,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       setLegendTip(null);
     },
   });
-  const LegendTipCard = ({ chart }: { chart: LegendTip["chart"] }) =>
-    legendTip && legendTip.chart === chart ? (
-      <div className="legendtip" style={{ left: legendTip.x, top: legendTip.y + 14 }} role="tooltip">
-        {legendTip.text}
-      </div>
-    ) : null;
   const seasonOpts = useMemo(() => {
     const o = gridOptions();
     return { ...o, plugins: { ...o.plugins, legend: { ...o.plugins.legend, ...legendHandlers("season") } } };
@@ -1266,7 +1271,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             </div>
           </div>
           <div className="chartbox" style={{ height: 320 + (showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0) }}>
-            <LegendTipCard chart="main" />
+            <LegendTipCard tip={legendTip} chart="main" />
             {data.plan ? (
               <Line
                 key={"plan" + tick + data.mkt + data.brand + data.item + data.metric + data.win + (showPY ? "p" : "") + (showYB ? "y" : "") + (showYB2 ? "z" : "") + brandAdjs.map((a) => a.id).join(".")}
@@ -1487,7 +1492,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               <span className="sub">{marketName} · {data.itemName ? "this item" : brandLabel}</span>
             </div>
             <div className="chartbox" style={{ height: 320 }}>
-              <LegendTipCard chart="season" />
+              <LegendTipCard tip={legendTip} chart="season" />
               <Line
                 key={"s" + tick + data.mkt + data.brand + data.item}
                 data={{
