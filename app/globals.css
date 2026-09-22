@@ -651,3 +651,25 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .prail-foot.chooser .pblurb{display:block;margin-bottom:10px}
 .stepchoices{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));grid-auto-rows:min-content;gap:10px;align-items:start}
 .stepchoices .gatepick{padding:12px 14px}
+
+/* A step that asks a question holds the page until it is answered: the work
+   below is dimmed and made inert, because it is about to change depending on
+   the answer. Sits under the rail (45) and the top bar (50) — scope stays
+   live, since scope is what the answer applies to. */
+.stepscrim{position:fixed;inset:60px 0 0;z-index:44;background:rgba(15,23,41,.38);
+  backdrop-filter:grayscale(.75) saturate(.3);-webkit-backdrop-filter:grayscale(.75) saturate(.3)}
+.prail.needs{border:1px solid var(--accent);border-top-width:3px;box-shadow:0 12px 34px rgba(20,24,35,.18)}
+.pneeds{margin-left:auto;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--accent);background:var(--accent-soft);border:1px solid #cddbfb;border-radius:20px;
+  padding:3px 10px;white-space:nowrap}
+.pneeds+.pcount{margin-left:0}
+.prail.needs .stepchoices .gatepick{border-color:var(--accent);animation:needpulse 2.4s ease-in-out infinite}
+.prail.needs .stepchoices .gatepick:nth-child(2){animation-delay:.35s}
+.prail.needs .stepchoices .gatepick:hover{animation:none}
+@keyframes needpulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,.28)}
+  50%{box-shadow:0 0 0 5px rgba(37,99,235,0)}
+}
+@media (prefers-reduced-motion:reduce){
+  .prail.needs .stepchoices .gatepick{animation:none;box-shadow:0 0 0 3px rgba(37,99,235,.18)}
+}

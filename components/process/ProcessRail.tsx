@@ -82,12 +82,20 @@ export default function ProcessRail({
 
   if (!loc) return null;
   const { proc, step, index } = loc;
+  /* A step that asks a question holds the page until it is answered. The
+     work below is not browsable yet — it is about to change depending on
+     the answer — so it is dimmed and made inert rather than left looking
+     usable. The top bar stays live: scope is what the answer applies to. */
+  const needsChoice =
+    step.chooser === "new-items" && !!status && status.newItems < status.customers;
   const prev = index > 0 ? proc.steps[index - 1] : null;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
   const many = proc.steps.length > 1;
 
   return (
-    <div className={"prail " + proc.kind}>
+    <>
+    {needsChoice && <div className="stepscrim" aria-hidden="true" />}
+    <div className={"prail " + proc.kind + (needsChoice ? " needs" : "")}>
       <div className="prail-top">
         <Link href="/start" className="pback" title="Back to the front door — your place is saved">
           ← All work
@@ -100,6 +108,7 @@ export default function ProcessRail({
         <span className="pscope" title="The customers this step applies to — change them in the top bar">
           {scopeLabel}
         </span>
+        {needsChoice && <span className="pneeds">Choose one to continue</span>}
         {many && <span className="pcount">Step {index + 1} of {proc.steps.length}</span>}
       </div>
 
@@ -157,5 +166,6 @@ export default function ProcessRail({
         </div>
       )}
     </div>
+    </>
   );
 }
