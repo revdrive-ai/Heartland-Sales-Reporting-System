@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { ICONS } from "@/lib/icons";
 import { parseWorkPath, processPath, writeProcCookie } from "@/lib/process";
@@ -118,6 +118,25 @@ export default function ProcessRail({
     if (kind && stepKey) writeProcCookie({ kind, step: stepKey, planYear: year });
   }, [kind, stepKey, year]);
 
+  /* A click on the held page is not a dead click: it scrolls the rail into
+     view and flashes it, so the thing that was clicked answers with the
+     thing that has to happen first. The chart chips below the scrim look
+     live — dimmed, but live — and a button that swallows a click in silence
+     reads as broken. */
+  const railRef = useRef<HTMLDivElement>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const answerClick = () => {
+    const el = railRef.current;
+    if (!el) return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    el.classList.remove("flash");
+    // restart the animation even if it is mid-run
+    void el.offsetWidth;
+    el.classList.add("flash");
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => el.classList.remove("flash"), 1400);
+  };
+
   if (!loc) return null;
   const { proc, step, index } = loc;
   /* A step that asks a question holds the page until it is answered. The
@@ -153,8 +172,15 @@ export default function ProcessRail({
 
   return (
     <>
-    {hold && <div className="stepscrim" aria-hidden="true" />}
-    <div className={"prail " + proc.kind + (urge ? " needs" : "")}>
+    {hold && (
+      <div
+        className="stepscrim"
+        aria-hidden="true"
+        onClick={answerClick}
+        title={needsAccount ? "Pick an account in the top bar first" : "Choose one of the two options above first"}
+      />
+    )}
+    <div ref={railRef} className={"prail " + proc.kind + (urge ? " needs" : "")}>
       <div className="prail-top">
         <Link href="/start" className="pback" title="Back to the front door — your place is saved">
           ← All work

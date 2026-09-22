@@ -672,8 +672,17 @@ button[disabled]{opacity:.45;cursor:not-allowed}
    below is dimmed and made inert, because it is about to change depending on
    the answer. Sits under the rail (45) and the top bar (50) — scope stays
    live, since scope is what the answer applies to. */
-.stepscrim{position:fixed;inset:60px 0 0;z-index:44;background:rgba(15,23,41,.38);
-  backdrop-filter:grayscale(.75) saturate(.3);-webkit-backdrop-filter:grayscale(.75) saturate(.3)}
+.stepscrim{position:fixed;inset:60px 0 0;z-index:44;background:rgba(15,23,41,.38);cursor:not-allowed;
+  backdrop-filter:grayscale(.75) saturate(.3) blur(1.2px);-webkit-backdrop-filter:grayscale(.75) saturate(.3) blur(1.2px)}
+/* The rail answering a click on the held page: a short, strong pulse that
+   says "here" — then it settles back to whatever state it was in. */
+.prail.flash{animation:railflash 1.3s ease-out 1}
+@keyframes railflash{
+  0%{box-shadow:0 0 0 0 rgba(37,99,235,.55),0 12px 34px rgba(20,24,35,.18)}
+  35%{box-shadow:0 0 0 10px rgba(37,99,235,.22),0 12px 34px rgba(20,24,35,.18)}
+  100%{box-shadow:0 0 0 0 rgba(37,99,235,0),0 12px 34px rgba(20,24,35,.18)}
+}
+@media (prefers-reduced-motion:reduce){.prail.flash{animation:none;outline:3px solid var(--accent);outline-offset:2px}}
 .prail.needs{border:1px solid var(--accent);border-top-width:3px;box-shadow:0 12px 34px rgba(20,24,35,.18)}
 .pneeds{margin-left:auto;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
   color:var(--accent);background:var(--accent-soft);border:1px solid #cddbfb;border-radius:20px;
