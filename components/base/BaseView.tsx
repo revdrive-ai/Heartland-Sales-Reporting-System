@@ -144,7 +144,6 @@ const SEAS_KEY = "hhSeasHide";
 const PY_KEY = "hhShowPY";
 const YB_KEY = "hhShowYB";  // year-ago BASE overlay (the prior year's base model)
 const YB2_KEY = "hhShowYB2"; // two-years-ago BASE overlay
-const LANES_KEY = "hhShowLanes"; // default on
 const INS_KEY = "hhInsightsHide";
 const ENG_KEY = "hhLiftEngineHide";
 
@@ -225,7 +224,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       return !v;
     });
   };
-  const [showLanes, setShowLanes] = useState(true);
+  /* Always-on program lanes are not offered on this screen: there are no
+     always-on programs in the plan year yet, and a chip that draws nothing
+     is a chip to be confused by. The lane code stays for when there are. */
+  const showLanes = false;
   // lift-engine predictor inputs
   const [engDepth, setEngDepth] = useState("20");
   const [engTactic, setEngTactic] = useState("Feature");
@@ -275,7 +277,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       setShowPY(localStorage.getItem(PY_KEY) === "1");
       setShowYB(localStorage.getItem(YB_KEY) === "1");
       setShowYB2(localStorage.getItem(YB2_KEY) === "1");
-      setShowLanes(localStorage.getItem(LANES_KEY) !== "0");
       setInsHide(localStorage.getItem(INS_KEY) === "1");
       setEngHide(localStorage.getItem(ENG_KEY) === "1");
     } catch {}
@@ -730,12 +731,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       return p.actual !== null ? p.actualFc : Math.round(p.actualFc * adjFactors[i]); // bridge week stays measured
     });
   }, [data.forecast, data.points, adjFactors]);
-  const toggleLanes = () => {
-    setShowLanes((v) => {
-      try { localStorage.setItem(LANES_KEY, v ? "0" : "1"); } catch {}
-      return !v;
-    });
-  };
   const togglePY = () => {
     setShowPY((v) => {
       try { localStorage.setItem(PY_KEY, v ? "0" : "1"); } catch {}
@@ -952,8 +947,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const legendDef = (label: string): string | null => {
     const sy = data.plan?.sourceYear;
     if (data.plan) {
-      if (label === `${sy} base model (measured)`)
-        return `NIQ's Base Units for the aligned ${sy} week (364 days back) — the volume NIQ estimates these items would have sold with no promotion — summed over the selection, less any item marked No volume in step 1. Stops where ${sy} stops being measured.`;
+      if (label === `${sy} base`)
+        return `The ${sy} base: NIQ's Base Units for the aligned ${sy} week (364 days back) — the volume NIQ estimates these items would have sold with no promotion — summed over the selection, less any item marked No volume in step 1. Runs as far as ${sy} has landed.`;
       if (label === `${sy} actuals`)
         return `Units actually sold in the aligned ${sy} week, promotions included. Sits above the base model in promoted weeks; the gap is the lift.`;
       if (label === `${sy! - 1} base model`)
@@ -1164,7 +1159,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       <div className="kpis">
         {data.plan ? (<>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">{data.plan.sourceYear} base model (measured)</span></div>
+            <div className="k-top"><span className="k-label">{data.plan.sourceYear} base</span></div>
             <div className="k-val">{fmtVal(data.plan.totActualized)}</div>
             <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks landed</div>
           </div>
@@ -1225,7 +1220,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           <div className="c-head">
             <h3>
               {data.plan
-                ? <>Plan {data.win} — {data.plan.sourceYear} base model (measured) + projected remainder</>
+                ? <>Plan {data.win} — {data.plan.sourceYear} base + projected remainder</>
                 : <>Weekly {metricLabel} — actual vs NIQ base · event windows shaded</>}
             </h3>
             <div className="chip-row">
@@ -1255,13 +1250,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 {showYB2 ? "✓ Base 2 yrs ago" : "Base 2 yrs ago"}
               </span>
               <span
-                className={"minichip" + (showLanes ? " on" : "")}
-                onClick={toggleLanes}
-                title={showLanes ? "Hide the always-on program lanes under the chart" : "Show one lane per always-on program (EDLP etc.) under the chart"}
-              >
-                {showLanes ? "✓ Always-on lanes" : "Always-on lanes"}
-              </span>
-              <span
                 className={"minichip" + (seasHide ? " on" : "")}
                 onClick={toggleSeas}
                 title={seasHide ? "Bring the seasonality card back beside the chart" : "Hide the seasonality card and widen this chart to the full row"}
@@ -1279,16 +1267,17 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 data={{
                   labels: data.points.map((p) => p.week.slice(5)),
                   datasets: [
-                    /* The carried segment IS the source year's measured base
-                       model — NIQ's promo-stripped base from the aligned weeks,
-                       less the items verification took out — so it is named and
-                       coloured as that model, and the separate "year-ago base"
-                       overlay is not offered here: it would draw the same line. */
+                    /* The carried segment is the source year's base — NIQ's
+                       promo-stripped baseline from the aligned weeks, less the
+                       items verification took out. One line, one name; the
+                       "year-ago base" overlay is not offered on this chart
+                       because it would draw the same line a second time under
+                       a second name. */
                     {
-                      label: `${data.plan.sourceYear} base model (measured)`,
+                      label: `${data.plan.sourceYear} base`,
                       data: data.plan.actualized,
-                      borderColor: "#8b5cf6",
-                      backgroundColor: "#8b5cf6",
+                      borderColor: cssToken("--accent"),
+                      backgroundColor: cssToken("--accent"),
                       borderWidth: 2.2,
                       tension: 0.25,
                       spanGaps: false,
@@ -1456,8 +1445,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           </div>
           <div className="note">
             {data.plan
-              ? <>◇ The violet and amber lines are <b>{data.plan.sourceYear} as it stands</b>: the violet is its <b>measured base
-                model</b> — NIQ&apos;s promo-stripped base from the aligned weeks ({data.plan.actualizedWeeks} weeks, through{" "}
+              ? <>◇ The blue and amber lines are <b>{data.plan.sourceYear} as it stands</b>: the blue is the <b>{data.plan.sourceYear} base</b>
+                — NIQ&apos;s promo-stripped baseline from the aligned weeks that have landed ({data.plan.actualizedWeeks} weeks, through{" "}
                 {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}), less any items verification took out — and the amber dashed
                 line its <b>projected base</b> for the rest of the year — the latest-52-week average shaped by this selection&apos;s
                 seasonality engine. Nothing decided for {data.win} moves either of them; both firm up as {data.plan.sourceYear} weeks land.
