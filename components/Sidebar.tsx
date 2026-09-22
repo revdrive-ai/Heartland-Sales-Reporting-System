@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { NAV } from "@/lib/nav";
+import { navFor } from "@/lib/surface";
 import { ICONS } from "@/lib/icons";
 import { MODE_PARAMS, writeModeCookie, type ModeKind, type WorkMode } from "@/lib/mode";
 
@@ -69,7 +69,7 @@ export default function Sidebar({ mode }: { mode: WorkMode }) {
         )}
       </div>
 
-      {NAV.map((g) => (
+      {navFor().map((g) => (
         <div className="navgroup" key={g.heading}>
           <h4>{g.heading}</h4>
           {g.items.map((it) => (

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { supabasePublicEnv } from "@/lib/supabase/env";
 import { isAllowedEmail } from "@/lib/auth/domain";
+import { homeFor, isHiddenView, surfacePath } from "@/lib/surface";
 
 /* Every request passes through here. It refreshes the Supabase session
    cookies and decides whether the request may proceed at all.
@@ -63,7 +64,7 @@ export async function middleware(req: NextRequest) {
     // already signed in and landing on the login page — go to the app
     if (allowed && pathname === "/login") {
       const url = req.nextUrl.clone();
-      url.pathname = "/base";
+      url.pathname = surfacePath("/base");
       url.search = "";
       return NextResponse.redirect(url);
     }
@@ -75,6 +76,18 @@ export async function middleware(req: NextRequest) {
     url.pathname = "/login";
     // come back to where they were headed once signed in
     url.search = pathname === "/" ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+    return NextResponse.redirect(url);
+  }
+
+  /* This deployment's surface may not show every view (see lib/surface.ts).
+     A stale bookmark or a typed URL for a hidden one lands on the surface's
+     own home rather than a dead page. Both surfaces read the same data, so
+     this is navigation, not authorization. */
+  const view = pathname.split("/")[1] ?? "";
+  if (isHiddenView(view)) {
+    const url = req.nextUrl.clone();
+    url.pathname = `/${homeFor()}`;
+    url.search = "";
     return NextResponse.redirect(url);
   }
 

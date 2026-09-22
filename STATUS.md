@@ -1,6 +1,6 @@
 # Heartland Sales Reporting System — Build Status
 
-_Last updated: 2026-09-19_
+_Last updated: 2026-09-22_
 
 A Next.js/TypeScript rebuild of the heartland-harvest-v3 demo on real data,
 deployed to Vercel from `main`. Every view reads through the repository seam
@@ -227,6 +227,30 @@ to the shared store automatically on first load. Backend: Supabase
 On the Vercel deployment the Supabase env vars are required for durability —
 until they're set, the tool falls back to per-browser storage there.
 
+## Surfaces — one codebase, two deployments
+
+A **surface** is a named subset of the 18 views: same code, same Supabase
+project, same numbers, shorter sidebar, its own URL. `NEXT_PUBLIC_SURFACE`
+picks one at build time, so a second Vercel project off the same `main` is
+the whole mechanism — no fork, no drift.
+
+- `full` (default, unchanged) — all 18 views, `heartland.revdrive.ai`.
+- `lite` — Sales Dashboard, Monthly Forecast Review, Latest Estimate. Built
+  views only; Objectives, Approvals and Sales Leader View join it when they
+  stop being stubs.
+
+Editing `LITE_VIEWS` in `lib/surface.ts` is the only change needed to move a
+view in or out — the sidebar (`navFor`), the route guard (`middleware.ts`)
+and the landing redirect (`surfacePath`) all follow it, and a group emptied
+by the filter drops out of the sidebar rather than rendering a bare heading.
+`/api/health` reports which surface a deployment is serving.
+
+This is focus, not access control: both surfaces authenticate identically
+and read the same rows. The nightly LE lock runs on `full` only, so the two
+projects cannot race to write the same lock version.
+
+Runbook for standing up the second project: `docs/surfaces.md`.
+
 ## Open items
 
 - **Supabase connection** — the project is **Heartland Sales Reporting POC**
@@ -256,7 +280,12 @@ until they're set, the tool falls back to per-browser storage there.
   consumption data. Awaiting the decisions listed in §7 and a sample export.
 - **Remaining stub views** — Promo Analysis (workflow step 5) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
-  Approvals, and Sales Leader View.
+  Approvals, and Sales Leader View. The last three are the ones the `lite`
+  surface wants; adding them to `LITE_VIEWS` is a one-line change once built.
+- **Lite deployment not created yet** — the code ships on `main` and the full
+  deployment is unaffected. Standing up the second Vercel project (import the
+  same repo, `NEXT_PUBLIC_SURFACE=lite`, no `CRON_SECRET`, its own subdomain,
+  add the host to Supabase Redirect URLs) is `docs/surfaces.md`.
 - **Data gaps to close on the business side** — the RC Taylor territory
   assignment, the Telus "Safeway Mountain West" ↔ NIQ "Safeway IMW" name
   match, and extending the crosswalk and price-list workbooks per the
