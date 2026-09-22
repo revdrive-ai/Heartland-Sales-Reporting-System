@@ -191,6 +191,21 @@ const fmtNum = (v: number) => (Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(2) + "M" :
 const fmtLift = (v: number | null) => (v === null ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v * 100).toFixed(0)}%`);
 
 /** % change vs the same weeks a year earlier, colored like the dashboard. */
+/* The change from the source year's base to the plan, on a card: units and
+   percent, coloured by direction, or a quiet "unchanged" when the plan is
+   still the carried base. */
+function DeltaSub({ from, to, label, fmt }: { from: number; to: number; label: string; fmt: (v: number) => string }) {
+  const d = to - from;
+  if (Math.abs(d) < 0.5) return <div className="k-sub flat">{label}: unchanged</div>;
+  const pct = from > 0 ? (d / from) * 100 : null;
+  const up = d >= 0;
+  return (
+    <div className={"k-sub " + (up ? "up" : "down")}>
+      {up ? "▲" : "▼"} {up ? "+" : "−"}{fmt(Math.abs(d))}{pct !== null ? ` (${up ? "+" : "−"}${Math.abs(pct).toFixed(1)}%)` : ""} {label}
+    </div>
+  );
+}
+
 function YoYSub({ v, label = "vs same weeks YA" }: { v: number | null | undefined; label?: string }) {
   if (v === null || v === undefined) return <div className="k-sub flat">no year-ago basis</div>;
   const up = v >= 0;
@@ -727,6 +742,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   }, [data.plan, data.points, adjFactors]);
   const adjTotal = adjustedPlan.reduce((a: number, v) => a + (v ?? 0), 0);
   const hasPlanDelta = hasAdj || (data.plan?.totAdditions ?? 0) > 0;
+  // the plan's total over the weeks the source year has landed, and over the rest
+  const planMeasTotal = adjustedPlan.reduce((a: number, v, i) => a + (data.plan?.actualized[i] !== null ? (v ?? 0) : 0), 0);
+  const planProjTotal = adjTotal - planMeasTotal;
   // in-flight year: the LE-adjusted forecast (measured weeks never move)
   const adjustedFc = useMemo(() => {
     if (!data.forecast) return [];
@@ -1160,16 +1178,18 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         )}
       </div>
 
-      <div className="kpis">
+      <div className={"kpis" + (data.plan ? " three" : "")}>
         {data.plan ? (<>
           <div className="kpi">
             <div className="k-top"><span className="k-label">{data.plan.sourceYear} base</span></div>
             <div className="k-val">{fmtVal(data.plan.totActualized)}</div>
+            <DeltaSub from={data.plan.totActualized} to={planMeasTotal} label={`to Plan ${data.win} over these weeks`} fmt={fmtVal} />
             <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks landed</div>
           </div>
           <div className="kpi">
             <div className="k-top"><span className="k-label">{data.plan.sourceYear} base — projected</span></div>
             <div className="k-val" style={{ color: "var(--warn)" }}>{fmtVal(data.plan.totProjected)}</div>
+            <DeltaSub from={data.plan.totProjected} to={planProjTotal} label={`to Plan ${data.win} over these weeks`} fmt={fmtVal} />
             <div className="k-sub flat">
               {data.points.length - data.plan.actualizedWeeks} weeks · last year&apos;s shape at this year&apos;s run-rate
               {(() => {
@@ -1181,6 +1201,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           <div className="kpi">
             <div className="k-top"><span className="k-label">Plan {data.win} — full year</span></div>
             <div className="k-val">{fmtVal(hasPlanDelta ? adjTotal : data.plan.totActualized + data.plan.totProjected)}</div>
+            <DeltaSub from={data.plan.totActualized + data.plan.totProjected} to={hasPlanDelta ? adjTotal : data.plan.totActualized + data.plan.totProjected} label={`vs ${data.plan.sourceYear} base`} fmt={fmtVal} />
             <div className="k-sub flat">
               {hasPlanDelta
                 ? [
@@ -1217,12 +1238,17 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             <div className="k-sub flat">{data.planningYear ? "planning view" : `${liftPct >= 0 ? "+" : "−"}${Math.abs(liftPct).toFixed(1)}% lift on base`}</div>
           </div>
         </>)}
-        <div className="kpi">
-          <div className="k-top"><span className="k-label">Promotion windows</span></div>
-          <div className="k-val">{data.overlays.length}</div>
-          {data.yoy && !data.plan && <YoYSub v={data.yoy.promoWeeks} label="NIQ promo wks vs YA" />}
-          <div className="k-sub flat">{events.length} events · {alwaysOn.length} always-on · NIQ saw promo support in {data.totals.niqPromoWeeks} wks</div>
-        </div>
+        {/* The windows card belongs to the measured trend, where NIQ saw the
+            promotions. On the plan view the year's windows are the planner's
+            business, and a count of zero next to the base is a distraction. */}
+        {!data.plan && (
+          <div className="kpi">
+            <div className="k-top"><span className="k-label">Promotion windows</span></div>
+            <div className="k-val">{data.overlays.length}</div>
+            {data.yoy && <YoYSub v={data.yoy.promoWeeks} label="NIQ promo wks vs YA" />}
+            <div className="k-sub flat">{events.length} events · {alwaysOn.length} always-on · NIQ saw promo support in {data.totals.niqPromoWeeks} wks</div>
+          </div>
+        )}
       </div>
 
       <div className={"grid2" + (seasHide ? " wide1" : "")}>

@@ -98,6 +98,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14p
 
 /* KPI cards */
 .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpis.three{grid-template-columns:repeat(3,1fr)}
 .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 17px;box-shadow:var(--shadow);position:relative;overflow:hidden}
 .kpi .k-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .kpi .k-label{font-size:12px;font-weight:700;color:var(--ink-2)}
