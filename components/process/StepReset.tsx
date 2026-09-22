@@ -14,8 +14,12 @@ import { DV_EMPTY } from "@/lib/distver";
 /* Start over — for when a step was answered wrongly and unpicking it one
    decision at a time is worse than beginning again.
 
-   It clears what the PROCESS entered, for the accounts the top bar has in
-   scope, and nothing else:
+   ONE ACCOUNT AT A TIME. The process is worked account by account — the
+   steps count "9 of 13" for a reason — so clearing is too. With the top bar
+   on a territory or a parent this does nothing but say so; narrow to one
+   account and it clears that account.
+
+   It clears what the PROCESS entered there, and nothing else:
 
      · the distribution answers, the new items and the "none this year" answer
      · the plan adjustments
@@ -64,6 +68,7 @@ export default function StepReset({
   const ask = async () => {
     setOpen(true);
     setCounts(null);
+    if (markets.length !== 1) return;
     const ids = telusIdsFor(markets);
     const c: Counts = { decisions: 0, out: 0, additions: 0, answered: false, verified: 0, adjustments: 0, events: 0 };
     for (const code of markets) {
@@ -103,11 +108,17 @@ export default function StepReset({
 
   const nothing = counts && !counts.decisions && !counts.additions && !counts.answered
     && !counts.verified && !counts.adjustments && !counts.events;
-  const reach = markets.length === 1 ? scopeLabel : `all ${markets.length} accounts in scope`;
+  const one = markets.length === 1;
 
   return (
     <>
-      <button className="pstartover" onClick={ask} title={`Clear what has been entered for Plan ${year} and begin at step 1`}>
+      <button
+        className="pstartover"
+        onClick={ask}
+        title={one
+          ? `Clear what has been entered for ${scopeLabel} in Plan ${year} and begin at step 1`
+          : "Clear one account's work — narrow the top bar to a single account first"}
+      >
         Start over
       </button>
 
@@ -118,16 +129,27 @@ export default function StepReset({
               <div>
                 <div className="mt">Start Plan {year} over</div>
                 <div className="ms">
-                  Clears what has been entered for <b>{reach}</b> and begins again at step 1.
+                  {one
+                    ? <>Clears what has been entered for <b>{scopeLabel}</b> and begins again at step 1.</>
+                    : <>One account at a time.</>}
                 </div>
               </div>
               <button className="x" onClick={() => setOpen(false)}>✕</button>
             </div>
             <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
-              {!counts ? (
+              {!one ? (
+                <div className="note">
+                  ◇ <span>
+                    The top bar is on <b>{scopeLabel}</b>, which is {markets.length} accounts. The plan is worked
+                    one account at a time — that is what &ldquo;0 of {markets.length} accounts&rdquo; on the steps
+                    counts — so clearing is too, and a single button should not be able to undo thirteen
+                    people&apos;s work. Pick one under <b>Account</b> in the top bar, then come back.
+                  </span>
+                </div>
+              ) : !counts ? (
                 <div className="note">Counting what would go…</div>
               ) : nothing ? (
-                <div className="note">◇ <span>Nothing has been entered for {reach} yet — there is nothing to clear.</span></div>
+                <div className="note">◇ <span>Nothing has been entered for {scopeLabel} yet — there is nothing to clear.</span></div>
               ) : (<>
                 <div className="clearlist">
                   <b>This will be cleared</b>
@@ -157,7 +179,7 @@ export default function StepReset({
             </div>
             <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <button className="btn" onClick={() => setOpen(false)}>Cancel</button>
-              <button className="btn danger" onClick={clear} disabled={busy || !counts || !!nothing}>
+              <button className="btn danger" onClick={clear} disabled={!one || busy || !counts || !!nothing}>
                 {busy ? "Clearing…" : `Clear and start over`}
               </button>
             </div>
