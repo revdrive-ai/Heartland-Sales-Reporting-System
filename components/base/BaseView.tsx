@@ -76,7 +76,7 @@ export type BaseData = {
   plan: null | {             // the plan-year series (future years only)
     sourceYear: number;                 // the year the actualized base carries from
     actualized: (number | null)[];      // actual NIQ base, matching weeks a year back
-    projected: (number | null)[];       // seasonality-shaped projection for the rest
+    projected: (number | null)[];       // the rest, projected: last year's shape at this year's run-rate
     /** the plan year's new items, per week, on their proxy from their shelf
         date — the plan line is (actualized ?? projected) + this, × levers */
     additions: (number | null)[];
@@ -87,6 +87,9 @@ export type BaseData = {
     totAdditions: number;
     itemShare: Record<string, number>;  // upc → share of the selection's base (latest 52w)
     brandShare: Record<string, number>; // brand → the same, for the all-brands roll-up
+    /** how this year is running against last, per brand, over the latest N
+        measured weeks — the level the projected remainder runs at */
+    trend: { weeks: number; byBrand: Record<string, number> };
   };
   points: WeekPoint[];
   overlays: OverlayRow[];
@@ -954,7 +957,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       if (label === `${sy! - 1} base model`)
         return `NIQ's base model from two aligned years back (728 days), fully measured — the multi-year base trend across the whole plan year.`;
       if (label === `${sy} base — projected`)
-        return `The rest of ${sy} as projected: the latest-52-week average base shaped by this selection's month-by-month seasonality index. Nothing decided for ${data.win} is in it.`;
+        return `The rest of ${sy} as projected — last year's shape at this year's run-rate: each remaining week takes the same week of ${sy! - 1}, scaled by how the latest ${data.plan.trend.weeks} measured weeks are running against the same weeks a year earlier. Nothing decided for ${data.win} is in it.`;
       if (label === `Plan ${data.win}`)
         return `The ${data.win} plan: the ${sy} base above, plus the new items on their proxy from their shelf date, with the plan adjustments below applied.`;
     }
@@ -1166,7 +1169,13 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           <div className="kpi">
             <div className="k-top"><span className="k-label">{data.plan.sourceYear} base — projected</span></div>
             <div className="k-val" style={{ color: "var(--warn)" }}>{fmtVal(data.plan.totProjected)}</div>
-            <div className="k-sub flat">{data.points.length - data.plan.actualizedWeeks} weeks · seasonality-shaped · no {data.win} changes in it</div>
+            <div className="k-sub flat">
+              {data.points.length - data.plan.actualizedWeeks} weeks · last year&apos;s shape at this year&apos;s run-rate
+              {(() => {
+                const r = allBrands ? null : data.plan!.trend.byBrand[data.brand];
+                return r !== null && r !== undefined ? ` (${Math.round(r * 100)}% of last year, latest ${data.plan!.trend.weeks} wks)` : "";
+              })()} · no {data.win} changes in it
+            </div>
           </div>
           <div className="kpi">
             <div className="k-top"><span className="k-label">Plan {data.win} — full year</span></div>
@@ -1453,8 +1462,11 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               ? <>◇ The blue and amber lines are <b>{data.plan.sourceYear} as it stands</b>: the blue is the <b>{data.plan.sourceYear} base</b>
                 — NIQ&apos;s promo-stripped baseline from the aligned weeks that have landed ({data.plan.actualizedWeeks} weeks, through{" "}
                 {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}), less any items verification took out — and the amber dashed
-                line its <b>projected base</b> for the rest of the year — the latest-52-week average shaped by this selection&apos;s
-                seasonality engine. Nothing decided for {data.win} moves either of them; both firm up as {data.plan.sourceYear} weeks land.
+                line its <b>projected base</b> for the rest of the year: <b>last year&apos;s shape at this year&apos;s run-rate</b> — each
+                remaining week takes the same week of {data.plan.sourceYear - 1}, scaled by how the latest {data.plan.trend.weeks} measured weeks
+                are running against the same weeks a year earlier
+                {Object.entries(data.plan.trend.byBrand).filter(([b]) => allBrands || b === data.brand).map(([b, r]) => ` (${b}: ${Math.round(r * 100)}%)`).join("")}.
+                Nothing decided for {data.win} moves either of them; both firm up as {data.plan.sourceYear} weeks land.
                 The dark <b>Plan {data.win}</b> line is that base with the plan year&apos;s <b>new items</b> on top and the
                 <b> adjustments</b> below applied. Opening this view logged <b>{marketName}</b> as registered for {data.win}
                 ({Object.keys(planReg).length} of {data.markets.length} customers so far).</>
@@ -2588,8 +2600,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 One row per item with {expGran === "week" ? "week" : "month"} columns and totals.
                 {data.planningYear
                   ? expAdj && brandAdjs.length
-                    ? " Plan year: * columns are the seasonality-shaped projection. Each item gets three rows — Plan base, Adjusted (planner adjustments applied, item-level ones exactly to their item), and Δ% — so what changed reads straight off the file."
-                    : " Plan year: the year-ago base carries in as far as it has actualized; * columns are the seasonality-shaped projection. Planner adjustments are not applied."
+                    ? " Plan year: * columns are projected — last year's shape at this year's run-rate. Each item gets three rows — Plan base, Adjusted (planner adjustments applied, item-level ones exactly to their item), and Δ% — so what changed reads straight off the file."
+                    : " Plan year: the year-ago base carries in as far as it has landed; * columns are projected — last year's shape at this year's run-rate. Planner adjustments are not applied."
                   : " Measured NIQ base units for the selected window."}
               </div>
             </div>

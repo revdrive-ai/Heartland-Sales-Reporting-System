@@ -2,12 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
+import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/projection";
 
 /* Base-units export — the Base Business Review selection as a brand-by-item table,
    weekly or monthly columns, CSV or Excel. Works for every timeframe the Lab
    offers, plan years included: measured weeks carry the NIQ base; a plan
    year's weeks carry the year-ago base as far as it has actualized and the
-   seasonality-shaped projection after (marked * in the column header).
+   projection after — last year's shape at this year's run-rate (marked * in
+   the column header).
    Planner adjustments are browser-local and are NOT applied here. */
 
 const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
@@ -148,13 +150,37 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
     const grandAvg = grandN ? grand / grandN : 0;
     engine = monthTot.map((t, m) => (monthN[m] > 0 && grandAvg > 0 ? t / monthN[m] / grandAvg : 1));
   }
+  // this year against last, per brand, over the live items — the level the
+  // projection runs at (lib/server/projection.ts); and each item's first week
+  const brandOf = new Map(items.map((i) => [i.upc, i.brand]));
+  const brandWeekly = new Map<string, Map<string, number>>();
+  const firstOf = new Map<string, string>();
+  for (const [u, m] of base) {
+    const b = brandOf.get(u) ?? "";
+    const bm = brandWeekly.get(b) ?? brandWeekly.set(b, new Map()).get(b)!;
+    for (const [w, v] of m) {
+      bm.set(w, (bm.get(w) ?? 0) + v);
+      const f = firstOf.get(u);
+      if (f === undefined || w < f) firstOf.set(u, w);
+    }
+  }
+  const trendOfBrand = new Map<string, Trend>();
+  for (const [b, bm] of brandWeekly) trendOfBrand.set(b, trendOf(bm, allWeeks));
+  const noTrend: Trend = { ratio: 1, cur: 0, prior: 0 };
 
   // value per item per week (measured, carried, or projected) + projection flag
   const valueAt = (u: string, w: string): { v: number; proj: boolean } => {
     if (!planningYear) return { v: base.get(u)?.get(w) ?? 0, proj: false };
     const src = yearAgoWeek(w);
     if (src <= latestWeek) return { v: base.get(u)?.get(src) ?? 0, proj: false };
-    return { v: (avg52.get(u) ?? 0) * engine[+w.slice(5, 7) - 1], proj: true };
+    return {
+      v: projectItemWeek({
+        im: base.get(u), w, firstWeek: firstOf.get(u),
+        ratio: itemRatio(base.get(u), allWeeks, trendOfBrand.get(brandOf.get(u) ?? "") ?? noTrend),
+        a52: avg52.get(u) ?? 0, engine, measuredWeeks: allWeeks,
+      }),
+      proj: true,
+    };
   };
 
   // periods: weeks, or months of those weeks (a week belongs to its Saturday's month)
@@ -232,7 +258,7 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
     ["Timeframe", `${winLabel} · ${weeks[0]} → ${weeks[weeks.length - 1]}`],
     ["Granularity", gran === "week" ? "Weekly (NIQ week-ending Saturdays)" : "Monthly (weeks grouped by their Saturday's month)"],
     ["Basis", planningYear
-      ? `Plan year: year-ago NIQ base carried in as far as actualized; * periods are seasonality-shaped projection.${withAdj
+      ? `Plan year: year-ago NIQ base carried in as far as it has landed; * periods are projected — last year's shape at this year's run-rate (the latest 13 weeks against the same weeks a year earlier).${withAdj
           ? ` Adjusted rows apply ${adjustments.length} planner adjustment${adjustments.length === 1 ? "" : "s"} from this browser; Δ % = adjusted vs plan base.`
           : " Planner adjustments are not applied."}`
       : "Measured NIQ base units."],

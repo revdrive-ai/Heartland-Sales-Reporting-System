@@ -4,6 +4,7 @@ import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import { readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
 import type { PlanAdjustment } from "@/lib/repo/client";
 import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
+import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
 
@@ -169,6 +170,10 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
     const grand = gN > 0 ? gTot / gN : 0;
     const eng = monthTot.map((t, i) => (monthN[i] > 0 && grand > 0 ? t / monthN[i] / grand : 1));
     const avg = (m: Map<string, number>) => last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+    // this year against last for the brand — the level the projection runs at
+    const brandTrend = trendOf(mBlive, allWeeks);
+    const firstOf = new Map<string, string>();
+    for (const [u, im] of mI) firstOf.set(u, [...im.keys()].sort()[0]);
 
     const adjFactor = (upc: string, wISO: string) => {
       const wt = utcOf(wISO);
@@ -179,12 +184,16 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
       }
       return f;
     };
-    /** one item's carried weekly base, before adjustments */
-    const rawOf = (im: Map<string, number>) => {
+    /** one item's carried weekly base, before adjustments: year-ago where
+        measured, then last year's shape at this year's run-rate */
+    const rawOf = (im: Map<string, number>, upc: string) => {
       const a52 = avg(im);
       return weeks.map((w) => {
         const src = yearAgoWeek(w);
-        return Math.max(0, src <= latest ? (im.get(src) ?? 0) : a52 * eng[+w.slice(5, 7) - 1]);
+        if (src <= latest) return Math.max(0, im.get(src) ?? 0);
+        return live.has(upc)
+          ? projectItemWeek({ im, w, firstWeek: firstOf.get(upc), ratio: itemRatio(im, allWeeks, brandTrend), a52, engine: eng, measuredWeeks: allWeeks })
+          : 0;
       });
     };
 
@@ -209,12 +218,12 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
 
     for (const [upc, im] of mI) {
       if (out.has(upc)) continue; // no volume in the plan year
-      addItem(upc, rawOf(im));
+      addItem(upc, rawOf(im, upc));
     }
     for (const a of adds) {
       const pim = mI.get(a.proxy_upc);
       if (!pim) continue;
-      const proxy = rawOf(pim);
+      const proxy = rawOf(pim, a.proxy_upc);
       /* Consumption only: the pipeline fill ships into the warehouse, it is
          not taken off the shelf, so it is not part of the frozen base. */
       addItem(a.upc, weeks.map((w, i) => (w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0)));

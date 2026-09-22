@@ -1,4 +1,5 @@
 import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, priceAsOf } from "@/lib/repo";
+import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
@@ -110,7 +111,7 @@ export default async function Page() {
     const divItemWk: Record<string, Record<string, number>> = {};
     // plan-year monthly BASE per division × brand, built the same way as the
     // Base Business Review plan view: year-ago weekly base carried where measured,
-    // seasonality-shaped run-rate projection for the rest
+    // projected for the rest: last year's shape at this year's run-rate (lib/server/projection)
     const divBrandBaseM: Record<string, Record<string, number[]>> = {};
 
     // Dated list prices, hoisted ahead of the facts loop: they price the
@@ -249,6 +250,10 @@ export default async function Page() {
           }
           const grand = gN > 0 ? gTot / gN : 0;
           const eng = mTot.map((t, i) => (mN[i] > 0 && grand > 0 ? t / mN[i] / grand : 1));
+          // this year against last for the brand at this division — the level the projection runs at
+          const brandTrend = trendOf(mBlive, mWeeks);
+          const firstOf = new Map<string, string>();
+          for (const [u, im] of mI) firstOf.set(u, [...im.keys()].sort()[0]);
           const avg52 = divBrandWk[m.code][brand];
           const latest = mWeeks[mWeeks.length - 1];
           const exclAvg52 = m52.reduce((a, w) => a + (mBx.get(w) ?? 0), 0) / Math.max(m52.length, 1);
@@ -265,12 +270,16 @@ export default async function Page() {
             }
             return f;
           };
-          // one item's raw (unadjusted) plan-year series: year-ago carried, engine-shaped after
-          const rawSeries = (im: Map<string, number>) => {
+          // one item's raw (unadjusted) plan-year series: year-ago carried where
+          // measured, then last year's shape at this year's run-rate (lib/server/projection)
+          const rawSeries = (im: Map<string, number>, upc: string) => {
             const a52 = m52.reduce((a, w) => a + (im.get(w) ?? 0), 0) / Math.max(m52.length, 1);
             return planWeeks.map((w) => {
               const src = new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
-              return latest && src <= latest ? (im.get(src) ?? 0) : a52 * eng[+w.slice(5, 7) - 1];
+              if (latest && src <= latest) return im.get(src) ?? 0;
+              return live.has(upc)
+                ? projectItemWeek({ im, w, firstWeek: firstOf.get(upc), ratio: itemRatio(im, mWeeks, brandTrend), a52, engine: eng, measuredWeeks: mWeeks })
+                : 0;
             });
           };
           const itemWkly = (divItemWkly[m.code] ??= {});
@@ -278,7 +287,7 @@ export default async function Page() {
           if (latest) {
             for (const [u, im] of mI) {
               if (dv?.out.has(u)) continue; // no volume in the plan year
-              const ser = rawSeries(im).map((v, i) => Math.max(0, v) * adjFactor(u, utcOf(planWeeks[i])));
+              const ser = rawSeries(im, u).map((v, i) => Math.max(0, v) * adjFactor(u, utcOf(planWeeks[i])));
               if (ser.every((v) => v <= 0)) continue;
               itemWkly[u] = ser.map((v) => +v.toFixed(1));
               ser.forEach((v, i) => { brandWkly[i] += v; });
@@ -286,7 +295,7 @@ export default async function Page() {
             for (const a of addsHere) {
               const pim = mI.get(a.proxy_upc);
               if (!pim) continue;
-              const proxy = rawSeries(pim);
+              const proxy = rawSeries(pim, a.proxy_upc);
               const ser = planWeeks.map((w, i) => {
                 /* Consumption only — the pipeline fill is a shipment, not a
                    sale, so it is not in the base the events score against. */

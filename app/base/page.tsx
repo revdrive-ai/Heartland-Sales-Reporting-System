@@ -3,6 +3,7 @@ import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
 import { readDistVerification } from "@/lib/distver";
+import { itemRatio, projectItemWeek, trendOf, TREND_WEEKS, type Trend } from "@/lib/server/projection";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
@@ -288,22 +289,55 @@ export default async function Page({
       weekBaseM.set(r.week_ending, (weekBaseM.get(r.week_ending) ?? 0) + bVal(r));
     }
     const last52 = allWeeks.slice(-52);
-    const avgBase = last52.reduce((a, w) => a + (weekBaseM.get(w) ?? 0), 0) / Math.max(last52.length, 1);
 
-    // per-item weekly base (chosen metric + units) — proxy shapes for additions
+    // per-item weekly base (chosen metric) and first week on file — the
+    // carried items' own series, and the proxy shapes for additions
     const upcWeek = new Map<string, Map<string, number>>();
+    const upcFirst = new Map<string, string>();
     for (const r of factsAll) {
       (upcWeek.get(r.upc) ?? upcWeek.set(r.upc, new Map()).get(r.upc)!)
         .set(r.week_ending, ((upcWeek.get(r.upc)!.get(r.week_ending)) ?? 0) + bVal(r));
+      const f = upcFirst.get(r.upc);
+      if (f === undefined || r.week_ending < f) upcFirst.set(r.upc, r.week_ending);
     }
     const avg52Of = (m: Map<string, number> | undefined) =>
       m ? last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1) : 0;
+    /* This year against last, per brand, over the live items — the level the
+       projection runs at (see lib/server/projection.ts). */
+    const brandWeekly = new Map<string, Map<string, number>>();
+    for (const r of factsAll) {
+      if (!upcsWithVolume.has(r.upc)) continue;
+      const bm = brandWeekly.get(r.brand) ?? brandWeekly.set(r.brand, new Map()).get(r.brand)!;
+      bm.set(r.week_ending, (bm.get(r.week_ending) ?? 0) + bVal(r));
+    }
+    const brandTrend = new Map<string, Trend>();
+    const trendByBrand: Record<string, number> = {};
+    for (const [b, bm] of brandWeekly) {
+      const t = trendOf(bm, allWeeks);
+      brandTrend.set(b, t);
+      trendByBrand[b] = +t.ratio.toFixed(4);
+    }
+    const noTrend: Trend = { ratio: 1, cur: 0, prior: 0 };
+    const brandOf = (upc: string) => itemMetaAll.get(upc)?.brand ?? "";
+    /** one item in a source-year week that has not landed: on the shelf now → projected; not → nothing */
+    const itemProj = (upc: string, w: string) =>
+      upcsWithVolume.has(upc)
+        ? projectItemWeek({
+            im: upcWeek.get(upc), w, firstWeek: upcFirst.get(upc),
+            ratio: itemRatio(upcWeek.get(upc), allWeeks, brandTrend.get(brandOf(upc)) ?? noTrend),
+            a52: avg52Of(upcWeek.get(upc)), engine, measuredWeeks: allWeeks,
+          })
+        : 0;
     const planValOf = (upc: string, w: string) => {
       const m = upcWeek.get(upc);
       if (!m) return 0;
       const src = yearAgoWeek(w);
-      return src <= latestWeek ? (m.get(src) ?? 0) : avg52Of(m) * (engine[+w.slice(5, 7) - 1] ?? 1);
+      return src <= latestWeek ? (m.get(src) ?? 0) : itemProj(upc, w);
     };
+    // the items the projection is for: the carried live items, or the one item
+    const carried = item === "ALL"
+      ? [...new Set(planScoped.map((r) => r.upc))].filter((u) => upcsWithVolume.has(u))
+      : [item];
     const adds = item === "ALL"
       ? dv.additions.filter((a) => (allBrands ? HEARTLAND_BRANDS.includes(a.brand) : a.brand === brand))
       : [];
@@ -333,7 +367,7 @@ export default async function Page({
         nAct++;
       } else {
         actualized.push(null);
-        projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1)));
+        projected.push(Math.round(carried.reduce((s, u) => s + itemProj(u, w), 0)));
       }
     }
 
@@ -435,6 +469,7 @@ export default async function Page({
       totAdditions: additions.reduce((a: number, v) => a + (v ?? 0), 0),
       itemShare,
       brandShare,
+      trend: { weeks: TREND_WEEKS, byBrand: trendByBrand },
     };
   }
 
