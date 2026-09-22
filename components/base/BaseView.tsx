@@ -72,6 +72,7 @@ export type BaseData = {
     weeks: number; from: string;
     itemShare: Record<string, number>;
     brandShare: Record<string, number>;
+    trend: { weeks: number; byBrand: Record<string, number> };
   };
   plan: null | {             // the plan-year series (future years only)
     sourceYear: number;                 // the year the actualized base carries from
@@ -967,8 +968,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       case "Year ago": return "Actual units in the same weeks a year earlier (364 days back, Saturdays aligned).";
       case "NIQ base — year ago": return "NIQ's base model from the same weeks a year earlier.";
       case "NIQ base — 2 yrs ago": return "NIQ's base model from two aligned years back.";
-      case "Forecast actuals": return "Past the NIQ data edge: the year-ago base with the expected lift of each Telus window still open — the forecast to year-end.";
-      case "Forecast base": return "Past the data edge: the year-ago NIQ base carried forward. Dashed because it is not yet measured.";
+      case "Forecast actuals": return "Past the NIQ data edge: the forecast base with the expected lift of each Telus window still open — the forecast to year-end.";
+      case "Forecast base": return `Past the data edge: last year's shape at this year's run-rate — each week takes the same week a year earlier, scaled by how the latest ${data.forecast?.trend.weeks ?? 13} measured weeks are running against the year before. Dashed because it is not yet measured.`;
       case "LE-adjusted forecast": return "The forecast weeks with the LE adjustments below applied. Measured weeks never move.";
       case "Index — engine (full history)": return "Average weekly base units per calendar month ÷ the all-weeks average, over every week on file. 1.00 is an average month. This is the shape the projection uses.";
     }
@@ -1479,9 +1480,12 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 doesn&apos;t{data.item !== "ALL" ? " — windows are brand-level, not item-level" : ""}. Dots on the actual
                 line mark weeks where NIQ measured promo support on shelf (≥ 10 %ACV).
                 {data.forecast && <> The <b>{data.forecast.weeks} weeks from {data.forecast.from}</b> are past the NIQ
-                data edge and show a <b>forecast</b>: dashed base carries the year-ago NIQ base, and dashed forecast
-                actuals apply the expected lift of each Telus window still open (the windows table&apos;s predicted
-                lift; EDLP/Slotting fund price, so they add no lift). Both firm up as NIQ weeks land.
+                data edge and show a <b>forecast</b>: the dashed base is <b>last year&apos;s shape at this year&apos;s run-rate</b>
+                — each week takes the same week a year earlier, scaled by how the latest {data.forecast.trend.weeks} measured weeks are
+                running against the same weeks the year before
+                {Object.entries(data.forecast.trend.byBrand).filter(([b]) => allBrands || b === data.brand).map(([b, r]) => ` (${b}: ${Math.round(r * 100)}%)`).join("")}
+                — and the dashed forecast actuals apply the expected lift of each Telus window still open (the windows
+                table&apos;s predicted lift; EDLP/Slotting fund price, so they add no lift). Both firm up as NIQ weeks land.
                 {hasAdj && <> The dark dashed <b>LE-adjusted forecast</b> applies the LE adjustments below to the
                 forecast weeks — measured weeks don&apos;t move.</>}</>}
                 {data.grossCoverage && <> <b>Gross</b> = units × the dated list price in force each week —{" "}

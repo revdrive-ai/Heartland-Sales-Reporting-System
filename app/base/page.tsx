@@ -264,6 +264,48 @@ export default async function Page({
      matching weeks a year earlier (364 days — Saturdays stay aligned) as far
      as that source year has actualized, and project the remaining weeks as
      the latest-52-week average base shaped by the seasonality engine. */
+  /* Per item: weekly base in the chosen metric and first week on file; per
+     brand: this year against last over the items that still sell. The two
+     projections below — the plan year's carried remainder and the in-flight
+     year's forecast — both run through lib/server/projection on these. */
+  const itemMetaAll = new Map(allItems.map((i) => [i.upc, i]));
+  const last52 = allWeeks.slice(-52);
+  const upcWeek = new Map<string, Map<string, number>>();
+  const upcFirst = new Map<string, string>();
+  for (const r of factsAll) {
+    (upcWeek.get(r.upc) ?? upcWeek.set(r.upc, new Map()).get(r.upc)!)
+      .set(r.week_ending, ((upcWeek.get(r.upc)!.get(r.week_ending)) ?? 0) + bVal(r));
+    const f = upcFirst.get(r.upc);
+    if (f === undefined || r.week_ending < f) upcFirst.set(r.upc, r.week_ending);
+  }
+  const avg52Of = (m: Map<string, number> | undefined) =>
+    m ? last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1) : 0;
+  const brandWeekly = new Map<string, Map<string, number>>();
+  for (const r of factsAll) {
+    if (!upcsWithVolume.has(r.upc)) continue;
+    const bm = brandWeekly.get(r.brand) ?? brandWeekly.set(r.brand, new Map()).get(r.brand)!;
+    bm.set(r.week_ending, (bm.get(r.week_ending) ?? 0) + bVal(r));
+  }
+  const brandTrend = new Map<string, Trend>();
+  const trendByBrand: Record<string, number> = {};
+  for (const [b, bm] of brandWeekly) {
+    const t = trendOf(bm, allWeeks);
+    brandTrend.set(b, t);
+    trendByBrand[b] = +t.ratio.toFixed(4);
+  }
+  const noTrend: Trend = { ratio: 1, cur: 0, prior: 0 };
+  const brandOf = (upc: string) => itemMetaAll.get(upc)?.brand ?? "";
+  /** one item in a week that has not landed, shaped by the last fully-measured
+      year (`back` years ago): on the shelf now → projected; not → nothing */
+  const projectOne = (upc: string, w: string, back: 1 | 2) =>
+    upcsWithVolume.has(upc)
+      ? projectItemWeek({
+          im: upcWeek.get(upc), w, firstWeek: upcFirst.get(upc),
+          ratio: itemRatio(upcWeek.get(upc), allWeeks, brandTrend.get(brandOf(upc)) ?? noTrend),
+          a52: avg52Of(upcWeek.get(upc)), engine, measuredWeeks: allWeeks, shapeYearsBack: back,
+        })
+      : 0;
+
   let plan: BaseData["plan"] = null;
   let distVer: BaseData["distVer"] = null;
   if (planningYear) {
@@ -279,7 +321,6 @@ export default async function Page({
        worth in its first week and then shape every promotion off that
        spike. It is recorded on the addition and belongs to the shipment
        forecast, which lays it on by month once the plan is built. */
-    const itemMetaAll = new Map(allItems.map((i) => [i.upc, i]));
     const dv = readDistVerification(await getState(`distver:${mkt}:${+win}`).catch(() => undefined));
     const outSet = new Set(Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => u));
     const planScoped = scoped.filter((r) => !outSet.has(r.upc));
@@ -288,46 +329,8 @@ export default async function Page({
     for (const r of planScoped) {
       weekBaseM.set(r.week_ending, (weekBaseM.get(r.week_ending) ?? 0) + bVal(r));
     }
-    const last52 = allWeeks.slice(-52);
-
-    // per-item weekly base (chosen metric) and first week on file — the
-    // carried items' own series, and the proxy shapes for additions
-    const upcWeek = new Map<string, Map<string, number>>();
-    const upcFirst = new Map<string, string>();
-    for (const r of factsAll) {
-      (upcWeek.get(r.upc) ?? upcWeek.set(r.upc, new Map()).get(r.upc)!)
-        .set(r.week_ending, ((upcWeek.get(r.upc)!.get(r.week_ending)) ?? 0) + bVal(r));
-      const f = upcFirst.get(r.upc);
-      if (f === undefined || r.week_ending < f) upcFirst.set(r.upc, r.week_ending);
-    }
-    const avg52Of = (m: Map<string, number> | undefined) =>
-      m ? last52.reduce((a, w) => a + (m.get(w) ?? 0), 0) / Math.max(last52.length, 1) : 0;
-    /* This year against last, per brand, over the live items — the level the
-       projection runs at (see lib/server/projection.ts). */
-    const brandWeekly = new Map<string, Map<string, number>>();
-    for (const r of factsAll) {
-      if (!upcsWithVolume.has(r.upc)) continue;
-      const bm = brandWeekly.get(r.brand) ?? brandWeekly.set(r.brand, new Map()).get(r.brand)!;
-      bm.set(r.week_ending, (bm.get(r.week_ending) ?? 0) + bVal(r));
-    }
-    const brandTrend = new Map<string, Trend>();
-    const trendByBrand: Record<string, number> = {};
-    for (const [b, bm] of brandWeekly) {
-      const t = trendOf(bm, allWeeks);
-      brandTrend.set(b, t);
-      trendByBrand[b] = +t.ratio.toFixed(4);
-    }
-    const noTrend: Trend = { ratio: 1, cur: 0, prior: 0 };
-    const brandOf = (upc: string) => itemMetaAll.get(upc)?.brand ?? "";
     /** one item in a source-year week that has not landed: on the shelf now → projected; not → nothing */
-    const itemProj = (upc: string, w: string) =>
-      upcsWithVolume.has(upc)
-        ? projectItemWeek({
-            im: upcWeek.get(upc), w, firstWeek: upcFirst.get(upc),
-            ratio: itemRatio(upcWeek.get(upc), allWeeks, brandTrend.get(brandOf(upc)) ?? noTrend),
-            a52: avg52Of(upcWeek.get(upc)), engine, measuredWeeks: allWeeks,
-          })
-        : 0;
+    const itemProj = (upc: string, w: string) => projectOne(upc, w, 2);
     const planValOf = (upc: string, w: string) => {
       const m = upcWeek.get(upc);
       if (!m) return 0;
@@ -543,18 +546,19 @@ export default async function Page({
     weeks: number; from: string;
     itemShare: Record<string, number>;
     brandShare: Record<string, number>;
+    trend: { weeks: number; byBrand: Record<string, number> };
   } | null = null;
   if (forecastFrom !== null) {
-    const last52 = allWeeks.slice(-52);
-    const avg52 = last52.reduce((a, w) => a + (weekBaseFull.get(w) ?? 0), 0) / Math.max(last52.length, 1);
+    /* The forecast base for the weeks past the data edge: last year's shape
+       at this year's run-rate, item by item over the items that still sell
+       (lib/server/projection, one year back) — the same construction the
+       Monthly Forecast Review and the LE use, so the three agree. */
+    const fcItems = item === "ALL" ? [...new Set(scoped.map((r) => r.upc))].filter((u) => upcsWithVolume.has(u)) : [item];
     let n = 0;
     for (const p of points) {
       if (p.week <= latestWeek) continue;
       n++;
-      const src = yearAgoWeek(p.week);
-      const baseFc = src <= latestWeek
-        ? (weekBaseFull.get(src) ?? 0)
-        : avg52 * (engine[+p.week.slice(5, 7) - 1] ?? 1);
+      const baseFc = fcItems.reduce((s, u) => s + projectOne(u, p.week, 1), 0);
       const wt = utcOf(p.week);
       let lift = 0;
       for (const o of overlayRows) {
@@ -585,7 +589,7 @@ export default async function Page({
     for (const [u, v] of shareTot) itemShare[u] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
     const brandShare: Record<string, number> = {};
     for (const [bn, v] of brandTot) brandShare[bn] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
-    forecast = { weeks: n, from: forecastFrom, itemShare, brandShare };
+    forecast = { weeks: n, from: forecastFrom, itemShare, brandShare, trend: { weeks: TREND_WEEKS, byBrand: trendByBrand } };
   }
 
   /* Lift engine — depth vs unit lift across the selection's promoted weeks,

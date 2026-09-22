@@ -9,11 +9,12 @@
    like its old level, and the seam between measured and projected reads as
    a cliff.
 
-   Now: each unmeasured week takes the aligned week two years back (728
-   days — the same week of the year before the source year, which IS fully
-   measured) and scales it by how this year is running against last year
-   over the latest TREND_WEEKS measured weeks. Last year's shape, this
-   year's level.
+   Now: each unmeasured week takes the aligned week from the last year that
+   IS fully measured — two years back (728 days) for a forward plan year
+   whose source year is still landing, one year back (364 days) for the
+   in-flight year itself — and scales it by how this year is running against
+   last year over the latest TREND_WEEKS measured weeks. Last year's shape,
+   this year's level.
 
    The ratio is each item's own where the item is big enough to read — an
    item that stopped selling in March projects at nothing for the autumn,
@@ -29,9 +30,10 @@
    from items that still sell. An item with no volume in the latest 52 weeks
    projects at nothing: it is not on the shelf.
 
-   Every place the plan base is built — the Base Business Review, the
-   planner, the frozen snapshot and the export — projects through here, so
-   they agree to the unit. */
+   Every place a base is projected — the plan base in the Base Business
+   Review, the planner, the frozen snapshot and the export, and the in-flight
+   year's forecast in the Monthly Forecast Review, the Sales Dashboard's FY
+   mode and the LE — projects through here, so they agree to the unit. */
 
 export const TREND_WEEKS = 13;
 const DAY = 86400000;
@@ -77,14 +79,18 @@ export function projectItemWeek(o: {
   a52: number;                          // the item's latest-52-week average
   engine: (number | null)[];            // the brand's month index (live items); null = no weeks for that month
   measuredWeeks: string[];              // every measured week at the division, ascending
+  /** which fully-measured year carries the shape: 2 for a forward plan
+      year (its source year is still landing), 1 for the in-flight year */
+  shapeYearsBack?: 1 | 2;
 }): number {
   if (!o.im) return 0;
   const month = (wk: string) => +wk.slice(5, 7) - 1;
-  /* Shape: the same week two years back, if the item was on file from the
+  const back = o.shapeYearsBack ?? 2;
+  /* Shape: the same week `back` years ago, if the item was on file from the
      start of that year — a whole year of shape, not a ramp. */
-  const shapeYearStart = `${+o.w.slice(0, 4) - 2}-01-07`;
+  const shapeYearStart = `${+o.w.slice(0, 4) - back}-01-07`;
   if (o.firstWeek !== undefined && o.firstWeek <= shapeYearStart) {
-    return Math.max(0, (o.im.get(alignedWeek(o.w, 728)) ?? 0) * o.ratio);
+    return Math.max(0, (o.im.get(alignedWeek(o.w, 364 * back)) ?? 0) * o.ratio);
   }
   /* No shape of its own: this year's run-rate — the latest TREND_WEEKS weeks,
      de-seasonalised against the index of those same months — put through
