@@ -31,8 +31,10 @@ export type ProcessStep = {
   /** This step asks a question in the rail rather than advancing blindly. */
   chooser?: "new-items";
   /** Its work belongs to one customer, so it cannot start until the top bar
-      names one. Distribution is confirmed per account and a new item joins
-      one account's plan — neither is a thing to do for a territory. */
+      names one. Everything a plan year is built from — the distribution
+      answers, the new items, the adjustments, the events and the sign-off —
+      is recorded against a customer, so the whole plan is worked one account
+      at a time. */
   perAccount?: true;
 };
 
@@ -110,12 +112,14 @@ export const PROCESSES: ProcessDef[] = [
         label: "Base & Lift",
         blurb: "Review the plan-year base. It already reflects the distribution and new-item decisions above.",
         view: "base",
+        perAccount: true,
       },
       {
         key: "planner",
         label: "Build the plan",
         blurb: "Lay the promotion calendar on that base and sign off the Plan of Record.",
         view: "planner",
+        perAccount: true,
       },
     ],
   },
