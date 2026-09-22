@@ -298,8 +298,17 @@ export default async function Page({
       ? dv.additions.filter((a) => (allBrands ? HEARTLAND_BRANDS.includes(a.brand) : a.brand === brand))
       : [];
 
+    /* Three series, kept apart on purpose. The blue and amber lines are the
+       SOURCE year as it stands — its measured base where it has landed, its
+       projected base where it has not — and nothing decided for the plan
+       year touches them. The new items are the plan year's own volume: they
+       ride in on a proxy from their shelf date, and they belong on the plan
+       line with the levers, not folded into the base they are added to.
+       Folding them in made the source year's projection appear to rise
+       because of a decision taken for the year after it. */
     const actualized: (number | null)[] = [];
     const projected: (number | null)[] = [];
+    const additions: (number | null)[] = [];
     let nAct = 0;
     for (const w of weeks) {
       const src = yearAgoWeek(w);
@@ -307,13 +316,14 @@ export default async function Page({
       for (const a of adds) {
         if (w >= a.first_week) extra += planValOf(a.proxy_upc, w) * (a.proxy_pct / 100);
       }
+      additions.push(Math.round(extra));
       if (src <= latestWeek) {
-        actualized.push(Math.round((weekBaseM.get(src) ?? 0) + extra));
+        actualized.push(Math.round(weekBaseM.get(src) ?? 0));
         projected.push(null);
         nAct++;
       } else {
         actualized.push(null);
-        projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1) + extra));
+        projected.push(Math.round(avgBase * (engine[+w.slice(5, 7) - 1] ?? 1)));
       }
     }
 
@@ -407,9 +417,12 @@ export default async function Page({
       sourceYear: +win - 1,
       actualized,
       projected,
+      additions,
+      newItems: adds.length,
       actualizedWeeks: nAct,
       totActualized: actualized.reduce((a: number, v) => a + (v ?? 0), 0),
       totProjected: projected.reduce((a: number, v) => a + (v ?? 0), 0),
+      totAdditions: additions.reduce((a: number, v) => a + (v ?? 0), 0),
       itemShare,
       brandShare,
     };

@@ -77,9 +77,14 @@ export type BaseData = {
     sourceYear: number;                 // the year the actualized base carries from
     actualized: (number | null)[];      // actual NIQ base, matching weeks a year back
     projected: (number | null)[];       // seasonality-shaped projection for the rest
+    /** the plan year's new items, per week, on their proxy from their shelf
+        date — the plan line is (actualized ?? projected) + this, × levers */
+    additions: (number | null)[];
+    newItems: number;
     actualizedWeeks: number;
     totActualized: number;
     totProjected: number;
+    totAdditions: number;
     itemShare: Record<string, number>;  // upc → share of the selection's base (latest 52w)
     brandShare: Record<string, number>; // brand → the same, for the all-brands roll-up
   };
@@ -692,14 +697,19 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     });
   }, [data.plan, data.forecast, data.points, data.item, brandAdjs, allBrands, selItemBrand]);
   const hasAdj = adjFactors.some((f) => f !== 1);
+  /* The plan line: the source year's base (measured, then projected) with
+     the plan year's new items on top, and the levers multiplying the lot.
+     It is drawn whenever it differs from the base — new items or levers —
+     and named for the plan year, because that is what it is. */
   const adjustedPlan = useMemo(() => {
     if (!data.plan) return [];
     return data.points.map((_, i) => {
       const b = data.plan!.actualized[i] ?? data.plan!.projected[i];
-      return b === null ? null : Math.round(b * adjFactors[i]);
+      return b === null ? null : Math.round((b + (data.plan!.additions[i] ?? 0)) * adjFactors[i]);
     });
   }, [data.plan, data.points, adjFactors]);
   const adjTotal = adjustedPlan.reduce((a: number, v) => a + (v ?? 0), 0);
+  const hasPlanDelta = hasAdj || (data.plan?.totAdditions ?? 0) > 0;
   // in-flight year: the LE-adjusted forecast (measured weeks never move)
   const adjustedFc = useMemo(() => {
     if (!data.forecast) return [];
@@ -1089,22 +1099,26 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       <div className="kpis">
         {data.plan ? (<>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">Actualized base — carried from {data.plan.sourceYear}</span></div>
+            <div className="k-top"><span className="k-label">{data.plan.sourceYear} base — actualized</span></div>
             <div className="k-val">{fmtVal(data.plan.totActualized)}</div>
-            <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks actualized</div>
+            <div className="k-sub flat">{scopeName} · {data.plan.actualizedWeeks} of {data.points.length} weeks measured</div>
           </div>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">Projected base — rest of year</span></div>
+            <div className="k-top"><span className="k-label">{data.plan.sourceYear} base — projected</span></div>
             <div className="k-val" style={{ color: "var(--warn)" }}>{fmtVal(data.plan.totProjected)}</div>
-            <div className="k-sub flat">{data.points.length - data.plan.actualizedWeeks} weeks · seasonality-shaped</div>
+            <div className="k-sub flat">{data.points.length - data.plan.actualizedWeeks} weeks · seasonality-shaped · no {data.win} changes in it</div>
           </div>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">Full-year plan base{hasAdj ? " — adjusted" : ""}</span></div>
-            <div className="k-val">{fmtVal(hasAdj ? adjTotal : data.plan.totActualized + data.plan.totProjected)}</div>
+            <div className="k-top"><span className="k-label">Plan {data.win} — full year</span></div>
+            <div className="k-val">{fmtVal(hasPlanDelta ? adjTotal : data.plan.totActualized + data.plan.totProjected)}</div>
             <div className="k-sub flat">
-              {hasAdj
-                ? `unadjusted ${fmtVal(data.plan.totActualized + data.plan.totProjected)} · ${brandAdjs.length} adjustment${brandAdjs.length === 1 ? "" : "s"}`
-                : `${Math.round((data.plan.totActualized / Math.max(data.plan.totActualized + data.plan.totProjected, 1)) * 100)}% actualized`}
+              {hasPlanDelta
+                ? [
+                    `${data.plan.sourceYear} base ${fmtVal(data.plan.totActualized + data.plan.totProjected)}`,
+                    data.plan.totAdditions > 0 ? `+${fmtVal(data.plan.totAdditions)} from ${data.plan.newItems} new item${data.plan.newItems === 1 ? "" : "s"}` : null,
+                    hasAdj ? `${brandAdjs.length} adjustment${brandAdjs.length === 1 ? "" : "s"}` : null,
+                  ].filter(Boolean).join(" · ")
+                : `carried from ${data.plan.sourceYear} as it stands · ${Math.round((data.plan.totActualized / Math.max(data.plan.totActualized + data.plan.totProjected, 1)) * 100)}% measured`}
             </div>
           </div>
         </>) : (<>
@@ -1248,7 +1262,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       pointHoverRadius: 4,
                     }] : []),
                     {
-                      label: "Projected base — rest of year",
+                      label: `${data.plan.sourceYear} base — projected`,
                       // repeats the last actualized week so the two lines connect
                       data: planProjected,
                       borderColor: cssToken("--warn"),
@@ -1260,9 +1274,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       pointRadius: 0,
                       pointHoverRadius: 4,
                     },
-                    // the plan after the planner's adjustments below
-                    ...(hasAdj ? [{
-                      label: "Adjusted plan",
+                    // the plan year: the base above, the new items on top, the levers on the lot
+                    ...(hasPlanDelta ? [{
+                      label: `Plan ${data.win}`,
                       data: adjustedPlan,
                       borderColor: cssToken("--ink"),
                       backgroundColor: cssToken("--ink"),
@@ -1383,11 +1397,13 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           </div>
           <div className="note">
             {data.plan
-              ? <>◇ <b>Plan {data.win}</b>: the blue line carries the <b>actual NIQ base</b> from the matching {data.plan.sourceYear} weeks
-                — as far as {data.plan.sourceYear} has actualized ({data.plan.actualizedWeeks} weeks, through {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}).
-                The amber dashed line <b>projects the rest of the year</b>: the latest-52-week average base shaped by this
-                selection&apos;s seasonality engine. Both firm up as {data.plan.sourceYear} weeks land. Opening this view logged{" "}
-                <b>{marketName}</b> as registered for {data.win} ({Object.keys(planReg).length} of {data.markets.length} customers so far).</>
+              ? <>◇ The blue and amber lines are <b>{data.plan.sourceYear} as it stands</b>: the blue is its <b>measured NIQ base</b>
+                ({data.plan.actualizedWeeks} weeks, through {data.points[data.plan.actualizedWeeks - 1]?.week ?? "—"}), the amber dashed
+                line its <b>projected base</b> for the rest of the year — the latest-52-week average shaped by this selection&apos;s
+                seasonality engine. Nothing decided for {data.win} moves either of them; both firm up as {data.plan.sourceYear} weeks land.
+                The dark <b>Plan {data.win}</b> line is that base with the plan year&apos;s <b>new items</b> on top and the
+                <b> adjustments</b> below applied. Opening this view logged <b>{marketName}</b> as registered for {data.win}
+                ({Object.keys(planReg).length} of {data.markets.length} customers so far).</>
               : data.planningYear
               ? <>◇ <b>{data.winLabel}</b> is a planning view: its {data.points.length} NIQ weeks aren&apos;t on file yet, so the
                 axis shows the expected week-endings and the trend fills in as data (and next year&apos;s Telus book) lands.
@@ -1679,7 +1695,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 <tr><td colSpan={7} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
                   No adjustments yet for {marketName} · {brandLabel} in {data.win}. Add one above — e.g. lost
                   distribution on an item, a coming price increase, or a trend running hotter or colder than the
-                  projection — and the dark <b>{data.plan ? "Adjusted plan" : "LE-adjusted forecast"}</b> line
+                  projection — and the dark <b>{data.plan ? `Plan ${data.win}` : "LE-adjusted forecast"}</b> line
                   appears on the chart.
                 </td></tr>
               )}
