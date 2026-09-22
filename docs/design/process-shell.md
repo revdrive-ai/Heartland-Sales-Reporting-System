@@ -1,6 +1,8 @@
 # Process shell — a front door instead of a sidebar
 
-_Design plan. Nothing here is built yet._
+_Phase 1 is built and on `main` (front door, process model, step rail,
+routing, admin gate — every view rendering exactly as it did before).
+Phases 2 and 3 below are still ahead._
 
 ## The problem
 
@@ -139,10 +141,12 @@ are identical either way, so switching later changes no links.
 
 ## Who is an admin
 
-A `public.app_admins` table keyed by email, same shape as the existing
-`public.signup_email_domains` — so adding an admin is one SQL insert, no
-deploy. `currentUser()` gains `isAdmin`; the layout and the front door read
-it. Everyone else is an account person.
+There is exactly one for this demo, so `lib/auth/admin.ts` holds a constant
+rather than the table this plan first proposed — a migration and a SQL step
+to express a single address is ceremony. The moment there are two it becomes
+a `public.app_admins` table in the shape of `public.signup_email_domains`
+(migration 00013), and no caller changes: everything already goes through
+`isAdminEmail`.
 
 Non-admins are kept out of the raw view routes by the guard already in
 `middleware.ts`: `/base` typed directly redirects to `/start`, while
@@ -154,24 +158,23 @@ separate deployment.
 Worth saying plainly, so we don't end up maintaining three ways to hide a
 screen:
 
-- **The `lite` surface** (`lib/surface.ts`, shipped 2026-09-22) was the
-  build-time answer to "a simpler version": a shorter sidebar on a second
-  deployment. This is the better answer — the account person gets no sidebar
-  at all, and it is one deployment with a role instead of two projects to
-  keep in step. **Recommend retiring the `lite` preset** and keeping the
-  route-guard mechanics, which this reuses. The cron guard stays useful
-  regardless.
-- **`components/WelcomeModal.tsx`** — the five-step loop overlay. The front
-  door says the same thing better, and permanently. Retire it.
+- **The `lite` surface** (`lib/surface.ts`) was the build-time answer to "a
+  simpler version": a shorter sidebar on a second deployment. This is the
+  better answer — the account person gets no sidebar at all, and it is one
+  deployment with a role instead of two projects to keep in step.
+  **Retired**, along with `docs/surfaces.md` and the cron guard that only
+  mattered because of a second deployment. The route-guard shape survives in
+  `middleware.ts`.
+- **`components/WelcomeModal.tsx`** — the five-step loop overlay. **Retired**:
+  the front door says the same thing better, and permanently.
 - **The sidebar's "Working on" group** — moves to the front door. The
   sidebar keeps it only in Admin.
 
 ## Phasing
 
-**Phase 1 — the layout.** Front door, process model, step rail, routing,
-role gate. Every view renders exactly as it does today; only the chrome
-around them changes. This is the phase that answers "is the general layout
-correct", and it should be judged on that alone.
+**Phase 1 — the layout. Built.** Front door, process model, step rail,
+routing, role gate. Every view renders exactly as it did; only the chrome
+around them changed. Judge it on the layout alone.
 
 **Phase 2 — the views per process.** The LE-variant planner and the
 plan-variant planner diverge. Base & Lift gets its plan-cycle treatment.
@@ -181,13 +184,21 @@ This is where option B above gets done.
 per-user progress persisted in `lib/server/appstate.ts`, and whatever the
 spreadsheets turn out to demand.
 
-## Open decisions
+## Decided
 
-1. **Admin list** — who besides randy@revdrive.ai?
-2. **Can an account person leave a process mid-way?** Assumed yes: the front
-   door is always one click away and progress is saved per customer × year,
-   so nothing is lost. Say if it should be stricter than that.
-3. **Retire the `lite` surface?** Recommended above; it is three days old and
-   nothing depends on it.
-4. **Does Analyze need the scope selectors**, or does it open on the whole
-   book and let the user narrow from inside?
+1. **Admin list** — randy@revdrive.ai alone, for this demo.
+2. **Leaving mid-way** — allowed, and the front door offers to resume. The
+   step is remembered in the `hh-proc` cookie; the work was already shared
+   per customer × year.
+3. **The `lite` surface** — retired.
+4. **Analyze keeps the scope selectors.** They are hidden on the front door
+   only, where nothing is scoped yet.
+
+## Still open
+
+- **Step 3 of Plan shows Base & Lift's own "Verify distribution" and "Add new
+  item" buttons**, which duplicate steps 1 and 2. Harmless — arguably useful
+  as a way back — but it is the kind of thing phase 2 should decide
+  deliberately rather than inherit.
+- **The two steps with no completion signal** (new items, Base & Lift) need
+  an explicit acknowledgement before the rail can honestly tick them.

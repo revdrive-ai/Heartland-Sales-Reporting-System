@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import "./rebuild.css";
 import AppShell from "@/components/AppShell";
@@ -6,6 +7,8 @@ import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getModeStatus } from "@/lib/server/modeStatus";
 import ModeStrip from "@/components/ModeStrip";
+import ProcessRail from "@/components/process/ProcessRail";
+import { parseWorkPath, WORK_HEADER } from "@/lib/process";
 import { currentUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -29,13 +32,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // Read the persisted customer scope server-side so the selectors render
   // with the saved values on first paint (no hydration flicker).
-  const [{ scope }, mode] = await Promise.all([getScope(), getMode()]);
+  const [resolved, mode, h] = await Promise.all([getScope(), getMode(), headers()]);
   const status = await getModeStatus(mode);
+
+  /* Inside a process the middleware rewrote /work/... onto the view that
+     renders it, so the pathname the browser shows only survives on this
+     header. It is what tells the shell to draw the rail instead of the
+     sidebar. */
+  const work = parseWorkPath(h.get(WORK_HEADER) ?? "");
 
   return (
     <html lang="en">
       <body>
-        <AppShell initialScope={scope} mode={mode} user={user} strip={<ModeStrip status={status} />}>{children}</AppShell>
+        <AppShell
+          initialScope={resolved.scope}
+          mode={mode}
+          user={user}
+          strip={<ModeStrip status={status} />}
+          rail={work ? <ProcessRail loc={work} status={status} scopeLabel={resolved.label} /> : null}
+        >
+          {children}
+        </AppShell>
       </body>
     </html>
   );

@@ -36,7 +36,7 @@ function saturdaysOfYear(year: number): string[] {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ mkt?: string; brand?: string; item?: string; metric?: string; win?: string }>;
+  searchParams: Promise<{ mkt?: string; brand?: string; item?: string; metric?: string; win?: string; hhopen?: string }>;
 }) {
   const sp = await searchParams;
   const [allMarkets, gscope, allItems, mode] = await Promise.all([listMarkets(), getScope(), listItems(), getMode()]);
@@ -602,5 +602,9 @@ export default async function Page({
     insightsTotal: insights.length,
   };
 
-  return <BaseView data={data} />;
+  /* A plan process step arrives here through the middleware rewrite with
+     the modal it wants named in hhopen — step 1 opens distribution
+     verification, step 2 the new-item form, step 3 neither. */
+  const autoOpen = sp.hhopen === "distribution" || sp.hhopen === "newitem" ? sp.hhopen : undefined;
+  return <BaseView data={data} autoOpen={autoOpen} />;
 }

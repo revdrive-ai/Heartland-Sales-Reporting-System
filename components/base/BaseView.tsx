@@ -161,7 +161,7 @@ const YEAR_STYLES = [
   { color: "--bad", dash: [] as number[], width: 1.3 },
 ];
 
-export default function BaseView({ data }: { data: BaseData }) {
+export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?: "distribution" | "newitem" }) {
   const tick = useThemeTick();
   const router = useRouter();
   const [seasHide, setSeasHide] = useState(false);
@@ -312,6 +312,17 @@ export default function BaseView({ data }: { data: BaseData }) {
     setDvDoc(await getDistVerification(data.mkt, data.distVer.year));
     setDvAddOpen(true);
   };
+  /* Arriving as a process step (lib/process.ts): the step names the modal it
+     is for, and the page opens it rather than asking the person to find the
+     button. Runs once — closing the modal must not reopen it. */
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current || !autoOpen || !data.distVer) return;
+    opened.current = true;
+    if (autoOpen === "distribution") void openDv();
+    else void openDvAdd();
+  }, [autoOpen, data.distVer]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const dvPersist = async (next: DistVerification) => {
     if (!data.distVer) return;
     setDvDoc(next);

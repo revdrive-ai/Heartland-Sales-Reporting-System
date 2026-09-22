@@ -5,7 +5,6 @@ import { getSnapshots, takeSnapshot } from "@/lib/server/planSnapshot";
 import { setState } from "@/lib/server/appstate";
 import { cronRunKey, type LeCronRun } from "@/lib/server/leCron";
 import { dueCycle } from "@/lib/leSchedule";
-import { SURFACE } from "@/lib/surface";
 
 /* The scheduled LE lock.
 
@@ -41,15 +40,6 @@ function authorized(req: Request): { ok: true } | { ok: false; why: string } {
 }
 
 export async function GET(req: Request) {
-  /* Only the full deployment locks. A lite deployment builds from the same
-     repo, so it inherits this cron, and two projects firing the same minute
-     against the same Supabase could both read "not yet locked" and both
-     write a version. Answering 200 here keeps the lite project's cron log
-     clean and means it needs no CRON_SECRET; nothing is read or written. */
-  if (SURFACE !== "full") {
-    return NextResponse.json({ skipped: `the ${SURFACE} surface does not lock — the full deployment owns the LE lock` });
-  }
-
   const auth = authorized(req);
   if (!auth.ok) {
     return NextResponse.json({ error: "unauthorized", reason: auth.why }, { status: 401 });

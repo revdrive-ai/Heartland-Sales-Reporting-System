@@ -227,29 +227,49 @@ to the shared store automatically on first load. Backend: Supabase
 On the Vercel deployment the Supabase env vars are required for durability —
 until they're set, the tool falls back to per-browser storage there.
 
-## Surfaces — one codebase, two deployments
+## Front door & processes
 
-A **surface** is a named subset of the 18 views: same code, same Supabase
-project, same numbers, shorter sidebar, its own URL. `NEXT_PUBLIC_SURFACE`
-picks one at build time, so a second Vercel project off the same `main` is
-the whole mechanism — no fork, no drift.
+The tool was a map: 18 views in a sidebar, all reachable at once, in any
+order. It is now a front door plus a corridor. `/start` asks one question —
+**what are you working on** — and the three answers are the working modes
+(`lib/mode.ts`) promoted out of the sidebar, which is where a once-a-session
+decision belongs. Entering a process sets the mode cookie, so every view
+downstream opens in the right year with nothing else to set.
 
-- `full` (default, unchanged) — all 18 views, `heartland.revdrive.ai`.
-- `lite` — Sales Dashboard, Monthly Forecast Review, Latest Estimate. Built
-  views only; Objectives, Approvals and Sales Leader View join it when they
-  stop being stubs.
+| Choice | Opens | Steps |
+| --- | --- | --- |
+| **Analyze** | Sales Dashboard | 1 |
+| **Latest Estimate** | Promotion Planner | 1 |
+| **Plan a new year** | Base & Lift, after a year is picked | 4 |
+| **Admin** | the full sidebar, every view — admins only | — |
 
-Editing `LITE_VIEWS` in `lib/surface.ts` is the only change needed to move a
-view in or out — the sidebar (`navFor`), the route guard (`middleware.ts`)
-and the landing redirect (`surfacePath`) all follow it, and a group emptied
-by the filter drops out of the sidebar rather than rendering a bare heading.
-`/api/health` reports which surface a deployment is serving.
+**The plan process** is four steps over views that already exist:
+review distribution → add new items → Base & Lift → build the plan. Steps
+1–3 all render `/base`; only the modal differs, and step 3 is that view with
+the modals shut, showing a base that already reflects the two steps before
+it. Nothing is recomputed or handed along — the distribution doc is saved
+per customer × year and `BaseView` reads it.
 
-This is focus, not access control: both surfaces authenticate identically
-and read the same rows. The nightly LE lock runs on `full` only, so the two
-projects cannot race to write the same lock version.
+**Inside a process there is no sidebar**, just the step rail: which process,
+which year, the customers in scope, the steps of *this* process, what the
+current step is asking for, and Back/Continue. Completion is claimed only
+where the platform knows — distribution verification and Plan of Record
+sign-off are recorded per customer, so those steps say "9 of 13"; reviewing
+a base leaves no trace, so that step shows progress rather than a tick.
 
-Runbook for standing up the second project: `docs/surfaces.md`.
+**Leaving and coming back.** Position is personal, so the step rides in an
+`hh-proc` cookie and the front door offers to resume it. The work itself is
+shared per customer × year and was already persisted server-side.
+
+**Routing.** `/work/plan/2027/distribution` and friends are real, linkable
+URLs. The middleware rewrites them onto the view that renders them, so there
+is no second copy of the ~600 lines of data assembly in `app/base/page.tsx`;
+it passes the mode on a request header (`x-hh-mode`) because a cookie set
+during a request is only read on the next one. Raw view routes (`/base`,
+`/planner`, …) are admins only — `lib/auth/admin.ts`, one address for this
+demo, a `public.app_admins` table the moment there are two.
+
+Design plan and the phases still ahead: `docs/design/process-shell.md`.
 
 ## Open items
 
@@ -280,12 +300,11 @@ Runbook for standing up the second project: `docs/surfaces.md`.
   consumption data. Awaiting the decisions listed in §7 and a sample export.
 - **Remaining stub views** — Promo Analysis (workflow step 5) is the natural
   next build; then Deduction Center, Foodservice, Objectives & KPIs,
-  Approvals, and Sales Leader View. The last three are the ones the `lite`
-  surface wants; adding them to `LITE_VIEWS` is a one-line change once built.
-- **Lite deployment not created yet** — the code ships on `main` and the full
-  deployment is unaffected. Standing up the second Vercel project (import the
-  same repo, `NEXT_PUBLIC_SURFACE=lite`, no `CRON_SECRET`, its own subdomain,
-  add the host to Supabase Redirect URLs) is `docs/surfaces.md`.
+  Approvals, and Sales Leader View.
+- **Process phases 2 and 3** — the views themselves are untouched so far, so
+  the LE planner and the plan planner are still the same screen, and the two
+  steps without a completion signal (new items, Base & Lift) have no explicit
+  acknowledgement yet. `docs/design/process-shell.md` has both.
 - **Data gaps to close on the business side** — the RC Taylor territory
   assignment, the Telus "Safeway Mountain West" ↔ NIQ "Safeway IMW" name
   match, and extending the crosswalk and price-list workbooks per the

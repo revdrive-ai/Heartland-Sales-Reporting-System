@@ -500,3 +500,115 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .lmsg.bad{background:var(--bad-soft);color:var(--bad)}
 .lmsg.ok{background:var(--good-soft);color:var(--good)}
 .lfoot{margin-top:18px;padding-top:14px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-3)}
+
+/* ============ FRONT DOOR & PROCESS RAIL ============ */
+/* Without a sidebar the grid is one column; the top bar still spans it. */
+.app.nosides{grid-template-columns:1fr;grid-template-areas:"top" "main"}
+
+.front{max-width:1020px;margin:0 auto;padding:28px 0 40px}
+.front-head{margin-bottom:26px}
+.front-head h1{font-size:30px;letter-spacing:-.6px;font-weight:800;margin-bottom:8px}
+.front-head p{color:var(--ink-2);font-size:14.5px;max-width:62ch;line-height:1.55}
+
+.resume{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font:inherit;cursor:pointer;
+  background:var(--accent-soft);border:1px solid #cddbfb;border-radius:12px;padding:13px 16px;margin-bottom:22px}
+.resume:hover{border-color:var(--accent)}
+.resume .ic{width:20px;flex:none;color:var(--accent)}
+.resume .ic svg{width:18px;height:18px}
+.resume .rt{display:flex;flex-direction:column;gap:2px;min-width:0}
+.resume .rt b{font-size:13.5px}
+.resume .rd{font-size:12.5px;color:var(--ink-2)}
+.resume .go{margin-left:auto;font-weight:800;font-size:12.5px;color:var(--accent);white-space:nowrap}
+
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(272px,1fr));gap:16px}
+.tile{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;transition:border-color .14s,transform .14s}
+.tile:hover{border-color:var(--brand);transform:translateY(-2px)}
+.tile-hit{display:flex;flex-direction:column;gap:10px;align-items:flex-start;flex:1;
+  background:none;border:none;font:inherit;text-align:left;cursor:pointer;padding:20px 20px 16px;width:100%}
+.tile-hit .ic{width:40px;height:40px;border-radius:11px;background:var(--brand-soft);color:var(--ink);
+  display:grid;place-items:center}
+.tile-hit .ic svg{width:19px;height:19px}
+.tile-hit .tl{display:flex;flex-direction:column;gap:3px}
+.tile-hit .tl b{font-size:17px;letter-spacing:-.2px}
+.tile-hit .tag{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--ink-3)}
+.tile-hit .td{font-size:13px;color:var(--ink-2);line-height:1.5;flex:1}
+.tile-hit .steps{font-size:11.5px;font-weight:800;color:var(--accent)}
+.tile-year{display:flex;align-items:center;gap:9px;padding:11px 20px;border-top:1px solid var(--line);
+  background:var(--surface-2);font-size:12px;font-weight:700;color:var(--ink-2)}
+.tile-year select{font:inherit;font-weight:700;font-size:12.5px;color:var(--ink);padding:5px 9px;
+  border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+.tile-year.static{color:var(--ink-3);font-weight:800}
+
+.adminrow{margin-top:26px;padding-top:22px;border-top:1px solid var(--line)}
+.adminbtn{display:flex;align-items:center;gap:14px;width:100%;text-align:left;font:inherit;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.adminbtn:hover{border-color:var(--ink-3)}
+.adminbtn .ic{width:20px;flex:none;color:var(--ink-3)}
+.adminbtn .ic svg{width:18px;height:18px}
+.adminbtn .at{display:flex;flex-direction:column;gap:2px;min-width:0}
+.adminbtn .at b{font-size:13.5px}
+.adminbtn .at span{font-size:12.5px;color:var(--ink-2)}
+.adminbtn .go{margin-left:auto;font-weight:800;font-size:12.5px;color:var(--ink-2);white-space:nowrap}
+
+/* The corridor: what replaces the sidebar while a process is being worked. */
+.prail{position:sticky;top:60px;z-index:45;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;margin:-10px 0 18px;border-top:3px solid var(--accent)}
+.prail.plan{border-top-color:var(--warn)}
+.prail.analyze{border-top-color:var(--good)}
+.prail-top{display:flex;align-items:center;flex-wrap:wrap;gap:8px 16px;padding:10px 16px}
+.pback{font-size:12.5px;font-weight:800;color:var(--ink-2);text-decoration:none;white-space:nowrap}
+.pback:hover{color:var(--accent)}
+.ptitle{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;letter-spacing:-.2px}
+.ptitle .ic{width:17px;color:var(--ink-3)}
+.ptitle .ic svg{width:16px;height:16px}
+.ptitle b{font-weight:800}
+.pscope{font-size:12px;font-weight:700;color:var(--ink-2);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:20px;padding:3px 10px;white-space:nowrap}
+.pcount{margin-left:auto;font-size:11.5px;font-weight:800;color:var(--ink-3);white-space:nowrap}
+
+.psteps{display:flex;flex-wrap:wrap;gap:6px;list-style:none;padding:0 16px 12px;margin:0}
+.psteps li{flex:1 1 180px;min-width:0}
+.psteps a{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:10px;text-decoration:none;
+  border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);min-width:0}
+.psteps a:hover{border-color:var(--ink-3)}
+.psteps .n{flex:none;width:21px;height:21px;border-radius:50%;display:grid;place-items:center;
+  font-size:11px;font-weight:800;background:var(--surface);border:1px solid var(--line);color:var(--ink-3)}
+.psteps .sl{display:flex;flex-direction:column;gap:1px;font-size:12.5px;font-weight:700;min-width:0}
+.psteps .sn{font-size:11px;font-weight:600;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.psteps li.on a{border-color:var(--accent);background:var(--accent-soft);color:var(--ink)}
+.psteps li.on .n{background:var(--accent);border-color:var(--accent);color:#fff}
+.psteps li.done a{border-color:#bfe6d0;background:var(--good-soft);color:var(--ink)}
+.psteps li.done .n{background:var(--good);border-color:var(--good);color:#fff}
+.psteps li.ahead a{opacity:.72}
+
+.prail-foot{display:flex;align-items:center;flex-wrap:wrap;gap:10px 16px;
+  padding:10px 16px;border-top:1px solid var(--line);background:var(--surface-2);border-radius:0 0 11px 11px}
+.pblurb{font-size:12.5px;color:var(--ink-2);flex:1 1 320px;line-height:1.5}
+.pnav{display:flex;gap:8px;margin-left:auto}
+.prail .btn{display:inline-flex;text-decoration:none;white-space:nowrap}
+
+@media (max-width:720px){
+  .front-head h1{font-size:24px}
+  .prail-top,.psteps,.prail-foot{padding-left:12px;padding-right:12px}
+  .pcount{margin-left:0}
+}
+
+/* Phone widths: the top bar's fixed furniture (brand, Ask, avatar, sign out)
+   is wider than the viewport and, being a grid item, drags the whole page
+   with it. The data views still scroll sideways on a phone — they are tables
+   and always have — but the front door should not. */
+@media (max-width:640px){
+  .topbar{padding:0 12px;gap:10px}
+  .topbar .right{gap:8px}
+  .brand{min-width:0}
+  .brand>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .main{padding:18px 14px 48px}
+  .front{padding-top:18px}
+}
+@media (max-width:430px){
+  /* the last thing to go is the Ask label — the spark still opens it */
+  .ask .lbl{display:none}
+  .ask{padding:9px 11px}
+  .signout{font-size:11px}
+}
