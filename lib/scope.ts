@@ -83,6 +83,13 @@ export type ResolvedScope = {
   telusCustomerIds: string[];
 };
 
+/** Client side: persist the scope (the server reads it on the next render). */
+export function writeScopeCookie(s: Scope) {
+  try {
+    document.cookie = `${SCOPE_COOKIE}=${encodeURIComponent(JSON.stringify(s))}; path=/; max-age=31536000; SameSite=Lax`;
+  } catch {}
+}
+
 export function resolveScope(s: Scope): ResolvedScope {
   const rows = scopeRows(s);
   return {

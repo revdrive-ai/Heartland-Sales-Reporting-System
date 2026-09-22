@@ -9,15 +9,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  applySelection, facetOptions, SCOPE_COOKIE, SCOPE_FIELDS, scopeActive, scopeRows,
+  applySelection, facetOptions, SCOPE_FIELDS, scopeActive, scopeRows, writeScopeCookie,
   type Scope,
 } from "@/lib/scope";
-
-function writeCookie(s: Scope) {
-  try {
-    document.cookie = `${SCOPE_COOKIE}=${encodeURIComponent(JSON.stringify(s))}; path=/; max-age=31536000; SameSite=Lax`;
-  } catch {}
-}
 
 function Chip({
   label, value, options, onPick,
@@ -68,16 +62,29 @@ export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
   const [scope, setScope] = useState<Scope>(initialScope);
   const router = useRouter();
 
+  /* Follow the server when it changes the scope out from under us — entering
+     a plan clears it so the account is chosen deliberately, and the chips
+     have to go blank with it rather than keep showing last week's customer.
+     Adjusted during render rather than in an effect: React re-renders before
+     painting, so the chips never flash the old customer. After a pick here
+     the two already agree and this does nothing. */
+  const serverScope = JSON.stringify(initialScope);
+  const [seenScope, setSeenScope] = useState(serverScope);
+  if (serverScope !== seenScope) {
+    setSeenScope(serverScope);
+    setScope(JSON.parse(serverScope) as Scope);
+  }
+
   const pick = (field: keyof Scope, value?: string) => {
     const next = applySelection(scope, field, value);
     setScope(next);
-    writeCookie(next);
+    writeScopeCookie(next);
     router.refresh();
   };
 
   const clear = () => {
     setScope({});
-    writeCookie({});
+    writeScopeCookie({});
     router.refresh();
   };
 

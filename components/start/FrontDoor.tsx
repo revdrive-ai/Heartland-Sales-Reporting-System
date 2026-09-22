@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ICONS } from "@/lib/icons";
 import { PROCESSES, processFor, processPath, resumePath, type ProcResume } from "@/lib/process";
 import { writeModeCookie, type WorkMode } from "@/lib/mode";
+import { writeScopeCookie } from "@/lib/scope";
 
 /* The front door. One question — what did you come here to do — and the
    three answers, which are the working modes that used to live in the
@@ -28,6 +29,12 @@ export default function FrontDoor({
     // write the mode before navigating so the first paint is already right;
     // the middleware sets the same value on the way through
     writeModeCookie({ kind, planYear: year ?? mode.planYear });
+    /* A process worked one account at a time starts with the account blank.
+       Otherwise it opens on whoever was selected last — possibly weeks ago,
+       possibly by someone else — and the first step fires for them before
+       anyone has chosen. Resuming does not clear: picking up where you left
+       off means the account you left off on. */
+    if (processFor(kind)?.steps.some((st) => st.perAccount)) writeScopeCookie({});
     router.push(processPath(kind, undefined, year));
     /* And refresh: the front door and the process share a root layout, which
        Next therefore does not re-render across this navigation — the rail
