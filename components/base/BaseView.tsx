@@ -1794,10 +1794,11 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               <div>
                 <div className="mt">Distribution verification — {marketName} · Plan {data.distVer.year}</div>
                 <div className="ms">
-                  Every Heartland branded item this customer sold, with distribution health, <b>ranked by
-                  distribution</b> and then by most recent sale. <b>In plan</b> carries its base
-                  into {data.distVer.year}; <b>No volume</b> takes it out. Items quiet for 8+ weeks are pre-set to No
-                  volume — override anything. Shared with everyone once saved.
+                  Every Heartland branded item this customer sold <b>in the latest 52 weeks</b>, with
+                  distribution health, <b>ranked by distribution</b> and then by most recent sale.
+                  <b> In plan</b> carries its base into {data.distVer.year}; <b>No volume</b> takes it out.
+                  Items quiet for 8+ weeks are pre-set to No volume — override anything. Shared with
+                  everyone once saved.
                 </div>
               </div>
               <button className="x" onClick={() => setDvOpen(false)}>✕</button>
@@ -1845,7 +1846,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             </div>
             <div style={{ padding: "12px 20px", borderTop: "1px solid var(--line)", display: "flex", gap: 10, alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "var(--ink-3)", flex: 1 }}>
-                {Object.values(dvDoc.decisions).filter((d) => d === "out").length} of {data.distVer.items.length} items set to No volume · {dvDoc.additions.length} added
+                {/* count the rows on screen, not every decision in the saved
+                    doc — that can still hold answers for items which have
+                    since gone quiet past the 52-week window */}
+                {data.distVer.items.filter((it) => (dvDoc.decisions[it.upc] ?? "in") === "out").length} of {data.distVer.items.length} items set to No volume · {dvDoc.additions.length} added
               </span>
               <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => setDvOpen(false)}>Cancel</button>
               <button className="btn primary" style={{ cursor: "pointer" }} onClick={dvSave} disabled={dvSaving}>

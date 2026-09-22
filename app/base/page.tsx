@@ -299,46 +299,56 @@ export default async function Page({
       }
     }
 
-    /* the verification popup's inventory: every Heartland branded item this customer
-       sold in the source year, with distribution health */
-    // "—" means never sold; "" sorts below every real ISO date
-    const saleKey = (i: { lastSale: string }) => (i.lastSale === "—" ? "" : i.lastSale);
+    /* The verification popup's inventory: every Heartland branded item this
+       customer sold in the LATEST 52 MEASURED WEEKS. Anything quieter than
+       that is not a decision worth putting in front of someone — it carries
+       no base into the plan year whichever way they answer, because the
+       source year's measured weeks all sit inside this same window. */
     const mktFacts = await getWeeklyFacts({ market_code: mkt });
-    const stats = new Map<string, { lastSale: string; acv: number; acvW: string; base: number; baseN: number }>();
+    const stats = new Map<string, { lastSale: string; acv: number; acvW: string; base: number; baseN: number; sold52: boolean }>();
     const last52Set2 = new Set(last52);
     for (const r of mktFacts) {
       const meta = itemMetaAll.get(r.upc);
       if (!meta?.is_own) continue;
-      const s = stats.get(r.upc) ?? { lastSale: "", acv: 0, acvW: "", base: 0, baseN: 0 };
-      if ((r.units ?? 0) > 0 && r.week_ending > s.lastSale) s.lastSale = r.week_ending;
+      const s = stats.get(r.upc) ?? { lastSale: "", acv: 0, acvW: "", base: 0, baseN: 0, sold52: false };
+      const sold = (r.units ?? 0) > 0;
+      if (sold && r.week_ending > s.lastSale) s.lastSale = r.week_ending;
+      if (sold && last52Set2.has(r.week_ending)) s.sold52 = true;
       if (r.acv_dist !== null && r.week_ending >= s.acvW) { s.acv = Math.max(r.week_ending > s.acvW ? 0 : s.acv, r.acv_dist); s.acvW = r.week_ending; }
       if (last52Set2.has(r.week_ending)) { s.base += r.base_units ?? r.units ?? 0; s.baseN = 52; }
       stats.set(r.upc, s);
     }
-    distVer = {
-      year: +win,
-      dataEdge: latestWeek,
-      verifiedAt: dv.verified_at,
-      excluded: [...outSet].filter((u) => stats.has(u)).length,
-      added: dv.additions.length,
-      items: [...stats.entries()].map(([u, s]) => ({
+    /* Ranked for the decision, not for browsing: widest distribution at the
+       top, and within the same %ACV the most recently sold first. Brand is a
+       column, not a grouping — the item to think hardest about is the biggest
+       one, whatever brand it belongs to. Every row here sold inside the
+       window, so there is no never-sold case left to rank around. */
+    const dvItems = [...stats.entries()]
+      .filter(([, s]) => s.sold52)
+      .map(([u, s]) => ({
         upc: u,
         name: itemMetaAll.get(u)?.name ?? u,
         brand: itemMetaAll.get(u)?.brand ?? "",
         acv: Math.round(s.acv * 10) / 10,
-        lastSale: s.lastSale || "—",
+        lastSale: s.lastSale,
         baseWk: Math.round((s.base / Math.max(s.baseN, 1)) * 10) / 10,
-      /* Ranked for the decision, not for browsing: widest distribution at the
-         top, and within the same %ACV the most recently sold first. Items
-         that never sold fall to the bottom — the empty key sorts below every
-         ISO date once the comparison is reversed. Brand is a column, not a
-         grouping: the item to think hardest about is the biggest one, whatever
-         brand it belongs to. */
-      })).sort((a, b) =>
+      }))
+      .sort((a, b) =>
         b.acv - a.acv ||
-        saleKey(b).localeCompare(saleKey(a)) ||
+        b.lastSale.localeCompare(a.lastSale) ||
         a.name.localeCompare(b.name)
-      ),
+      );
+    const dvListed = new Set(dvItems.map((i) => i.upc));
+    distVer = {
+      year: +win,
+      dataEdge: latestWeek,
+      verifiedAt: dv.verified_at,
+      /* Only decisions about items still on the list. A saved "out" for an
+         item that has since gone quiet past the window is no longer shown,
+         so counting it would contradict the table it is meant to summarise. */
+      excluded: [...outSet].filter((u) => dvListed.has(u)).length,
+      added: dv.additions.length,
+      items: dvItems,
       master: allItems.filter((i) => i.is_own).map((i) => ({ upc: i.upc, name: i.name, brand: i.brand })),
     };
     // Each item's share of the brand base over the latest 52 weeks — the
