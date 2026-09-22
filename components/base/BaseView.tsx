@@ -1322,8 +1322,13 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       pointRadius: 0,
                       pointHoverRadius: 4,
                     },
-                    // the plan year: the base above, the new items on top, the levers on the lot
-                    ...(hasPlanDelta ? [{
+                    /* The plan year: the base above, the new items on top, the
+                       levers on the lot. Always drawn — when nothing has been
+                       added or adjusted it sits exactly on the base, which is
+                       itself the answer to "where is the plan": it is the
+                       carried base, unchanged. Hiding it until it differed
+                       read as the plan being missing. */
+                    {
                       label: `Plan ${data.win}`,
                       data: adjustedPlan,
                       borderColor: cssToken("--ink"),
@@ -1333,7 +1338,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       spanGaps: false,
                       pointRadius: 0,
                       pointHoverRadius: 4,
-                    }] : []),
+                    },
                   ],
                 }}
                 options={opts}
