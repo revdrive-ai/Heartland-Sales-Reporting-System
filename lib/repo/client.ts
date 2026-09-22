@@ -10,6 +10,7 @@
 // untouched: every function keeps its signature.
 
 import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
+import { readDistVerification, type DistVerification } from "@/lib/distver";
 
 /* ---- shared-document plumbing ---- */
 
@@ -320,30 +321,12 @@ export async function setPlanBudget(key: string, value: number): Promise<void> {
    is shared, like all planner work. Consumed server-side by the Base & Lift
    plan-year series. */
 
-export type DistAddition = {
-  id: string;
-  upc: string;            // the new item (from the item master)
-  name: string;
-  brand: string;
-  proxy_upc: string;      // the in-plan item whose weekly base shape it inherits
-  proxy_pct: number;      // % of the proxy's base, default 100
-  first_week: string;     // ISO Saturday — ongoing volume starts here
-  loadin_units: number;   // one-time pipeline fill, retail units
-  loadin_date: string;    // lands in the plan week containing this date
-};
-
-export type DistVerification = {
-  decisions: Record<string, "in" | "out">; // upc → keep in plan / no volume
-  additions: DistAddition[];
-  verified_at: string | null;
-};
+export type { DistAddition, DistVerification } from "@/lib/distver";
 
 const dvKey = (market_code: string, plan_year: number) => `distver:${market_code}:${plan_year}`;
-const DV_EMPTY: DistVerification = { decisions: {}, additions: [], verified_at: null };
 
 export async function getDistVerification(market_code: string, plan_year: number): Promise<DistVerification> {
-  const doc = await loadDoc<DistVerification>(dvKey(market_code, plan_year), () => null);
-  return doc ? { ...DV_EMPTY, ...doc } : { ...DV_EMPTY };
+  return readDistVerification(await loadDoc<DistVerification>(dvKey(market_code, plan_year), () => null));
 }
 
 export async function saveDistVerification(market_code: string, plan_year: number, dv: DistVerification): Promise<void> {

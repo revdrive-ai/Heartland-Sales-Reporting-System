@@ -2,7 +2,7 @@ import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets,
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
-import type { DistVerification } from "@/lib/repo/client";
+import { readDistVerification } from "@/lib/distver";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
@@ -239,8 +239,7 @@ export default async function Page({
        first week, plus a one-time load-in. Carry-by-default until verified. */
     const utc2 = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
     const itemMetaAll = new Map(allItems.map((i) => [i.upc, i]));
-    const dvRaw = (await getState(`distver:${mkt}:${+win}`).catch(() => undefined)) as DistVerification | undefined;
-    const dv: DistVerification = { decisions: dvRaw?.decisions ?? {}, additions: dvRaw?.additions ?? [], verified_at: dvRaw?.verified_at ?? null };
+    const dv = readDistVerification(await getState(`distver:${mkt}:${+win}`).catch(() => undefined));
     const outSet = new Set(Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => u));
     const planScoped = scoped.filter((r) => !outSet.has(r.upc));
 
@@ -285,7 +284,7 @@ export default async function Page({
       for (const a of adds) {
         if (w >= a.first_week) extra += planValOf(a.proxy_upc, w) * (a.proxy_pct / 100);
         // the load-in lands in the plan week covering its purchase date
-        if (a.loadin_units > 0 && w >= a.loadin_date && utc2(w) - utc2(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+        if (a.loadin_units > 0 && w >= a.ship_date && utc2(w) - utc2(a.ship_date.slice(0, 10)) < 7 * DAY) {
           extra += a.loadin_units * perUnitOf(a.proxy_upc);
         }
       }

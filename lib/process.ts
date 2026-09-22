@@ -93,7 +93,7 @@ export const PROCESSES: ProcessDef[] = [
       {
         key: "new-items",
         label: "Add new items",
-        blurb: "Add items launching in the plan year — a proxy for base volume, a first week, a load-in.",
+        blurb: "Anything launching in the plan year — or say there are none, and move on.",
         view: "base",
         open: "newitem",
       },

@@ -4,7 +4,8 @@ import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
-import type { DistAddition, DistVerification, PlanAdjustment } from "@/lib/repo/client";
+import { readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
+import type { PlanAdjustment } from "@/lib/repo/client";
 import PlannerView, { type PromoRow, type PlannerData } from "@/components/planner/PlannerView";
 
 /* Promotion Planner — the first rebuilt view, running on the real Telus
@@ -161,7 +162,7 @@ export default async function Page() {
       if (!d) continue;
       const out = new Set(Object.entries(d.decisions ?? {}).filter(([, x]) => x === "out").map(([u]) => u));
       if (!out.size && !(d.additions ?? []).length && !d.verified_at) continue;
-      dvByMkt[m.code] = { out, adds: d.additions ?? [] };
+      dvByMkt[m.code] = { out, adds: readDistVerification(d).additions };
       if (d.verified_at) dvVerified++;
       dvOut += out.size;
       dvAdded += (d.additions ?? []).length;
@@ -279,7 +280,7 @@ export default async function Page() {
               const proxy = rawSeries(pim);
               const ser = planWeeks.map((w, i) => {
                 let v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
-                if (a.loadin_units > 0 && w >= a.loadin_date && utcOf(w) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+                if (a.loadin_units > 0 && w >= a.ship_date && utcOf(w) - utcOf(a.ship_date.slice(0, 10)) < 7 * DAY) {
                   v += a.loadin_units; // one-time pipeline fill in this week
                 }
                 return Math.max(0, v) * adjFactor(a.upc, utcOf(w));

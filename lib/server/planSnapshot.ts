@@ -1,7 +1,8 @@
 import { getWeeklyFacts, listItems, listWeekEndings } from "@/lib/repo";
 import { getState, setState } from "@/lib/server/appstate";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
-import type { DistAddition, DistVerification, PlanAdjustment } from "@/lib/repo/client";
+import { readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
+import type { PlanAdjustment } from "@/lib/repo/client";
 import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
@@ -119,7 +120,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
      Each brand total is the sum of its items. */
   const dvRaw = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
   const out = new Set(Object.entries(dvRaw?.decisions ?? {}).filter(([, d]) => d === "out").map(([u]) => u));
-  const additions: DistAddition[] = dvRaw?.additions ?? [];
+  const additions: DistAddition[] = readDistVerification(dvRaw).additions;
   const adjs = ((await getState(`adj:${mkt}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined) ?? [];
   const itemName = new Map(items.map((i) => [i.upc, i.name]));
 
@@ -201,7 +202,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
       const proxy = rawOf(pim);
       addItem(a.upc, weeks.map((w, i) => {
         let v = w >= a.first_week ? proxy[i] * (a.proxy_pct / 100) : 0;
-        if (a.loadin_units > 0 && w >= a.loadin_date && utcOf(w) - utcOf(a.loadin_date.slice(0, 10)) < 7 * DAY) {
+        if (a.loadin_units > 0 && w >= a.ship_date && utcOf(w) - utcOf(a.ship_date.slice(0, 10)) < 7 * DAY) {
           v += a.loadin_units; // one-time pipeline fill in this week
         }
         return v;

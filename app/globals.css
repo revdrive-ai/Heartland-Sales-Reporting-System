@@ -612,3 +612,32 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   .ask{padding:9px 11px}
   .signout{font-size:11px}
 }
+
+/* ============ NEW-ITEM STEP (distribution verification) ============ */
+/* The step-2 gate: two answers, both legitimate, neither hidden behind the
+   other. Saying there are no new items this year is a decision, so it gets
+   the same weight on screen as adding one. */
+.gate{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.gatepick{display:flex;flex-direction:column;gap:5px;align-items:flex-start;text-align:left;font:inherit;
+  cursor:pointer;padding:15px 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);
+  transition:border-color .12s,background .12s}
+.gatepick:hover{border-color:var(--accent);background:var(--accent-soft)}
+.gatepick b{font-size:14px}
+.gatepick span{font-size:12.5px;color:var(--ink-2);line-height:1.45}
+.gatepick.go:hover{border-color:var(--good);background:var(--good-soft)}
+.gatepick:disabled{opacity:.6;cursor:default}
+
+/* pick-from-the-list vs type-it-in */
+.segs{display:flex;gap:6px;margin-bottom:14px}
+.seg{font:inherit;font-size:12.5px;font-weight:700;padding:7px 13px;border-radius:9px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-2)}
+.seg:hover{border-color:var(--ink-3)}
+.seg.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+
+.fld{display:block;font-size:11.5px;font-weight:700;color:var(--ink-2);margin-bottom:10px}
+.dim{color:var(--ink-3);font-weight:600}
+
+.addlist{margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.addlist>b{font-size:12.5px;display:block;margin-bottom:6px}
+.addrow{display:flex;gap:10px;align-items:flex-start;font-size:12.5px;padding:6px 0;line-height:1.5}
+.addrow>span:first-child{flex:1;min-width:0}

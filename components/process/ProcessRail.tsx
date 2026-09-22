@@ -9,10 +9,10 @@ import ProcRemember from "./ProcRemember";
    the current step is asking for.
 
    Completion is only claimed where the platform actually knows. Distribution
-   verification and Plan of Record sign-off are recorded per customer, so
-   those steps can say "9 of 13". Reviewing the base and deciding there are
-   no new items this year leave no trace, so those steps show progress
-   instead of a tick rather than pretending. */
+   verification, the new-items answer and Plan of Record sign-off are all
+   recorded per customer, so those steps can say "9 of 13". Reviewing the
+   base leaves no trace, so that step shows progress instead of a tick
+   rather than pretending. */
 
 type StepState = { done: boolean; note?: string };
 
@@ -25,8 +25,13 @@ function stateOf(stepKey: string, status: ModeStatus | null): StepState {
         ? { done: true, note: `all ${t.customers} accounts` }
         : { done: false, note: `${t.verified} of ${t.customers} accounts` };
     case "new-items": {
+      /* Answered either way — items added, or "none this year" recorded at
+         the step's gate. Zero additions is a legitimate answer, which is why
+         the count alone could never decide this. */
       const added = status.customers.reduce((a, c) => a + c.distver.added, 0);
-      return { done: false, note: added ? `${added} added` : "none added yet" };
+      return t.newItems === t.customers && t.customers > 0
+        ? { done: true, note: added ? `${added} added` : "none this year" }
+        : { done: false, note: `${t.newItems} of ${t.customers} answered` };
     }
     case "planner":
       return t.signed === t.customers && t.customers > 0

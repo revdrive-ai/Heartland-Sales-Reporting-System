@@ -18,7 +18,13 @@ export type CustomerStatus = {
   lockedCycle: string | null;    // the cycle its newest version belongs to
   signedOff: boolean;            // plan years: a Plan of Record exists
   adjustments: number;
-  distver: { out: number; added: number; verifiedAt: string | null };
+  distver: {
+    out: number;
+    added: number;
+    verifiedAt: string | null;
+    /** the new-items question has an answer — items added, or "none this year" */
+    newItemsAnswered: boolean;
+  };
 };
 
 export type ModeStatus = {
@@ -36,6 +42,7 @@ export type ModeStatus = {
     taken: number;               // LE: customers locked for the due cycle; Plan: customers with any version
     signed: number;              // Plan of Record count (plan years)
     verified: number;            // distribution verified
+    newItems: number;            // the new-items question answered either way
     adjustments: number;
     events: number;              // plan events in the year document
   };
@@ -79,6 +86,7 @@ export async function getModeStatus(mode: WorkMode): Promise<ModeStatus | null> 
         out: Object.values(dv?.decisions ?? {}).filter((d) => d === "out").length,
         added: (dv?.additions ?? []).length,
         verifiedAt: dv?.verified_at ?? null,
+        newItemsAnswered: !!dv?.no_additions || (dv?.additions ?? []).length > 0,
       },
     };
   });
@@ -96,6 +104,7 @@ export async function getModeStatus(mode: WorkMode): Promise<ModeStatus | null> 
       taken: mode.kind === "le" ? customers.filter((c) => c.lockedForDue).length : customers.filter((c) => c.versions.length > 0).length,
       signed: customers.filter((c) => c.signedOff).length,
       verified: customers.filter((c) => c.distver.verifiedAt).length,
+      newItems: customers.filter((c) => c.distver.newItemsAnswered).length,
       adjustments: customers.reduce((a, c) => a + c.adjustments, 0),
       events: Array.isArray(events) ? events.length : 0,
     },
