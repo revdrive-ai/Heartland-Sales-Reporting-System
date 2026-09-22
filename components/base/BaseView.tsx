@@ -1794,7 +1794,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               <div>
                 <div className="mt">Distribution verification — {marketName} · Plan {data.distVer.year}</div>
                 <div className="ms">
-                  Every Heartland branded item this customer sold, with distribution health. <b>In plan</b> carries its base
+                  Every Heartland branded item this customer sold, with distribution health, <b>ranked by
+                  distribution</b> and then by most recent sale. <b>In plan</b> carries its base
                   into {data.distVer.year}; <b>No volume</b> takes it out. Items quiet for 8+ weeks are pre-set to No
                   volume — override anything. Shared with everyone once saved.
                 </div>

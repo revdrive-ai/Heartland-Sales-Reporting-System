@@ -301,6 +301,8 @@ export default async function Page({
 
     /* the verification popup's inventory: every Heartland branded item this customer
        sold in the source year, with distribution health */
+    // "—" means never sold; "" sorts below every real ISO date
+    const saleKey = (i: { lastSale: string }) => (i.lastSale === "—" ? "" : i.lastSale);
     const mktFacts = await getWeeklyFacts({ market_code: mkt });
     const stats = new Map<string, { lastSale: string; acv: number; acvW: string; base: number; baseN: number }>();
     const last52Set2 = new Set(last52);
@@ -326,7 +328,17 @@ export default async function Page({
         acv: Math.round(s.acv * 10) / 10,
         lastSale: s.lastSale || "—",
         baseWk: Math.round((s.base / Math.max(s.baseN, 1)) * 10) / 10,
-      })).sort((a, b) => a.brand.localeCompare(b.brand) || b.acv - a.acv),
+      /* Ranked for the decision, not for browsing: widest distribution at the
+         top, and within the same %ACV the most recently sold first. Items
+         that never sold fall to the bottom — the empty key sorts below every
+         ISO date once the comparison is reversed. Brand is a column, not a
+         grouping: the item to think hardest about is the biggest one, whatever
+         brand it belongs to. */
+      })).sort((a, b) =>
+        b.acv - a.acv ||
+        saleKey(b).localeCompare(saleKey(a)) ||
+        a.name.localeCompare(b.name)
+      ),
       master: allItems.filter((i) => i.is_own).map((i) => ({ upc: i.upc, name: i.name, brand: i.brand })),
     };
     // Each item's share of the brand base over the latest 52 weeks — the
