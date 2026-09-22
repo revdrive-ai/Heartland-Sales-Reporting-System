@@ -814,21 +814,16 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             ⬇ Export base
           </button>
           {planYear ? (<>
-            <button
-              className="btn"
-              style={{ ...selStyle, cursor: "pointer" }}
-              title={`Confirm which of last year's items carry volume into ${planYear} at ${marketName}, and add new items with a proxy base + load-in. Shared per customer × year.`}
-              onClick={openDv}
-            >
-              ✓ Verify distribution
-            </button>
+            {/* No "Verify distribution" button: step 1 of the plan process owns
+                that, the same way step 2 owns new items. The pills below still
+                report where it stands, which is what this row is for. */}
             {data.distVer && (data.distVer.verifiedAt
               ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
                   title={`Verified ${data.distVer.verifiedAt.slice(0, 10)} — ${data.distVer.excluded} item${data.distVer.excluded === 1 ? "" : "s"} taken out, ${data.distVer.added} added`}>
                   ✓ distribution verified · {data.distVer.excluded} out · {data.distVer.added} added
                 </span>
               : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-                  title="Carried volume includes every item from last year until someone verifies the list — click Verify distribution">
+                  title={`Carried volume includes every item ${planYear - 1} sold until someone verifies the list — that is step 1 of Plan ${planYear}`}>
                   ⚠ distribution unverified
                 </span>)}
             {snapPill}
