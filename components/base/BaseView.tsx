@@ -431,6 +431,15 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         {planYear ? "base not signed off" : "no LE taken yet"}
       </span>) : null;
 
+  /* Finishing is a decision, not an escape. Closing with the ✕ leaves you
+     wondering whether the work took; this says how many items landed and
+     moves the plan on to the step that shows them. */
+  const dvDoneAdding = () => {
+    setDvAddOpen(false);
+    dvResetAdd();
+    if (data.distVer) router.push(processPath("plan", "base", data.distVer.year));
+  };
+
   const dvResetAdd = () => {
     setDvNew(null); setDvSearch(""); setDvProxy(""); setDvAcv(""); setDvSeeSeas(false);
     setDvShip(""); setDvShelf(""); setDvLoadU("");
@@ -2034,6 +2043,23 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                     ◇ {data.distVer.master.length} items in the system, grouped by brand. Not there? Use
                     <b> Enter by hand</b> — it will carry volume the same way, and the code can be filled in later
                     when the item reaches the crosswalk.
+                  </div>
+                  <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center",
+                                marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--line)" }}>
+                    {dvDoc.additions.length > 0 && (
+                      <span className="dim" style={{ marginRight: "auto", fontSize: 12.5 }}>
+                        Add another above, or finish here.
+                      </span>
+                    )}
+                    <button className="btn" style={{ ...selStyle, cursor: "pointer" }}
+                      onClick={() => { setDvAddOpen(false); dvResetAdd(); }}>
+                      {dvDoc.additions.length > 0 ? "Keep adding later" : "Close"}
+                    </button>
+                    {dvDoc.additions.length > 0 && (
+                      <button className="btn primary" style={{ cursor: "pointer" }} onClick={dvDoneAdding}>
+                        Done — {dvDoc.additions.length} item{dvDoc.additions.length === 1 ? "" : "s"} added →
+                      </button>
+                    )}
                   </div>
                 </>) : (<>
                   <label className="fld">Item name
