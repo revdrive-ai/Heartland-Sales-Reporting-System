@@ -7,11 +7,12 @@
 // cookie, and a refresh re-scopes every server-rendered view.
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   applySelection, facetOptions, SCOPE_FIELDS, scopeActive, scopeRows, writeScopeCookie,
   type Scope,
 } from "@/lib/scope";
+import { parseWorkPath } from "@/lib/process";
 
 function Chip({
   label, value, options, onPick,
@@ -61,6 +62,28 @@ function Chip({
 export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
   const [scope, setScope] = useState<Scope>(initialScope);
   const router = useRouter();
+  const pathname = usePathname();
+
+  /* Inside a process worked one account at a time, the account IS the
+     decision — team lead and account lead only offer other routes to the
+     same place, and a second way to reach one answer reads as a second
+     question. They stay on Analyze and on the admin views, which look
+     across a book and where a lead is a real way to slice it. */
+  const perAccount = !!parseWorkPath(pathname)?.proc.steps.some((st) => st.perAccount);
+  const fields = perAccount
+    ? SCOPE_FIELDS.filter((f) => f.key !== "teamLead" && f.key !== "accountLead")
+    : SCOPE_FIELDS;
+
+  /* A hidden selector must not still be filtering. Entering one of these
+     processes clears the scope, so this only catches the way round it —
+     arriving by a link with a lead already set from somewhere else. It
+     writes the cookie and refreshes rather than setting state, so the sync
+     below picks the correction up the same way it picks up any other. */
+  useEffect(() => {
+    if (!perAccount || (!initialScope.teamLead && !initialScope.accountLead)) return;
+    writeScopeCookie({ ...initialScope, teamLead: undefined, accountLead: undefined });
+    router.refresh();
+  }, [perAccount, initialScope, router]);
 
   /* Follow the server when it changes the scope out from under us — entering
      a plan clears it so the account is chosen deliberately, and the chips
@@ -92,7 +115,7 @@ export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
 
   return (
     <div className="filters">
-      {SCOPE_FIELDS.map((f) => (
+      {fields.map((f) => (
         <Chip
           key={f.key}
           label={f.label}
