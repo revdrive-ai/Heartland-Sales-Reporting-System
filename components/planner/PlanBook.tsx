@@ -306,12 +306,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const p = spendParts(e, lift);
     return p ? Math.round(p.weekly.reduce((a, v) => a + v, 0) + p.fixed) : undefined;
   };
-  /** The spend an event carries right now: live for rate-funded events, the
-      stored commitment otherwise. */
-  const spendOf = (e: PlanEvent): number => recomputeSpend(e, e.lift_pct) ?? e.spend;
+  /** A carried deal that nobody has touched commits at what the FY book
+      booked for it. The fund is held flat on those booked dollars, so
+      copying last year's book has to read as last year's spend — pricing it
+      at rate × plan volume instead would compare a shipment-based budget
+      with a consumption-based cost and call the gap "available". Editing
+      the lift, a rate or the deal reprices it, and from then on it commits
+      at rate × plan volume like any other rate-funded event. */
+  const isBooked = (e: PlanEvent) => e.origin === "carry" && !e.repriced && typeof e.carried_spend === "number";
+  /** The spend an event commits right now: booked for an untouched carried
+      deal, live for rate-funded events, the stored commitment otherwise. */
+  const spendOf = (e: PlanEvent): number => (isBooked(e) ? e.carried_spend! : recomputeSpend(e, e.lift_pct) ?? e.spend);
   /** The reference a carried event's live spend is read against (the FY book's planned $). */
   const carriedRef = (e: PlanEvent): number | null =>
     e.carried_spend ?? (e.origin === "carry" ? e.spend : null);
+  const reprice = (e: PlanEvent): Partial<PlanEvent> => (e.origin === "carry" ? { repriced: true } : {});
 
   const calc = (e: PlanEvent): EventCalc => {
     const weeks = weeksOf(e);
@@ -394,10 +403,13 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const t = Array(12).fill(0);
     for (const e of visible) {
       const p = spendParts(e, e.lift_pct);
-      if (!p) { byMonth(t, e.spend, e.start, e.end, year); continue; }
-      // rate-funded dollars land in the week the units move; fees spread evenly
-      p.weekly.forEach((v, i) => { t[+plan.planWeeks[p.idx[i]].slice(5, 7) - 1] += v; });
-      byMonth(t, p.fixed, e.start, e.end, year);
+      if (!p) { byMonth(t, spendOf(e), e.start, e.end, year); continue; }
+      // rate-funded dollars land in the week the units move; fees spread evenly.
+      // A booked carried deal keeps that timing, scaled to its booked total.
+      const live = p.weekly.reduce((a, v) => a + v, 0) + p.fixed;
+      const k = isBooked(e) && live > 0 ? spendOf(e) / live : 1;
+      p.weekly.forEach((v, i) => { t[+plan.planWeeks[p.idx[i]].slice(5, 7) - 1] += v * k; });
+      byMonth(t, p.fixed * k, e.start, e.end, year);
     }
     return t.map(Math.round);
   }, [visible, year, plan]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -492,7 +504,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const addFromWizard = (e: Omit<PlanEvent, "id" | "created_at">) => {
     persistNow(
       wizardEdit
-        ? latestEvents.current.map((x) => (x.id === wizardEdit.id ? { ...x, ...e } : x))
+        ? latestEvents.current.map((x) => (x.id === wizardEdit.id ? { ...x, ...reprice(x), ...e } : x))
         : [...latestEvents.current, { ...e, id: newId(), created_at: new Date().toISOString() }]
     );
     setWizardOpen(false);
@@ -619,7 +631,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const lift = isNaN(v) ? null : v;
     const spend = recomputeSpend(e, lift);
     persistSoon(latestEvents.current.map((x) =>
-      x.id === e.id ? { ...x, lift_pct: lift, ...(spend !== undefined ? { spend } : {}) } : x));
+      x.id === e.id ? { ...x, ...reprice(x), lift_pct: lift, ...(spend !== undefined ? { spend } : {}) } : x));
   };
 
   /** Edit one deal line's $/unit rate in the drill-down — spend follows. */
@@ -627,7 +639,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const v = parseFloat(raw);
     const rate = isNaN(v) ? 0 : Math.max(0, v);
     const item_rates = (e.item_rates ?? []).map((r) => (r.line_id === line_id ? { ...r, rate } : r));
-    const next = { ...e, item_rates };
+    const next = { ...e, ...reprice(e), item_rates };
     const spend = recomputeSpend(next, next.lift_pct);
     persistSoon(latestEvents.current.map((x) =>
       x.id === e.id ? { ...next, ...(spend !== undefined ? { spend } : {}) } : x));
@@ -970,8 +982,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               {tableRows.slice(0, limit).map((e) => {
                 const c = calc(e);
                 const parts = spendParts(e, e.lift_pct);
-                const sp = parts ? Math.round(parts.weekly.reduce((a, v) => a + v, 0) + parts.fixed) : e.spend;
-                const live = parts !== null;
+                const atVolume = parts ? Math.round(parts.weekly.reduce((a, v) => a + v, 0) + parts.fixed) : null;
+                const booked = isBooked(e);
+                const sp = spendOf(e);
+                const live = parts !== null && !booked;
                 const ref = carriedRef(e);
                 return (
                   <React.Fragment key={e.id}>
@@ -1022,23 +1036,35 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                     </td>
                     <td
                       style={{ padding: "9px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
-                      title={live
+                      title={booked
+                        ? `Booked — carried from the FY${plan.priorYear} book at its planned dollars, which is what the fund is held flat on. Edit the lift, a rate or the deal to reprice it at rate × ${year} plan volume.`
+                        : live
                         ? "Rate-funded — follows the plan base: units on the deal's items at this customer, week by week over the window, × (1 + lift) × $/unit, plus fixed fees; off-invoice also pays on the units other events lift in the same weeks. Moves with distribution verification, plan adjustments, lift and rate edits."
                         : "Fixed commitment — base and lift changes don't move this spend"}
                     >
                       {fmtExact(sp)}
-                      {live ? (
+                      {booked ? (
+                        <>
+                          <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}>booked FY{plan.priorYear}</div>
+                          {atVolume !== null && Math.abs(atVolume - sp) > Math.max(1, sp * 0.005) && (
+                            <div style={{ fontSize: 10.5, color: "var(--ink-3)" }}
+                              title={`What this deal costs at its rates on the ${year} plan volume — the number it would commit if repriced`}>
+                              at plan volume {fmtExact(atVolume)}
+                            </div>
+                          )}
+                        </>
+                      ) : live ? (
                         <span style={{ color: "var(--ink-3)", fontSize: 10, marginLeft: 3 }}>⚙</span>
                       ) : (
                         <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}>committed total</div>
                       )}
-                      {parts && parts.extraUnits >= 1 && (
+                      {!booked && parts && parts.extraUnits >= 1 && (
                         <div style={{ fontSize: 10.5, color: "var(--ink-3)", fontWeight: 600 }}
                           title="Off-invoice pays on every unit shipped in the window — these are the units other events at this customer lift on the same items in the same weeks, charged at this deal's O/I rate">
                           ⊕ {Math.round(parts.extraUnits).toLocaleString()} u from overlapping events
                         </div>
                       )}
-                      {ref !== null && Math.abs(sp - ref) > Math.max(1, ref * 0.005) && (
+                      {!booked && ref !== null && Math.abs(sp - ref) > Math.max(1, ref * 0.005) && (
                         <div style={{ fontSize: 10.5, fontWeight: 700, color: sp > ref ? "var(--good)" : "var(--bad)" }}
                           title={`FY${plan.priorYear} Telus planned ${fmtExact(ref)} — the ${year} base moves it ${sp > ref ? "up" : "down"} ${fmtExact(Math.abs(sp - ref))}`}>
                           FY{plan.priorYear} {fmtExact(ref)} → {sp > ref ? "+" : "−"}{fmtExact(Math.abs(sp - ref))}
