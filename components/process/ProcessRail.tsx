@@ -92,9 +92,15 @@ export default function ProcessRail({
      the one thing left to do is the one thing still lit. */
   const oneAccount = inScope.length === 1;
   const needsAccount = !!step.perAccount && !oneAccount;
-  const needsChoice =
-    step.chooser === "new-items" && oneAccount && !!status && status.newItems < status.customers;
-  const hold = needsAccount || needsChoice;
+  /* On a step that asks a question the page is dimmed the whole time it is
+     the step being shown, answered or not: the two choices are what this
+     step is, and the work below belongs to the steps either side of it.
+     The urging — the ring, the pulse, the "choose one" badge — is only for
+     while the question is still open. */
+  const onChooser = !!step.chooser && oneAccount;
+  const unanswered = onChooser && !!status && status.newItems < status.customers;
+  const hold = needsAccount || onChooser;
+  const urge = needsAccount || unanswered;
   const prev = index > 0 ? proc.steps[index - 1] : null;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
   const many = proc.steps.length > 1;
@@ -102,7 +108,7 @@ export default function ProcessRail({
   return (
     <>
     {hold && <div className="stepscrim" aria-hidden="true" />}
-    <div className={"prail " + proc.kind + (hold ? " needs" : "")}>
+    <div className={"prail " + proc.kind + (urge ? " needs" : "")}>
       <div className="prail-top">
         <Link href="/start" className="pback" title="Back to the front door — your place is saved">
           ← All work
@@ -115,7 +121,7 @@ export default function ProcessRail({
         <span className="pscope" title="The customers this step applies to — change them in the top bar">
           {scopeLabel}
         </span>
-        {hold && <span className="pneeds">{needsAccount ? "Pick an account" : "Choose one to continue"}</span>}
+        {urge && <span className="pneeds">{needsAccount ? "Pick an account" : "Choose one to continue"}</span>}
         {many && <span className="pcount">Step {index + 1} of {proc.steps.length}</span>}
         {year && (
           <StepReset
