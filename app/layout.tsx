@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 import "./rebuild.css";
 import AppShell from "@/components/AppShell";
@@ -7,8 +6,7 @@ import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getModeStatus } from "@/lib/server/modeStatus";
 import ModeStrip from "@/components/ModeStrip";
-import ProcessRail from "@/components/process/ProcessRail";
-import { parseWorkPath, WORK_HEADER } from "@/lib/process";
+import ProcessRail, { type RailStatus } from "@/components/process/ProcessRail";
 import { currentUser } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -32,14 +30,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // Read the persisted customer scope server-side so the selectors render
   // with the saved values on first paint (no hydration flicker).
-  const [resolved, mode, h] = await Promise.all([getScope(), getMode(), headers()]);
-  const status = await getModeStatus(mode);
+  const [resolved, mode] = await Promise.all([getScope(), getMode()]);
+  /* The rollup follows the top bar: scope to one account and the steps
+     report that account, not all thirteen. */
+  const status = await getModeStatus(mode, resolved.marketCodes);
 
-  /* Inside a process the middleware rewrote /work/... onto the view that
-     renders it, so the pathname the browser shows only survives on this
-     header. It is what tells the shell to draw the rail instead of the
-     sidebar. */
-  const work = parseWorkPath(h.get(WORK_HEADER) ?? "");
+  /* The rail works out its own position from the pathname — steps of a
+     process share an underlying view, so moving between them does not
+     re-render this layout. It only needs the counts. */
+  const rail: RailStatus | null = status && {
+    customers: status.totals.customers,
+    verified: status.totals.verified,
+    newItems: status.totals.newItems,
+    added: status.customers.reduce((a, c) => a + c.distver.added, 0),
+    signed: status.totals.signed,
+    events: status.totals.events,
+    taken: status.totals.taken,
+    year: status.year,
+  };
 
   return (
     <html lang="en">
@@ -49,7 +57,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           mode={mode}
           user={user}
           strip={<ModeStrip status={status} />}
-          rail={work ? <ProcessRail loc={work} status={status} scopeLabel={resolved.label} /> : null}
+          rail={
+            <ProcessRail
+              status={rail}
+              scopeLabel={resolved.label}
+              inScope={status?.customers.map((c) => c.code) ?? []}
+            />
+          }
         >
           {children}
         </AppShell>

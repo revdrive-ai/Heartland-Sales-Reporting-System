@@ -1,5 +1,6 @@
 import { listItems } from "@/lib/repo";
 import { getMode } from "@/lib/server/mode";
+import { getScope } from "@/lib/server/scope";
 import { getModeStatus } from "@/lib/server/modeStatus";
 import { computePlanBase, type PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 import { lastCronRun } from "@/lib/server/leCron";
@@ -17,7 +18,8 @@ export default async function Page() {
   const mode = await getMode();
   // Analyze mode has no year of its own — show the in-flight LE cycle with a hint
   const effective = mode.kind === "analyze" ? { ...mode, kind: "le" as const } : mode;
-  const [status, items] = await Promise.all([getModeStatus(effective), listItems()]);
+  const scope = await getScope();
+  const [status, items] = await Promise.all([getModeStatus(effective, scope.marketCodes), listItems()]);
   if (!status) throw new Error("mode status unavailable");
   const brands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EVENT_MAX_DAYS } from "@/lib/data/nonPerformanceTypes";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { processPath, viewUrlWithin } from "@/lib/process";
+import { ADD_ITEM_EVENT, processPath, viewUrlWithin } from "@/lib/process";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -285,10 +285,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const [dvSaving, setDvSaving] = useState(false);
   const [dvAddOpen, setDvAddOpen] = useState(false);
   const [dvSearch, setDvSearch] = useState("");
-  /* Step 2 of the plan process opens the gate: either there are no new items
-     this year — a real answer, recorded — or there are, and the add form
-     opens. Nothing reaches the add form except through it. */
-  const [dvGateOpen, setDvGateOpen] = useState(false);
   const [dvNew, setDvNew] = useState<{ upc: string; name: string; brand: string; manual?: boolean } | null>(null);
   const [dvHand, setDvHand] = useState(false);   // typing an item that isn't in the master yet
   const [dvHandName, setDvHandName] = useState("");
@@ -317,15 +313,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
 
   // the add-item flow is standalone (its own header pill): it loads the shared
   // doc itself and persists on every change, no outer Save step
-  const openDvGate = async () => {
-    if (!data.distVer) return;
-    setDvDoc(await getDistVerification(data.mkt, data.distVer.year));
-    setDvGateOpen(true);
-  };
   const openDvAdd = async () => {
     if (!data.distVer) return;
     setDvDoc(await getDistVerification(data.mkt, data.distVer.year));
-    setDvGateOpen(false);
     setDvAddOpen(true);
   };
   /* The plan weeks are NIQ Saturdays. An on-shelf date belongs to the first
@@ -336,13 +326,25 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   /* Arriving as a process step (lib/process.ts): the step names the modal it
      is for, and the page opens it rather than asking the person to find the
      button. Runs once — closing the modal must not reopen it. */
-  const opened = useRef(false);
+  /* Keyed on WHICH modal, not on whether one has ever opened. Stepping from
+     1 to 2 is a soft navigation between two URLs that both render this view,
+     so the component stays mounted — a one-shot flag meant the second step
+     silently did nothing. */
+  const openedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (opened.current || !autoOpen || !data.distVer) return;
-    opened.current = true;
+    if (!autoOpen || !data.distVer || openedFor.current === autoOpen) return;
+    openedFor.current = autoOpen;
     if (autoOpen === "distribution") void openDv();
-    else void openDvGate();
+    else void openDvAdd();
   }, [autoOpen, data.distVer]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* The rail draws step 2's "Add a new item" and lives in the layout, a
+     different tree from this page, so it asks for the form with an event. */
+  useEffect(() => {
+    const open = () => void openDvAdd();
+    window.addEventListener(ADD_ITEM_EVENT, open);
+    return () => window.removeEventListener(ADD_ITEM_EVENT, open);
+  }, [data.distVer, data.mkt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dvPersist = async (next: DistVerification) => {
     if (!data.distVer) return;
@@ -430,21 +432,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     setDvHand(false); setDvHandName(""); setDvHandBrand(""); setDvHandUpc("");
   };
 
-  /* "No new items this year" is an answer, not a skip. Recording it is what
-     lets the step read as done, and it means nobody has to wonder later
-     whether the question was considered or just missed. */
-  const dvDoneNewItems = () => {
-    if (!data.distVer) return;
-    setDvGateOpen(false);
-    router.push(processPath("plan", "base", data.distVer.year));
-  };
-  const dvNoNewItems = async () => {
-    if (!dvDoc || !data.distVer) return;
-    await dvPersist({ ...dvDoc, no_additions: new Date().toISOString() });
-    setDvGateOpen(false);
-    router.push(processPath("plan", "base", data.distVer.year));
-  };
-
   /* Pick up an item typed in by hand. Its brand comes from a list rather than
      a text box: an addition rides its brand's series, so a brand nothing else
      uses would carry volume nowhere. Items with no code of their own yet get
@@ -490,11 +477,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     };
     // adding one retracts any earlier "there are none this year"
     await dvPersist({ ...dvDoc, additions: [...dvDoc.additions, add], no_additions: null });
+    // stay in the form — the "already added" list above the picker is where
+    // the item shows up, so there is no doubt it landed
     dvResetAdd();
-    // back to the gate, where the item is now listed — otherwise you are
-    // left staring at an empty picker with no sign it worked
-    setDvAddOpen(false);
-    setDvGateOpen(true);
   };
   const goAdjust = (ins: InsightRow) => {
     setInsModal(null);
@@ -1931,23 +1916,22 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         </div>
       )}
 
-      {/* Step 2's gate: either there are no new items this year, which is a
-          real answer and gets recorded, or there are, and the form opens. */}
-      {dvGateOpen && dvDoc && data.distVer && (
+      {dvAddOpen && dvDoc && data.distVer && (
         <div className="modal open">
-          <div className="box" style={{ width: 640 }}>
+          <div className="box" style={{ width: 620 }}>
             <div className="m-head">
               <div>
-                <div className="mt">New items for Plan {data.distVer.year}</div>
+                <div className="mt">Add a new item to Plan {data.distVer.year}</div>
                 <div className="ms">
-                  Anything launching at {marketName} that last year&apos;s numbers cannot carry — a new
-                  size, a new flavour, a new item. If there are none, say so and the plan moves on.
+                  {dvNew
+                    ? "Which item should it copy volume and seasonality from, and when does it ship and hit the shelf?"
+                    : "Choose it from the item list, or enter one by hand if it isn't in the system yet."}
                 </div>
               </div>
-              <button className="x" onClick={() => setDvGateOpen(false)}>✕</button>
+              <button className="x" onClick={() => { setDvAddOpen(false); dvResetAdd(); }}>✕</button>
             </div>
-            <div className="m-body" style={{ padding: "16px 20px", display: "block" }}>
-              {dvDoc.additions.length > 0 && (
+            <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
+              {dvDoc.additions.length > 0 && !dvNew && (
                 <div className="addlist">
                   <b>Added for {data.distVer.year}</b>
                   {dvDoc.additions.map((a) => (
@@ -1967,49 +1951,6 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                   ))}
                 </div>
               )}
-              {dvDoc.no_additions && !dvDoc.additions.length && (
-                <div className="note" style={{ marginBottom: 14 }}>
-                  ✓ <span>Answered on {dvDoc.no_additions.slice(0, 10)}: no new items for {data.distVer.year} at{" "}
-                  {marketName}. Adding one below replaces that answer.</span>
-                </div>
-              )}
-              <div className="gate">
-                <button className="gatepick" onClick={openDvAdd}>
-                  <b>{dvDoc.additions.length ? "Add another item" : "Add new items"}</b>
-                  <span>Pick from the item list, or enter one by hand if it isn&apos;t in the system yet.</span>
-                </button>
-                {dvDoc.additions.length ? (
-                  <button className="gatepick go" onClick={dvDoneNewItems}>
-                    <b>Done — on to Base &amp; Lift</b>
-                    <span>{dvDoc.additions.length} item{dvDoc.additions.length === 1 ? "" : "s"} will ride into the {data.distVer.year} base.</span>
-                  </button>
-                ) : (
-                  <button className="gatepick go" onClick={dvNoNewItems} disabled={dvSaving}>
-                    <b>No new items for {data.distVer.year}</b>
-                    <span>{dvSaving ? "Recording…" : "Recorded as answered, and step 3 opens next."}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {dvAddOpen && dvDoc && data.distVer && (
-        <div className="modal open">
-          <div className="box" style={{ width: 620 }}>
-            <div className="m-head">
-              <div>
-                <div className="mt">Add a new item to Plan {data.distVer.year}</div>
-                <div className="ms">
-                  {dvNew
-                    ? "Which item should it copy volume and seasonality from, and when does it ship and hit the shelf?"
-                    : "Choose it from the item list, or enter one by hand if it isn't in the system yet."}
-                </div>
-              </div>
-              <button className="x" onClick={() => { setDvAddOpen(false); dvResetAdd(); }}>✕</button>
-            </div>
-            <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
               {!dvNew ? (<>
                 <div className="segs">
                   <button className={"seg" + (dvHand ? "" : " on")} onClick={() => setDvHand(false)}>From the item list</button>

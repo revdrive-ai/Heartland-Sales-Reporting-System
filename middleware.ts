@@ -5,7 +5,7 @@ import { isAllowedEmail } from "@/lib/auth/domain";
 import { isAdminEmail } from "@/lib/auth/admin";
 import { navItemFor } from "@/lib/nav";
 import { MODE_COOKIE, MODE_HEADER, serializeModePref, type ModePref } from "@/lib/mode";
-import { parseWorkPath, processPath, WORK_HEADER, WORK_PREFIX } from "@/lib/process";
+import { parseWorkPath, processPath, WORK_PREFIX } from "@/lib/process";
 
 /* Every request passes through here. It refreshes the Supabase session
    cookies, decides whether the request may proceed at all, and turns a
@@ -117,9 +117,6 @@ export async function middleware(req: NextRequest) {
        it — a cookie set now would only be read on the next one. */
     const headers = new Headers(req.headers);
     headers.set(MODE_HEADER, mode);
-    // and the layout needs to know it is inside a process, to draw the step
-    // rail in place of the sidebar
-    headers.set(WORK_HEADER, pathname);
 
     const out = NextResponse.rewrite(dest, { request: { headers } });
     // carry over anything Supabase refreshed while we were checking the user

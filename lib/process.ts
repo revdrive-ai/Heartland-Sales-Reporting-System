@@ -28,6 +28,8 @@ export type ProcessStep = {
   /** Route segment of the existing view that renders this step. */
   view: string;
   open?: StepModal;
+  /** This step asks a question in the rail rather than advancing blindly. */
+  chooser?: "new-items";
 };
 
 export type ProcessDef = {
@@ -95,7 +97,7 @@ export const PROCESSES: ProcessDef[] = [
         label: "Add new items",
         blurb: "Anything launching in the plan year — or say there are none, and move on.",
         view: "base",
-        open: "newitem",
+        chooser: "new-items",
       },
       {
         key: "base",
@@ -115,10 +117,6 @@ export const PROCESSES: ProcessDef[] = [
 
 export const WORK_PREFIX = "/work";
 
-/* The rewrite hides the process URL from the page, but the layout still has
-   to know it is inside a process to draw the rail instead of the sidebar.
-   The middleware puts the original pathname here on the way through. */
-export const WORK_HEADER = "x-hh-work";
 
 export function processFor(kind: string | undefined): ProcessDef | undefined {
   return PROCESSES.find((p) => p.kind === kind);
@@ -237,3 +235,10 @@ export function viewUrlWithin(pathname: string, view: string, query?: string): s
   const step = loc.proc.steps.find((s) => s.view === view);
   return step ? processPath(loc.proc.kind, step.key, loc.year) + q : null;
 }
+
+/* The rail's "Add a new item" and the add form live in different trees — the
+   rail is drawn by the layout, the form by the page — so the button asks for
+   the form with an event rather than a navigation. A navigation would have to
+   change the URL to fire twice, and "open the form again" is not a different
+   place. */
+export const ADD_ITEM_EVENT = "hh:add-item";

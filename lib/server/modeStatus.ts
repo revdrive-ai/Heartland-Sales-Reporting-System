@@ -5,9 +5,14 @@ import type { DistVerification, PlanAdjustment } from "@/lib/repo/client";
 import type { WorkMode } from "@/lib/mode";
 import { daysUntilLock, dueCycle, openCycle, type LeCycle } from "@/lib/leSchedule";
 
-/* Where the work stands for the mode year, across every customer — the
-   rollup behind the strip under the top bar and the Latest Estimate view.
-   One batched app_state read: plansnap / adj / distver per customer. */
+/* Where the work stands for the mode year, across the customers IN SCOPE —
+   the rollup behind the step rail, the strip under the top bar and the
+   Latest Estimate view. One batched app_state read: plansnap / adj / distver
+   per customer.
+
+   Scope is the top bar's five selectors. Narrowing to one account has to
+   narrow the process with it: "1 of 13 accounts" is the wrong thing to tell
+   someone who is working Jewel, and the wrong thing to call done. */
 
 export type CustomerStatus = {
   code: string;
@@ -52,10 +57,11 @@ export function cycleMonth(d = new Date()): string {
   return d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 }
 
-export async function getModeStatus(mode: WorkMode): Promise<ModeStatus | null> {
+export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise<ModeStatus | null> {
   if (mode.kind === "analyze") return null;
   const year = mode.kind === "le" ? mode.leYear : mode.planYear;
-  const [markets, meta] = await Promise.all([listMarkets(), getPromoMeta()]);
+  const [allMarkets, meta] = await Promise.all([listMarkets(), getPromoMeta()]);
+  const markets = inScope ? allMarkets.filter((m) => inScope.includes(m.code)) : allMarkets;
   let dataEdge = "";
   for (const m of markets) {
     const w = await listWeekEndings(m.code);
