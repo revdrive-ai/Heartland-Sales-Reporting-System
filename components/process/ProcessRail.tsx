@@ -166,7 +166,6 @@ export default function ProcessRail({
      only until it is answered. */
   const hold = needsAccount || (onChooser && (step.holdsUntil !== "answer" || unanswered));
   const urge = needsAccount || unanswered;
-  const prev = index > 0 ? proc.steps[index - 1] : null;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
   const many = proc.steps.length > 1;
 
@@ -225,10 +224,12 @@ export default function ProcessRail({
         </ol>
       )}
 
-      {/* A step that asks a question owns its own way forward, and the step
-          BEFORE one loses its next button: "Add new items →" presumed the
-          answer, which is why it read as broken — it walked you past the
-          question rather than to it. A plain step keeps its button. */}
+      {/* The step chips above are the navigation — every step is one click,
+          back or forward — so a plain step's footer is its one line of
+          instruction and nothing else. The prev/next pills that used to sit
+          here said the same thing twice, and "Add new items →" once presumed
+          the answer to the question it walked past. The last step keeps a
+          way out: "Done for now" is the only thing that says finished. */}
       {needsAccount ? (
         <div className="prail-foot chooser">
           <span className="pblurb">{step.blurb}</span>
@@ -268,19 +269,11 @@ export default function ProcessRail({
       ) : (
         <div className="prail-foot">
           <span className="pblurb">{step.blurb}</span>
-          <span className="pnav">
-            {prev && (
-              <Link className="btn" href={processPath(proc.kind, prev.key, year)}>
-                ← {prev.label}
-              </Link>
-            )}
-            {next && !next.chooser && (
-              <Link className="btn primary" href={processPath(proc.kind, next.key, year)}>
-                {next.label} →
-              </Link>
-            )}
-            {!next && many && <Link className="btn" href="/start">Done for now →</Link>}
-          </span>
+          {!next && many && (
+            <span className="pnav">
+              <Link className="btn" href="/start">Done for now →</Link>
+            </span>
+          )}
         </div>
       )}
     </div>
