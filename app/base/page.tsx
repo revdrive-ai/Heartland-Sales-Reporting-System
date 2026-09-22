@@ -17,6 +17,11 @@ import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
    weeks land. Controls travel in the URL. */
 
 const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"]; // the Heartland brands NIQ carries
+/* The brand selector's first entry: every Heartland brand at once, so the
+   division reads as one business before it is read brand by brand. It is a
+   roll-up of exactly the three brands below it — the same weeks, the same
+   base model — so the totals add up to what the three brand views show. */
+const ALL_BRANDS = "ALL";
 const MONTH_LABELS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
 const FIRST_PLAN_YEAR = 2024;
@@ -58,7 +63,9 @@ export default async function Page({
   }
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt!
     : markets.some((m) => m.code === "ALB-JEWEL") ? "ALB-JEWEL" : markets[0].code;
-  const brand = HEARTLAND_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
+  const brand =
+    sp.brand === ALL_BRANDS || HEARTLAND_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
+  const allBrands = brand === ALL_BRANDS;
   // units | dollars (NIQ retail) | gross (units × the dated list price in force)
   const metric = sp.metric === "dollars" ? "dollars" : sp.metric === "gross" ? "gross" : "units";
 
@@ -141,17 +148,25 @@ export default async function Page({
 
   // Every week on file for this division × brand — drives the item list and
   // the seasonality card (which always uses full history, not the window).
-  const factsAll = await getWeeklyFacts({ market_code: mkt, brand });
+  const factsAll = allBrands
+    ? (await getWeeklyFacts({ market_code: mkt })).filter((r) => HEARTLAND_BRANDS.includes(r.brand))
+    : await getWeeklyFacts({ market_code: mkt, brand });
   // Item picker: only items that actually moved volume in the latest 52 weeks
   // at this division × brand — dead/delisted items drop out of the list.
   const recentFrom = allWeeks[Math.max(allWeeks.length - 52, 0)];
   const upcsWithVolume = new Set(
     factsAll.filter((r) => r.week_ending >= recentFrom && (r.units ?? 0) > 0).map((r) => r.upc)
   );
+  /* The item list carries its brand so the picker can group by it — with
+     every brand in scope a flat list of 40-odd items would say nothing about
+     which business each one belongs to. */
   const items = allItems
-    .filter((i) => i.brand === brand && upcsWithVolume.has(i.upc))
-    .map((i) => ({ upc: i.upc, name: i.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((i) => (allBrands ? HEARTLAND_BRANDS.includes(i.brand) : i.brand === brand) && upcsWithVolume.has(i.upc))
+    .map((i) => ({ upc: i.upc, name: i.name, brand: i.brand }))
+    .sort((a, b) =>
+      allBrands && a.brand !== b.brand
+        ? HEARTLAND_BRANDS.indexOf(a.brand) - HEARTLAND_BRANDS.indexOf(b.brand)
+        : a.name.localeCompare(b.name));
   const item = items.some((i) => i.upc === sp.item) ? sp.item! : "ALL";
   const itemName = item === "ALL" ? null : items.find((i) => i.upc === item)!.name;
 
@@ -279,7 +294,9 @@ export default async function Page({
       const src = yearAgoWeek(w);
       return src <= latestWeek ? (m.get(src) ?? 0) : avg52Of(m) * (engine[+w.slice(5, 7) - 1] ?? 1);
     };
-    const adds = item === "ALL" ? dv.additions.filter((a) => a.brand === brand) : [];
+    const adds = item === "ALL"
+      ? dv.additions.filter((a) => (allBrands ? HEARTLAND_BRANDS.includes(a.brand) : a.brand === brand))
+      : [];
 
     const actualized: (number | null)[] = [];
     const projected: (number | null)[] = [];
@@ -369,15 +386,22 @@ export default async function Page({
     // weight an item-level planner adjustment carries in the all-items view.
     const last52Set = new Set(last52);
     const shareTot = new Map<string, number>();
+    const brandTot = new Map<string, number>();
     let shareSum = 0;
     for (const r of factsAll) {
       if (!last52Set.has(r.week_ending)) continue;
       const v = bVal(r);
       shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
+      brandTot.set(r.brand, (brandTot.get(r.brand) ?? 0) + v);
       shareSum += v;
     }
     const itemShare: Record<string, number> = {};
     for (const [u, v] of shareTot) itemShare[u] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
+    /* And each brand's share of the same total. A brand-level lever is worth
+       its whole brand inside that brand's view, but only its share of the
+       business in the all-brands roll-up. */
+    const brandShare: Record<string, number> = {};
+    for (const [bn, v] of brandTot) brandShare[bn] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
 
     plan = {
       sourceYear: +win - 1,
@@ -387,6 +411,7 @@ export default async function Page({
       totActualized: actualized.reduce((a: number, v) => a + (v ?? 0), 0),
       totProjected: projected.reduce((a: number, v) => a + (v ?? 0), 0),
       itemShare,
+      brandShare,
     };
   }
 
@@ -407,7 +432,7 @@ export default async function Page({
     });
   }
 
-  const overlays = await getPromoOverlays({ market_code: mkt, brand, from, to });
+  const overlays = await getPromoOverlays({ market_code: mkt, brand: allBrands ? undefined : brand, from, to });
 
   /* Lift per promotion window, in the chosen metric.
      Actual lift: (actual − NIQ base) / base summed over the window's weeks on
@@ -456,7 +481,11 @@ export default async function Page({
      expected lift of whichever Telus performance window covers the week — the
      same predicted lift the windows table shows. Funding vehicles (EDLP,
      Slotting) carry no lift; overlapping windows take the strongest read. */
-  let forecast: { weeks: number; from: string; itemShare: Record<string, number> } | null = null;
+  let forecast: {
+    weeks: number; from: string;
+    itemShare: Record<string, number>;
+    brandShare: Record<string, number>;
+  } | null = null;
   if (forecastFrom !== null) {
     const last52 = allWeeks.slice(-52);
     const avg52 = last52.reduce((a, w) => a + (weekBaseFull.get(w) ?? 0), 0) / Math.max(last52.length, 1);
@@ -485,16 +514,20 @@ export default async function Page({
     // item shares (latest 52 wks) — the weight item-level LE adjustments carry
     const last52Set = new Set(last52);
     const shareTot = new Map<string, number>();
+    const brandTot = new Map<string, number>();
     let shareSum = 0;
     for (const r of factsAll) {
       if (!last52Set.has(r.week_ending)) continue;
       const v = bVal(r);
       shareTot.set(r.upc, (shareTot.get(r.upc) ?? 0) + v);
+      brandTot.set(r.brand, (brandTot.get(r.brand) ?? 0) + v);
       shareSum += v;
     }
     const itemShare: Record<string, number> = {};
     for (const [u, v] of shareTot) itemShare[u] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
-    forecast = { weeks: n, from: forecastFrom, itemShare };
+    const brandShare: Record<string, number> = {};
+    for (const [bn, v] of brandTot) brandShare[bn] = shareSum > 0 ? +(v / shareSum).toFixed(4) : 0;
+    forecast = { weeks: n, from: forecastFrom, itemShare, brandShare };
   }
 
   /* Lift engine — depth vs unit lift across the selection's promoted weeks,

@@ -11,6 +11,7 @@ import { getScope } from "@/lib/server/scope";
    Planner adjustments are browser-local and are NOT applied here. */
 
 const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
+const ALL_BRANDS = "ALL"; // the selection's all-brands roll-up
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
 const DAY = 86400000;
 
@@ -32,6 +33,9 @@ const csvEsc = (v: string | number) => {
 
 type ExportAdjustment = {
   upc: string;               // "ALL" = every item of the brand
+  /** The brand the lever belongs to. An "ALL" lever is every item of THAT
+      brand, which only matters once an export spans more than one. */
+  brand?: string;
   pct: number;               // signed % impact on base volume
   from: string;              // ISO effective window
   to: string;
@@ -62,7 +66,11 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
   const mkt = sp.get("mkt") ?? "";
   const market = allowed.find((m) => m.code === mkt);
   if (!market) return NextResponse.json({ error: "unknown or out-of-scope market" }, { status: 400 });
-  const brand = HEARTLAND_BRANDS.includes(sp.get("brand") ?? "") ? sp.get("brand")! : "SPLENDA";
+  const brandParam = sp.get("brand") ?? "";
+  const brand =
+    brandParam === ALL_BRANDS || HEARTLAND_BRANDS.includes(brandParam) ? brandParam : "SPLENDA";
+  const allBrands = brand === ALL_BRANDS;
+  const brandLabel = allBrands ? "All brands" : brand;
   const gran = sp.get("gran") === "month" ? "month" : "week";
   const fmt = sp.get("fmt") === "xlsx" ? "xlsx" : "csv";
 
@@ -94,13 +102,19 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
     }
   }
 
-  const factsAll = await getWeeklyFacts({ market_code: mkt, brand });
+  const factsAll = allBrands
+    ? (await getWeeklyFacts({ market_code: mkt })).filter((r) => HEARTLAND_BRANDS.includes(r.brand))
+    : await getWeeklyFacts({ market_code: mkt, brand });
   const recentFrom = allWeeks[Math.max(allWeeks.length - 52, 0)];
   const withVolume = new Set(factsAll.filter((r) => r.week_ending >= recentFrom && (r.units ?? 0) > 0).map((r) => r.upc));
   const itemParam = sp.get("item") ?? "ALL";
   const items = allItems
-    .filter((i) => i.brand === brand && withVolume.has(i.upc) && (itemParam === "ALL" || i.upc === itemParam))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((i) => (allBrands ? HEARTLAND_BRANDS.includes(i.brand) : i.brand === brand)
+      && withVolume.has(i.upc) && (itemParam === "ALL" || i.upc === itemParam))
+    .sort((a, b) =>
+      allBrands && a.brand !== b.brand
+        ? HEARTLAND_BRANDS.indexOf(a.brand) - HEARTLAND_BRANDS.indexOf(b.brand)
+        : a.name.localeCompare(b.name));
   if (items.length === 0) return NextResponse.json({ error: "no items in this selection" }, { status: 400 });
   const itemSet = new Set(items.map((i) => i.upc));
 
@@ -160,11 +174,13 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
   // planner adjustments (plan years only): factor per item per week — an
   // item-level adjustment applies exactly to its item row, "ALL" to every row
   const withAdj = planningYear && adjustments.length > 0;
-  const adjFactor = (upc: string, w: string): number => {
+  const adjFactor = (upc: string, itemBrand: string, w: string): number => {
     const wt = utcOf(w);
     let f = 1;
     for (const a of adjustments) {
-      if (a.upc !== "ALL" && a.upc !== upc) continue;
+      // "ALL" is every item of its OWN brand, not of every brand in the export
+      if (a.upc === "ALL") { if (a.brand && a.brand !== itemBrand) continue; }
+      else if (a.upc !== upc) continue;
       if (utcOf(a.from) > wt || utcOf(a.to) < wt - 6 * DAY) continue;
       f *= 1 + a.pct / 100;
     }
@@ -184,7 +200,7 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
       for (const w of p.weeks) {
         const { v } = valueAt(it.upc, w);
         s += v;
-        sa += v * adjFactor(it.upc, w);
+        sa += v * adjFactor(it.upc, it.brand, w);
       }
       colTot[i] += s; colTotAdj[i] += sa;
       vals.push(s); adjVals.push(sa);
@@ -192,27 +208,27 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
     const tot = vals.reduce((a, v) => a + v, 0);
     if (withAdj) {
       const totA = adjVals.reduce((a, v) => a + v, 0);
-      rows.push([brand, it.upc, it.name, "Plan base", ...vals.map(Math.round), Math.round(tot)]);
-      rows.push([brand, it.upc, it.name, "Adjusted", ...adjVals.map(Math.round), Math.round(totA)]);
-      rows.push([brand, it.upc, it.name, "Δ %", ...adjVals.map((v, i) => pct1(v, vals[i])), pct1(totA, tot)]);
+      rows.push([it.brand, it.upc, it.name, "Plan base", ...vals.map(Math.round), Math.round(tot)]);
+      rows.push([it.brand, it.upc, it.name, "Adjusted", ...adjVals.map(Math.round), Math.round(totA)]);
+      rows.push([it.brand, it.upc, it.name, "Δ %", ...adjVals.map((v, i) => pct1(v, vals[i])), pct1(totA, tot)]);
     } else {
-      rows.push([brand, it.upc, it.name, ...vals.map(Math.round), Math.round(tot)]);
+      rows.push([it.brand, it.upc, it.name, ...vals.map(Math.round), Math.round(tot)]);
     }
   }
   const gTot = colTot.reduce((a, v) => a + v, 0);
   if (withAdj) {
     const gTotA = colTotAdj.reduce((a, v) => a + v, 0);
-    rows.push([brand, "", `TOTAL ${brand}`, "Plan base", ...colTot.map(Math.round), Math.round(gTot)]);
-    rows.push([brand, "", `TOTAL ${brand}`, "Adjusted", ...colTotAdj.map(Math.round), Math.round(gTotA)]);
-    rows.push([brand, "", `TOTAL ${brand}`, "Δ %", ...colTotAdj.map((v, i) => pct1(v, colTot[i])), pct1(gTotA, gTot)]);
+    rows.push(["", "", `TOTAL — ${brandLabel}`, "Plan base", ...colTot.map(Math.round), Math.round(gTot)]);
+    rows.push(["", "", `TOTAL — ${brandLabel}`, "Adjusted", ...colTotAdj.map(Math.round), Math.round(gTotA)]);
+    rows.push(["", "", `TOTAL — ${brandLabel}`, "Δ %", ...colTotAdj.map((v, i) => pct1(v, colTot[i])), pct1(gTotA, gTot)]);
   } else {
-    rows.push([brand, "", `TOTAL ${brand}`, ...colTot.map(Math.round), Math.round(gTot)]);
+    rows.push(["", "", `TOTAL — ${brandLabel}`, ...colTot.map(Math.round), Math.round(gTot)]);
   }
 
   const meta = [
     ["Heartland — base units export"],
     ["Division", market.name],
-    ["Brand", brand + (itemParam !== "ALL" ? ` · single item` : ` · ${items.length} items`)],
+    ["Brand", brandLabel + (itemParam !== "ALL" ? ` · single item` : ` · ${items.length} items`)],
     ["Timeframe", `${winLabel} · ${weeks[0]} → ${weeks[weeks.length - 1]}`],
     ["Granularity", gran === "week" ? "Weekly (NIQ week-ending Saturdays)" : "Monthly (weeks grouped by their Saturday's month)"],
     ["Basis", planningYear
@@ -224,7 +240,7 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
     [],
   ];
 
-  const fname = `base-units_${mkt}_${brand.replace(/\s+/g, "")}_${win}_${gran}ly${withAdj ? "_adjusted" : ""}`;
+  const fname = `base-units_${mkt}_${(allBrands ? "AllBrands" : brand).replace(/\s+/g, "")}_${win}_${gran}ly${withAdj ? "_adjusted" : ""}`;
   if (fmt === "csv") {
     const csv = [...meta, header, ...rows].map((r) => r.map(csvEsc).join(",")).join("\n");
     return new NextResponse(csv, {

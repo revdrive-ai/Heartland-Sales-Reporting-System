@@ -43,7 +43,7 @@ export type OverlayRow = PromoOverlay & {
 export type BaseData = {
   markets: { code: string; name: string }[];
   brands: string[];
-  items: { upc: string; name: string }[];
+  items: { upc: string; name: string; brand: string }[];
   mkt: string;
   brand: string;
   item: string;              // "ALL" or a upc
@@ -67,7 +67,12 @@ export type BaseData = {
     items: { upc: string; name: string; brand: string; acv: number; lastSale: string; baseWk: number; seasonality: number[] }[];
     master: { upc: string; name: string; brand: string }[];
   };
-  forecast: null | { weeks: number; from: string; itemShare: Record<string, number> }; // data-edge year: weeks forecast past the edge
+  // data-edge year: weeks forecast past the edge
+  forecast: null | {
+    weeks: number; from: string;
+    itemShare: Record<string, number>;
+    brandShare: Record<string, number>;
+  };
   plan: null | {             // the plan-year series (future years only)
     sourceYear: number;                 // the year the actualized base carries from
     actualized: (number | null)[];      // actual NIQ base, matching weeks a year back
@@ -75,7 +80,8 @@ export type BaseData = {
     actualizedWeeks: number;
     totActualized: number;
     totProjected: number;
-    itemShare: Record<string, number>;  // upc → share of brand base (latest 52w)
+    itemShare: Record<string, number>;  // upc → share of the selection's base (latest 52w)
+    brandShare: Record<string, number>; // brand → the same, for the all-brands roll-up
   };
   points: WeekPoint[];
   overlays: OverlayRow[];
@@ -114,6 +120,7 @@ export type BaseData = {
 };
 
 const DAY = 86400000;
+const ALL_BRANDS = "ALL"; // the brand selector's roll-up entry
 // ≤ 12 weeks = an event window; longer = always-on (lib/data/nonPerformanceTypes)
 const LANE_H = 15;         // px per always-on lane under the x-axis
 const SEAS_KEY = "hhSeasHide";
@@ -225,6 +232,20 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     });
   };
   const [planReg, setPlanReg] = useState<Record<string, string>>({}); // market → registered_at, for the plan year
+
+  /* "All brands" is the roll-up the brand selector opens on: every Heartland
+     brand at this division as one business, which is how an account person
+     reads it before reading it brand by brand. Everything downstream already
+     works off the selection's own rows, so the only things that need to know
+     are the labels and the plan levers — a lever belongs to one brand, and in
+     the roll-up it is worth that brand's share of the total, not all of it. */
+  const allBrands = data.brand === ALL_BRANDS;
+  const brandLabel = allBrands ? "All brands" : data.brand;
+  /* The brand a new adjustment would belong to: the chosen brand, or — in the
+     roll-up — the chosen item's brand. Null means there is nothing to attach
+     one to yet, so the form asks for a brand first. */
+  const selItemBrand = data.items.find((i) => i.upc === data.item)?.brand ?? null;
+  const adjBrand = allBrands ? selItemBrand : data.brand;
 
   const nextPlanYear = data.latestDataYear + 1;
   const planYear = data.plan ? +data.win : null;
@@ -623,10 +644,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
 
   const addAdj = async () => {
     const pct = parseFloat(aPct);
-    if (!snapYear || !pct || !aFrom || !aTo || aTo < aFrom || !aReason) return;
+    if (!snapYear || !pct || !aFrom || !aTo || aTo < aFrom || !aReason || !adjBrand) return;
     setAdjs(await savePlanAdjustment({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      market_code: data.mkt, plan_year: snapYear, brand: data.brand,
+      market_code: data.mkt, plan_year: snapYear, brand: adjBrand,
       upc: aUpc, kind: aKind, pct, from: aFrom, to: aTo,
       // one stored field: the reason, with any detail after it
       note: aNote.trim() ? `${aReason} — ${aNote.trim()}` : aReason,
@@ -634,26 +655,36 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     }));
     setAPct(""); setANote(""); setAReason(""); setAdjGuide(false);
   };
-  const brandAdjs = adjs.filter((a) => a.brand === data.brand);
+  /* In the roll-up every brand's levers are in play — the total has to show
+     the adjustments already made underneath it. */
+  const brandAdjs = adjs.filter((a) => (allBrands ? data.brands.includes(a.brand) : a.brand === data.brand));
 
   /* per-week multiplier the adjustments put on the plan; item-level rows are
      weighted by the item's share of the brand base in the all-items view */
   const adjFactors = useMemo(() => {
     if (!data.plan && !data.forecast) return [];
     const shares = data.plan?.itemShare ?? data.forecast?.itemShare ?? {};
+    const bShares = data.plan?.brandShare ?? data.forecast?.brandShare ?? {};
     return data.points.map((p) => {
       const w = utc(p.week);
       let f = 1;
       for (const a of brandAdjs) {
         if (utc(a.from) > w || utc(a.to) < w - 6 * DAY) continue;
-        const weight = a.upc === "ALL" ? 1
+        /* A brand-level lever is the whole of its own brand. Inside that
+           brand's view that is the whole series; in the roll-up it is only
+           that brand's share of the total, and on a single item it applies
+           only if the item is that brand's. */
+        const weight = a.upc === "ALL"
+          ? (!allBrands ? 1
+             : data.item !== "ALL" ? (selItemBrand === a.brand ? 1 : 0)
+             : (bShares[a.brand] ?? 0))
           : data.item === "ALL" ? (shares[a.upc] ?? 0)
           : a.upc === data.item ? 1 : 0;
         f *= 1 + (a.pct / 100) * weight;
       }
       return f;
     });
-  }, [data.plan, data.forecast, data.points, data.item, brandAdjs]);
+  }, [data.plan, data.forecast, data.points, data.item, brandAdjs, allBrands, selItemBrand]);
   const hasAdj = adjFactors.some((f) => f !== 1);
   const adjustedPlan = useMemo(() => {
     if (!data.plan) return [];
@@ -878,7 +909,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     ? data.points.reduce((a, p, i) => a + (p.actual === null ? ((hasAdj ? adjustedFc[i] : p.actualFc) ?? 0) : 0), 0)
     : 0;
   const marketName = data.markets.find((m) => m.code === data.mkt)?.name ?? data.mkt;
-  const scopeName = data.itemName ?? data.brand;
+  const scopeName = data.itemName ?? brandLabel;
   const fmtVal = data.metric === "units" ? (v: number) => fmtNum(v) : fmtMoney;
   // YoY compares only the weeks with year-ago data — call out partial coverage
   const yoyLabel = data.yoy && data.yoy.matchedWeeks < data.yoy.totalWeeks
@@ -974,7 +1005,13 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         <select style={selStyle} value={data.mkt} onChange={(e) => nav({ mkt: e.target.value })}>
           {data.markets.map((m) => <option key={m.code} value={m.code}>{m.name}</option>)}
         </select>
-        <select style={selStyle} value={data.brand} onChange={(e) => nav({ brand: e.target.value, item: "ALL" })}>
+        <select
+          style={selStyle}
+          value={data.brand}
+          onChange={(e) => nav({ brand: e.target.value, item: "ALL" })}
+          title="Every Heartland brand at this division, or one brand on its own"
+        >
+          <option value={ALL_BRANDS}>All brands ({data.brands.length})</option>
           {data.brands.map((b) => <option key={b}>{b}</option>)}
         </select>
         <select
@@ -983,10 +1020,23 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           onChange={(e) => nav({ item: e.target.value })}
           title="Items with volume at this division in the latest 52 NIQ weeks"
         >
-          <option value="ALL">All {data.brand} items ({data.items.length})</option>
-          {data.items.map((i) => (
-            <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
-          ))}
+          <option value="ALL">
+            {allBrands ? `All Heartland items (${data.items.length})` : `All ${data.brand} items (${data.items.length})`}
+          </option>
+          {allBrands
+            ? data.brands
+                .map((b) => [b, data.items.filter((i) => i.brand === b)] as const)
+                .filter(([, list]) => list.length > 0)
+                .map(([b, list]) => (
+                  <optgroup key={b} label={`${b} (${list.length})`}>
+                    {list.map((i) => (
+                      <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
+                    ))}
+                  </optgroup>
+                ))
+            : data.items.map((i) => (
+                <option key={i.upc} value={i.upc}>{i.name.length > 44 ? i.name.slice(0, 43) + "…" : i.name}</option>
+              ))}
         </select>
         <select
           style={selStyle}
@@ -1357,7 +1407,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           <div className="card">
             <div className="c-head">
               <h3>Seasonality index</h3>
-              <span className="sub">{marketName} · {data.itemName ? "this item" : data.brand}</span>
+              <span className="sub">{marketName} · {data.itemName ? "this item" : brandLabel}</span>
             </div>
             <div className="chartbox" style={{ height: 320 }}>
               <Line
@@ -1475,7 +1525,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>{data.plan ? "Plan adjustments" : "LE adjustments"} — {data.win}</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {marketName} · {data.brand} · {data.plan
+            {marketName} · {brandLabel} · {data.plan
               ? "distribution, base price and trend levers on the plan base"
               : "levers on the forecast to year-end — measured weeks don't move"}
           </span>
@@ -1503,10 +1553,21 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         )}
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <select style={selStyle} value={aUpc} onChange={(e) => { setAUpc(e.target.value); touchAdj(); }} title="Which item the adjustment applies to">
-            <option value="ALL">All {data.brand} items</option>
-            {data.items.map((i) => (
-              <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
-            ))}
+            <option value="ALL">{allBrands ? "All items of one brand" : `All ${data.brand} items`}</option>
+            {(allBrands
+              ? data.brands
+                  .map((b) => [b, data.items.filter((i) => i.brand === b)] as const)
+                  .filter(([, list]) => list.length > 0)
+                  .map(([b, list]) => (
+                    <optgroup key={b} label={b}>
+                      {list.map((i) => (
+                        <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
+                      ))}
+                    </optgroup>
+                  ))
+              : data.items.map((i) => (
+                  <option key={i.upc} value={i.upc}>{i.name.length > 38 ? i.name.slice(0, 37) + "…" : i.name}</option>
+                )))}
           </select>
           <select style={selStyle} value={aKind}
             onChange={(e) => { setAKind(e.target.value as PlanAdjustment["kind"]); setAReason(""); touchAdj(); }}>
@@ -1549,11 +1610,19 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             style={{ ...selStyle, cursor: adjNext ? "default" : "pointer", opacity: adjNext ? 0.5 : 1,
                      ...(adjNext ? {} : { background: "var(--brand)", borderColor: "transparent", fontWeight: 800 }) }}
             onClick={addAdj}
-            disabled={!!adjNext}
-            title={adjNext ? `Still needed: ${adjNext.label.toLowerCase()}` : "Add this adjustment to the plan"}
+            disabled={!!adjNext || !adjBrand}
+            title={!adjBrand
+              ? "An adjustment belongs to one brand — pick a brand above, or an item here"
+              : adjNext ? `Still needed: ${adjNext.label.toLowerCase()}` : "Add this adjustment to the plan"}
           >
             + Add adjustment
           </button>
+          {!adjBrand && (
+            <span style={{ fontSize: 12, color: "var(--ink-2)" }}>
+              ◇ A lever belongs to one brand. Pick a brand in the top bar — or one item above — to add one. The
+              adjustments already made on each brand are listed below and are in the totals.
+            </span>
+          )}
         </div>
         <div style={{ overflowX: "auto" }}>
           <table>
@@ -1575,7 +1644,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                     <td style={{ padding: "9px 14px" }}>
                       <b>{itemName.length > 44 ? itemName.slice(0, 43) + "…" : itemName}</b>
                       {share !== null && (
-                        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{(share * 100).toFixed(1)}% of brand base</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
+                          {(share * 100).toFixed(1)}% of {allBrands ? "the Heartland base" : "brand base"}
+                        </div>
                       )}
                     </td>
                     <td style={{ padding: "9px 14px" }}>{kindLabel}</td>
@@ -1600,7 +1671,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               })}
               {brandAdjs.length === 0 && (
                 <tr><td colSpan={7} style={{ padding: "16px", color: "var(--ink-3)", fontSize: 12.5 }}>
-                  No adjustments yet for {marketName} · {data.brand} in {data.win}. Add one above — e.g. lost
+                  No adjustments yet for {marketName} · {brandLabel} in {data.win}. Add one above — e.g. lost
                   distribution on an item, a coming price increase, or a trend running hotter or colder than the
                   projection — and the dark <b>{data.plan ? "Adjusted plan" : "LE-adjusted forecast"}</b> line
                   appears on the chart.
@@ -1876,7 +1947,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
           <b>Promotion windows on this trend</b>
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
-            {marketName} · {data.brand}
+            {marketName} · {brandLabel}
             {filtersOn ? <> · showing {tableRows.length} of {data.overlays.length}</> : null}
             {" · "}{fmtMoney(tableRows.reduce((a, o) => a + o.planned_amount, 0))} planned{filtersOn ? " in view" : " in scope"}
           </span>
@@ -2389,7 +2460,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               <div>
                 <div className="mt">Export base units</div>
                 <div className="ms">
-                  {marketName} · {data.brand}{data.itemName ? ` · ${data.itemName}` : " · brand by item"} · {data.winLabel}
+                  {marketName} · {brandLabel}{data.itemName ? ` · ${data.itemName}` : " · brand by item"} · {data.winLabel}
                 </div>
               </div>
               <button className="x" onClick={() => setExpOpen(false)}>✕</button>
@@ -2423,7 +2494,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                     Add adjusted volume + Δ% rows
                     <span style={{ color: "var(--ink-3)", fontWeight: 600 }}>
                       {brandAdjs.length
-                        ? `(${brandAdjs.length} planner adjustment${brandAdjs.length === 1 ? "" : "s"} on ${data.brand} in this browser)`
+                        ? `(${brandAdjs.length} planner adjustment${brandAdjs.length === 1 ? "" : "s"} on ${brandLabel} in this browser)`
                         : "(no planner adjustments recorded for this selection)"}
                     </span>
                   </label>
@@ -2448,7 +2519,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       mkt: data.mkt, brand: data.brand, item: data.item, win: data.win, gran: expGran, fmt: expFmt,
                     };
                     if (data.planningYear && expAdj && brandAdjs.length) {
-                      payload.adjustments = brandAdjs.map((a) => ({ upc: a.upc, pct: a.pct, from: a.from, to: a.to }));
+                      payload.adjustments = brandAdjs.map((a) => ({
+                        upc: a.upc, brand: a.brand, pct: a.pct, from: a.from, to: a.to,
+                      }));
                     }
                     const res = await fetch("/api/base/export", {
                       method: "POST",
