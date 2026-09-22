@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { viewUrlWithin } from "@/lib/process";
 import { Bar, Line } from "react-chartjs-2";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 
@@ -79,6 +80,7 @@ function YoY({ v, suffix = "% YoY" }: { v: number | null; suffix?: string }) {
 export default function ReportingView({ data }: { data: ReportingData }) {
   const tick = useThemeTick();
   const router = useRouter();
+  const pathname = usePathname();
 
   const nav = (patch: Partial<Record<"mkt" | "brand" | "win" | "m" | "item", string>>) => {
     // changing brand or window resets the item scope unless the patch sets it
@@ -88,7 +90,7 @@ export default function ReportingView({ data }: { data: ReportingData }) {
       win: data.plan ? String(data.plan.year) : data.fy ? String(data.fy.year) : String(data.win),
       m: data.metric, item, ...patch,
     });
-    router.push(`/reporting?${p.toString()}`);
+    router.push(`${pathname}?${p.toString()}`);
   };
   const gross = data.metric === "gross";
   const dollarsWord = gross ? "gross dollars (list price)" : "retail dollars";
@@ -391,16 +393,25 @@ export default function ReportingView({ data }: { data: ReportingData }) {
                     <span className="badge" style={{ marginLeft: 8, background: "var(--surface-2)", color: "var(--ink-3)" }}>{KIND[ins.kind]}</span>
                     <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>{ins.detail}</div>
                   </div>
-                  {ins.href && (
-                    <span
-                      className="minichip"
-                      style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
-                      title="Open this division in the Base & Lift Lab"
-                      onClick={() => router.push(ins.href!)}
-                    >
-                      Open in Base & Lift →
-                    </span>
-                  )}
+                  {/* A jump to another view. Inside a process it is only
+                      offered when that view is one of the process's own
+                      steps — otherwise following it would drop the person
+                      out of the corridor, and a non-admin would land back
+                      at the front door. */}
+                  {ins.href && (() => {
+                    const [view, query] = ins.href!.replace(/^\//, "").split("?");
+                    const url = viewUrlWithin(pathname, view, query);
+                    return url ? (
+                      <span
+                        className="minichip"
+                        style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
+                        title="Open this division in the Base & Lift Lab"
+                        onClick={() => router.push(url)}
+                      >
+                        Open in Base &amp; Lift →
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
               );
             })}

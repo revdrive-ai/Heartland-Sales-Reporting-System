@@ -217,3 +217,23 @@ export function writeProcCookie(r: ProcResume) {
 export function resumePath(r: ProcResume): string {
   return processPath(r.kind, r.step, r.planYear);
 }
+
+/* The URL that shows `view` without leaving the corridor.
+
+   Inside a process the browser is on /work/plan/2027/base while the page
+   that actually renders is /base. Anything that navigates to the bare view
+   route drops the person out of the process — the sidebar reappears, and
+   someone who is not an admin is bounced to the front door.
+
+   Returns null when the target has no step in the current process, which is
+   the caller's cue to leave the link out rather than break the corridor. For
+   staying on the SAME page with a new query, use the pathname directly:
+   there may be several steps over one view, and only the current one is
+   right. */
+export function viewUrlWithin(pathname: string, view: string, query?: string): string | null {
+  const q = query ? `?${query}` : "";
+  const loc = parseWorkPath(pathname);
+  if (!loc) return `/${view}${q}`;
+  const step = loc.proc.steps.find((s) => s.view === view);
+  return step ? processPath(loc.proc.kind, step.key, loc.year) + q : null;
+}

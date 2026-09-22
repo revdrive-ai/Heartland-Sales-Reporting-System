@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EVENT_MAX_DAYS } from "@/lib/data/nonPerformanceTypes";
-import { useRouter, useSearchParams } from "next/navigation";
-import { processPath } from "@/lib/process";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { processPath, viewUrlWithin } from "@/lib/process";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
@@ -165,6 +165,7 @@ const YEAR_STYLES = [
 export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?: "distribution" | "newitem" }) {
   const tick = useThemeTick();
   const router = useRouter();
+  const pathname = usePathname();
   const [seasHide, setSeasHide] = useState(false);
   const [showPY, setShowPY] = useState(false);
   const [showYB, setShowYB] = useState(false);
@@ -505,7 +506,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric,
         win: String(nextPlanYear), adj: `${ins.kind}:${ins.upc ?? "ALL"}`,
       });
-      router.push(`/base?${p.toString()}`);
+      router.push(viewUrlWithin(pathname, "base", p.toString()) ?? processPath("plan", "base", nextPlanYear) + `?${p.toString()}`);
       router.refresh();
     }
   };
@@ -577,9 +578,14 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     });
   };
 
+  /* Stay on the URL the person is actually on. Inside a process that is
+     /work/plan/2027/base, and pushing the bare /base would quietly drop them
+     out of it — which is how changing a brand used to bring the sidebar
+     back. Not viewUrlWithin: three plan steps render this same view and only
+     the current one is the right place to stay. */
   const nav = (patch: Partial<Record<"mkt" | "brand" | "item" | "metric" | "win", string>>) => {
     const p = new URLSearchParams({ mkt: data.mkt, brand: data.brand, item: data.item, metric: data.metric, win: data.win, ...patch });
-    router.push(`/base?${p.toString()}`);
+    router.push(`${pathname}?${p.toString()}`);
   };
 
   /* Dated price-change markers: the server's (from the ingested list) plus

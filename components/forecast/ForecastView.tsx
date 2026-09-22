@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import type { ModeKind } from "@/lib/mode";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Bar } from "react-chartjs-2";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
 
@@ -67,13 +67,14 @@ const STATUS: Record<string, { label: string; bg: string; fg: string; title: str
 export default function ForecastView({ data, mode, planYear }: { data: ForecastData; mode: ModeKind; planYear: number }) {
   const tick = useThemeTick();
   const router = useRouter();
+  const pathname = usePathname();
   const nav = (patch: Partial<Record<"mkt" | "brand" | "item" | "cmp", string>>) => {
     const p = new URLSearchParams({
       mkt: data.mkt, brand: data.brand, item: data.item,
       cmp: (data.le?.comparisons ?? []).map((c) => c.key).join(","),
       ...patch,
     });
-    router.push(`/forecast?${p.toString()}`);
+    router.push(`${pathname}?${p.toString()}`);
   };
   /** replace one comparison slot; "" clears it */
   const setCmp = (slot: number, key: string) => {
