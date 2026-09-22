@@ -30,6 +30,10 @@ export type ProcessStep = {
   open?: StepModal;
   /** This step asks a question in the rail rather than advancing blindly. */
   chooser?: "new-items";
+  /** Its work belongs to one customer, so it cannot start until the top bar
+      names one. Distribution is confirmed per account and a new item joins
+      one account's plan — neither is a thing to do for a territory. */
+  perAccount?: true;
 };
 
 export type ProcessDef = {
@@ -91,6 +95,7 @@ export const PROCESSES: ProcessDef[] = [
         blurb: "Confirm which of last year's items carry volume into the plan year at this customer.",
         view: "base",
         open: "distribution",
+        perAccount: true,
       },
       {
         key: "new-items",
@@ -98,6 +103,7 @@ export const PROCESSES: ProcessDef[] = [
         blurb: "Anything launching in the plan year — or say there are none, and move on.",
         view: "base",
         chooser: "new-items",
+        perAccount: true,
       },
       {
         key: "base",

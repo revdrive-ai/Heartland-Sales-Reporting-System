@@ -87,19 +87,22 @@ export default function ProcessRail({
      work below is not browsable yet — it is about to change depending on
      the answer — so it is dimmed and made inert rather than left looking
      usable. The top bar stays live: scope is what the answer applies to.
-     There is nothing to hold the page for until the top bar names a single
-     account: the question cannot be answered for a territory, so the step
-     asks for an account instead and the page stays usable. */
+     A per-account step holds the page the same way before an account is
+     even chosen. That is not a trap: the top bar sits above the scrim, so
+     the one thing left to do is the one thing still lit. */
+  const oneAccount = inScope.length === 1;
+  const needsAccount = !!step.perAccount && !oneAccount;
   const needsChoice =
-    step.chooser === "new-items" && inScope.length === 1 && !!status && status.newItems < status.customers;
+    step.chooser === "new-items" && oneAccount && !!status && status.newItems < status.customers;
+  const hold = needsAccount || needsChoice;
   const prev = index > 0 ? proc.steps[index - 1] : null;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
   const many = proc.steps.length > 1;
 
   return (
     <>
-    {needsChoice && <div className="stepscrim" aria-hidden="true" />}
-    <div className={"prail " + proc.kind + (needsChoice ? " needs" : "")}>
+    {hold && <div className="stepscrim" aria-hidden="true" />}
+    <div className={"prail " + proc.kind + (hold ? " needs" : "")}>
       <div className="prail-top">
         <Link href="/start" className="pback" title="Back to the front door — your place is saved">
           ← All work
@@ -112,7 +115,7 @@ export default function ProcessRail({
         <span className="pscope" title="The customers this step applies to — change them in the top bar">
           {scopeLabel}
         </span>
-        {needsChoice && <span className="pneeds">Choose one to continue</span>}
+        {hold && <span className="pneeds">{needsAccount ? "Pick an account" : "Choose one to continue"}</span>}
         {many && <span className="pcount">Step {index + 1} of {proc.steps.length}</span>}
         {year && (
           <StepReset
@@ -148,7 +151,19 @@ export default function ProcessRail({
           BEFORE one loses its next button: "Add new items →" presumed the
           answer, which is why it read as broken — it walked you past the
           question rather than to it. A plain step keeps its button. */}
-      {step.chooser === "new-items" && year ? (
+      {needsAccount ? (
+        <div className="prail-foot chooser">
+          <span className="pblurb">{step.blurb}</span>
+          <div className="pickfirst">
+            ◇ <span>
+              The top bar is on <b>{scopeLabel}</b>
+              {inScope.length ? <>, which is {inScope.length} accounts</> : null}. This step belongs to one
+              account — distribution is confirmed per account and a new item joins one account&apos;s plan — so
+              pick one under <b>Account</b> in the top bar. It is the only thing still lit.
+            </span>
+          </div>
+        </div>
+      ) : step.chooser === "new-items" && year ? (
         <div className="prail-foot chooser">
           <span className="pblurb">{step.blurb}</span>
           <StepChoices

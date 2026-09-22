@@ -29,6 +29,11 @@ export default function FrontDoor({
     // the middleware sets the same value on the way through
     writeModeCookie({ kind, planYear: year ?? mode.planYear });
     router.push(processPath(kind, undefined, year));
+    /* And refresh: the front door and the process share a root layout, which
+       Next therefore does not re-render across this navigation — the rail
+       would open with the counts this page computed, which for Analyze is
+       none at all. */
+    router.refresh();
   };
 
   const resumeProc = resume ? processFor(resume.kind) : undefined;
@@ -49,7 +54,7 @@ export default function FrontDoor({
       </div>
 
       {resume && resumeProc && resumeStep && (
-        <button className="resume" onClick={() => router.push(resumePath(resume))}>
+        <button className="resume" onClick={() => { router.push(resumePath(resume)); router.refresh(); }}>
           <span className="ic" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS.clock ?? "" }} />
           <span className="rt">
             <b>Pick up where you left off</b>
@@ -105,7 +110,7 @@ export default function FrontDoor({
 
       {admin && (
         <div className="adminrow">
-          <button className="adminbtn" onClick={() => router.push("/reporting")}>
+          <button className="adminbtn" onClick={() => { router.push("/reporting"); router.refresh(); }}>
             <span className="ic" aria-hidden="true" dangerouslySetInnerHTML={{ __html: ICONS.map ?? "" }} />
             <span className="at">
               <b>Admin</b>

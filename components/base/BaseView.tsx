@@ -363,10 +363,17 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   /* Keyed on WHICH modal, not on whether one has ever opened. Stepping from
      1 to 2 is a soft navigation between two URLs that both render this view,
      so the component stays mounted — a one-shot flag meant the second step
-     silently did nothing. */
+     silently did nothing.
+
+     It waits for one account. Distribution is confirmed per account, and on
+     a wide scope this page falls back to the first market on file — opening
+     the list for whichever account that happened to be is worse than opening
+     nothing. The rail holds the page and asks for one; narrowing the top bar
+     re-renders this with a single market, and the effect fires then. */
   const openedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!autoOpen || !data.distVer || openedFor.current === autoOpen) return;
+    if (!autoOpen || !data.distVer || data.markets.length !== 1) return;
+    if (openedFor.current === autoOpen) return;
     openedFor.current = autoOpen;
     if (autoOpen === "distribution") void openDv();
     else void openDvAdd();

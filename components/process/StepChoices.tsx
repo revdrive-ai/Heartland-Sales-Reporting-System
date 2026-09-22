@@ -14,9 +14,9 @@ import { ADD_ITEM_EVENT } from "@/lib/process";
 
    ONE ACCOUNT AT A TIME, like starting over. The answer is recorded per
    customer and a new item is added to one customer's plan, so neither is a
-   question that can be answered for a territory. Until the top bar names a
-   single account the step says so instead of offering a button that would
-   answer for thirteen. */
+   question that can be answered for a territory. The rail does not render
+   this at all until the top bar names one account; `one` is the belt to
+   that braces. */
 
 export default function StepChoices({
   year,
@@ -53,20 +53,6 @@ export default function StepChoices({
       setBusy(false);
     }
   };
-
-  if (!one) {
-    return (
-      <div className="pickfirst">
-        ◇ <span>
-          The top bar is on <b>{scopeLabel}</b>
-          {markets.length ? <>, which is {markets.length} accounts</> : null}. New items are added to one
-          account&apos;s plan and &ldquo;none this year&rdquo; is recorded against one account, so this step is
-          answered one at a time — that is what &ldquo;of {markets.length || 13} accounts&rdquo; above counts.
-          Pick one under <b>Account</b> in the top bar.
-        </span>
-      </div>
-    );
-  }
 
   return (
     <div className="stepchoices">
