@@ -220,9 +220,19 @@ export default async function Page({
 
   /* Seasonality index over the full history: monthly average weekly base
      units (the promo-stripped series) against the all-weeks average — the
-     "engine" curve — plus each year's own actuals-derived index. */
+     "engine" curve — plus each year's own actuals-derived index.
+
+     Built from the items that STILL SELL — volume in the latest 52 measured
+     weeks — not from every item the brand ever had here. A delisted item's
+     history describes a shape that is no longer on the shelf, and at this
+     division it was doing real damage: ten dead SLIMFAST items, all launched
+     the same July week in 2023, gave August an index of 1.54 and projected
+     the two remaining items at half again their run-rate. The trend lines
+     above still show every item's history; only the shape used to project
+     is drawn from the items the projection is for. */
   const weekBase = new Map<string, number>();
   for (const r of scoped) {
+    if (item === "ALL" && !upcsWithVolume.has(r.upc)) continue;
     const v = (r.base_units ?? r.units ?? 0);
     weekBase.set(r.week_ending, (weekBase.get(r.week_ending) ?? 0) + v);
   }

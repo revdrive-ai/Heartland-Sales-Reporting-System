@@ -150,10 +150,19 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
       mB.set(r.week_ending, (mB.get(r.week_ending) ?? 0) + v);
     }
 
-    // monthly seasonality index over the brand's full history
+    // monthly seasonality index over the full history of the items that
+    // STILL SELL (volume in the latest 52 weeks) — delisted items' history is
+    // a shape no longer on the shelf, and it is not allowed to steer the
+    // projection. The Base Business Review and the planner build it the same way.
+    const live = new Set(facts.filter((r) => r.week_ending >= (last52[0] ?? "") && (r.units ?? 0) > 0).map((r) => r.upc));
+    const mBlive = new Map<string, number>();
+    for (const [u, im] of mI) {
+      if (!live.has(u)) continue;
+      for (const [w, v] of im) mBlive.set(w, (mBlive.get(w) ?? 0) + v);
+    }
     const monthTot = Array(12).fill(0), monthN = Array(12).fill(0);
     let gTot = 0, gN = 0;
-    for (const [w, v] of mB) {
+    for (const [w, v] of mBlive) {
       const mo = +w.slice(5, 7) - 1;
       monthTot[mo] += v; monthN[mo] += 1; gTot += v; gN += 1;
     }

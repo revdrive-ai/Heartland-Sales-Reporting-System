@@ -232,9 +232,18 @@ export default async function Page() {
            The brand series is the sum of its items, so an item-level lever is
            weighted exactly by that item's volume. */
         {
+          /* The engine's shape comes from the items that still sell — volume
+             in the latest 52 weeks — never from delisted items' history (see
+             the Base Business Review, which builds it the same way). */
+          const live = new Set(facts.filter((r) => r.week_ending >= (m52[0] ?? "") && (r.units ?? 0) > 0).map((r) => r.upc));
+          const mBlive = new Map<string, number>();
+          for (const [u, im] of mI) {
+            if (!live.has(u)) continue;
+            for (const [w, v] of im) mBlive.set(w, (mBlive.get(w) ?? 0) + v);
+          }
           const mTot = Array(12).fill(0), mN = Array(12).fill(0);
           let gTot = 0, gN = 0;
-          for (const [w, v] of mB) {
+          for (const [w, v] of mBlive) {
             const mo = +w.slice(5, 7) - 1;
             mTot[mo] += v; mN[mo] += 1; gTot += v; gN += 1;
           }
