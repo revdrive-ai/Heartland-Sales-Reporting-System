@@ -9,6 +9,8 @@ import {
 import { getPriceEdits } from "@/lib/repo/client";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { parseWorkPath } from "@/lib/process";
 import { usePromoLines } from "./lines";
 import { eventBaseProfile, eventUnitPrice, itemBaseProfile, itemWeeklyBase, listPriceAsOf, windowIdx, type DatedPrice, type PlanPayload } from "./planMath";
 import type { PlannerData } from "./PlannerView";
@@ -108,8 +110,24 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [impMsg, setImpMsg] = useState<string | null>(null);
 
+  /* Where the plan starts. Building the plan opens — in the plan corridor —
+     by asking whether to copy last year's deals for this account, or start
+     from a blank calendar. It asks when the base review has just been
+     submitted (?carry=ask), and on any arrival while this account has
+     nothing carried and nothing entered yet, unless "from scratch" was
+     already chosen for it. Once deals are carried it never asks again:
+     carrying twice would double the calendar. */
+  const pathname = usePathname();
+  const router = useRouter();
+  const search = useSearchParams();
+  const inPlanProcess = parseWorkPath(pathname)?.proc.kind === "plan";
+  const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [carryAsk, setCarryAsk] = useState<"done" | null>(null);
+  const custIds = useMemo(() => new Set(plan.customers.map((c) => c.id)), [plan.customers]);
+  const scratchKey = `hhPlanScratch:${year}:${[...custIds].sort().join(",")}`;
+
   useEffect(() => {
-    getPlanEvents(year).then((es) => { latestEvents.current = es; setEvents(es); });
+    getPlanEvents(year).then((es) => { latestEvents.current = es; setEvents(es); setEventsLoaded(true); });
     getPlanBudget(budgetKey).then((b) => setBudget(b ?? plan.priorPlannedTotal));
   }, [year, budgetKey, plan.priorPlannedTotal]);
 
@@ -507,6 +525,32 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     setImpMsg(`✓ Carried ${rows.length} events forward from the FY${plan.priorYear} book (windows shifted ${shift} days to keep weekdays).`);
   };
 
+  // decide once, when the events are in, whether this arrival asks the question
+  const mine = events.filter((e) => custIds.has(e.customer_id));
+  const alreadyCarried = mine.some((e) => e.origin === "carry");
+  const askNow = inPlanProcess && eventsLoaded && carryAsk === null && !alreadyCarried && (() => {
+    if (search.get("carry") === "ask") return true;
+    if (mine.length) return false;
+    try { return localStorage.getItem(scratchKey) !== "1"; } catch { return true; }
+  })();
+  const closeCarryAsk = () => {
+    setCarryAsk("done");
+    if (search.get("carry")) router.replace(pathname);
+  };
+  const chooseCarry = async () => {
+    await carryForward();
+    try { localStorage.removeItem(scratchKey); } catch {}
+    closeCarryAsk();
+    // once the carried events have landed, let the rail count them
+    await persistQueue.current;
+    router.refresh();
+  };
+  const chooseScratch = () => {
+    try { localStorage.setItem(scratchKey, "1"); } catch {}
+    closeCarryAsk();
+    setWizardOpen(true);
+  };
+
   const tmplDl = () => {
     const rows = [
       ["title", "customer", "brand", "performance_type", "start", "end", "spend_usd", "lift_pct", "note"],
@@ -613,8 +657,41 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           {roi.toFixed(1)}×
         </span>;
 
+  const carryTotal = plan.copySource.reduce((a, p) => a + (p.planned || 0), 0);
   return (
     <div className="view active">
+
+      {askNow && (
+        <div className="modal open">
+          <div className="box" style={{ width: 560 }}>
+            <div className="m-head">
+              <div>
+                <div className="mt">How should the {year} plan start?</div>
+                <div className="ms">
+                  {plan.customers.length === 1 ? plan.customers[0].name : `${plan.customers.length} customers`} · the base is reviewed; now the promotions.
+                </div>
+              </div>
+            </div>
+            <div className="m-body" style={{ padding: "14px 20px", display: "block" }}>
+              <div className="stepchoices">
+                <button className="gatepick go" onClick={chooseCarry} disabled={!plan.copySource.length}>
+                  <b>Copy the FY{plan.priorYear} deals</b>
+                  <span>
+                    {plan.copySource.length
+                      ? <>Carry the {plan.copySource.length} FY{plan.priorYear} promotion{plan.copySource.length === 1 ? "" : "s"} ({fmtMoney(carryTotal)} planned) into {year},
+                          windows shifted to keep weekdays aligned. Every event stays editable.</>
+                      : <>There are no FY{plan.priorYear} promotions booked for this account to copy.</>}
+                  </span>
+                </button>
+                <button className="gatepick" onClick={chooseScratch}>
+                  <b>Start from scratch</b>
+                  <span>A blank {year} calendar — the event wizard opens so you can enter the first one.</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="pagehead">
         <div>

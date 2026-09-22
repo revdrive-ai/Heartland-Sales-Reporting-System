@@ -1853,6 +1853,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             const doc: BaseReview = { verified_at: new Date().toISOString(), summary: cur };
             await saveBaseReview(data.mkt, planYear, doc);
             setReview(doc);
+            /* Submitting is the end of this step: go straight on to building
+               the plan, which opens by asking whether to start from last
+               year's deals. Outside the corridor there is no next step. */
+            if (inPlanProcess) router.push(`${processPath("plan", "planner", planYear)}?carry=ask`);
             router.refresh();
           } finally {
             setReviewBusy(false);
@@ -1936,7 +1940,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                     ? <>The plan has moved since this was submitted — read it back and submit again.</>
                     : owed.length
                       ? <>Finish {owed.map((o) => o.text.toLowerCase()).join(" and ")} first.</>
-                      : <>Submitting records this read and marks the step done.</>}
+                      : <>Submitting records this read, marks the step done{inPlanProcess ? " and moves on to building the plan" : ""}.</>}
               </span>
               <button className={"btn" + (ready ? " primary" : "")} onClick={submit} disabled={!ready || reviewBusy}
                 title={ready ? "Record the base review for this account" : owed.map((o) => o.text).join(" · ") || "Loading…"}>
