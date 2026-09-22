@@ -1953,7 +1953,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
           <div className="box" style={{ width: 620 }}>
             <div className="m-head">
               <div>
-                <div className="mt">Add a new item to Plan {data.distVer.year}</div>
+                <div className="mt">Add a new item to Plan {data.distVer.year} — {marketName}</div>
                 <div className="ms">
                   {dvNew
                     ? "Which item should it copy volume and seasonality from, and when does it ship and hit the shelf?"

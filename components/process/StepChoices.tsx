@@ -10,7 +10,13 @@ import { ADD_ITEM_EVENT } from "@/lib/process";
    There is no "continue" button on this step because there is nothing to
    continue past: either there are new items or there are not, and both
    answers move the plan on. Saying there are none is recorded per customer,
-   which is what lets the step read as done. */
+   which is what lets the step read as done.
+
+   ONE ACCOUNT AT A TIME, like starting over. The answer is recorded per
+   customer and a new item is added to one customer's plan, so neither is a
+   question that can be answered for a territory. Until the top bar names a
+   single account the step says so instead of offering a button that would
+   answer for thirteen. */
 
 export default function StepChoices({
   year,
@@ -28,16 +34,17 @@ export default function StepChoices({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  /* Answers for every customer the top bar has in scope — which is the point
-     of scoping first. The label says how many, so the reach is never a
-     surprise. A customer that already has items is left alone: "none" would
-     contradict what is already there. */
+  const one = markets.length === 1;
+
+  /* The answer belongs to one customer. A customer that already has items is
+     left alone — "none" would contradict what is already there. */
   const none = async () => {
+    if (!one) return;
     setBusy(true);
     try {
-      for (const code of markets) {
-        const doc = await getDistVerification(code, year);
-        if (doc.additions.length) continue;
+      const code = markets[0];
+      const doc = await getDistVerification(code, year);
+      if (!doc.additions.length) {
         await saveDistVerification(code, year, { ...doc, no_additions: new Date().toISOString() });
       }
       router.push(nextHref);
@@ -47,18 +54,30 @@ export default function StepChoices({
     }
   };
 
-  const reach = markets.length === 1 ? scopeLabel : `all ${markets.length} accounts in scope`;
+  if (!one) {
+    return (
+      <div className="pickfirst">
+        ◇ <span>
+          The top bar is on <b>{scopeLabel}</b>
+          {markets.length ? <>, which is {markets.length} accounts</> : null}. New items are added to one
+          account&apos;s plan and &ldquo;none this year&rdquo; is recorded against one account, so this step is
+          answered one at a time — that is what &ldquo;of {markets.length || 13} accounts&rdquo; above counts.
+          Pick one under <b>Account</b> in the top bar.
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="stepchoices">
-      <button className="gatepick go" onClick={none} disabled={busy || !markets.length}>
+      <button className="gatepick go" onClick={none} disabled={busy}>
         <b>{added ? `Done — ${added} added` : `No new items for ${year}`}</b>
         <span>
           {busy
             ? "Recording…"
             : added
               ? `They ride into the ${year} base. On to Base & Lift.`
-              : `Recorded for ${reach}, and Base & Lift opens next.`}
+              : `Recorded for ${scopeLabel}, and Base & Lift opens next.`}
         </span>
       </button>
       <button
@@ -67,7 +86,7 @@ export default function StepChoices({
         disabled={busy}
       >
         <b>Add a new item</b>
-        <span>Pick from the list of every item in the system, or enter one by hand.</span>
+        <span>Added to {scopeLabel} — pick from the list of every item in the system, or enter one by hand.</span>
       </button>
     </div>
   );

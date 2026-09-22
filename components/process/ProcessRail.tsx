@@ -86,9 +86,12 @@ export default function ProcessRail({
   /* A step that asks a question holds the page until it is answered. The
      work below is not browsable yet — it is about to change depending on
      the answer — so it is dimmed and made inert rather than left looking
-     usable. The top bar stays live: scope is what the answer applies to. */
+     usable. The top bar stays live: scope is what the answer applies to.
+     There is nothing to hold the page for until the top bar names a single
+     account: the question cannot be answered for a territory, so the step
+     asks for an account instead and the page stays usable. */
   const needsChoice =
-    step.chooser === "new-items" && !!status && status.newItems < status.customers;
+    step.chooser === "new-items" && inScope.length === 1 && !!status && status.newItems < status.customers;
   const prev = index > 0 ? proc.steps[index - 1] : null;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
   const many = proc.steps.length > 1;
