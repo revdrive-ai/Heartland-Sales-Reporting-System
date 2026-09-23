@@ -6,7 +6,7 @@ import { getState } from "@/lib/server/appstate";
 import { computePlanBase } from "@/lib/server/planSnapshot";
 import { readDistVerification } from "@/lib/distver";
 import { readBaseReview } from "@/lib/basereview";
-import { readPlanBuilt } from "@/lib/planbuilt";
+import { planSig, readPlanBuilt } from "@/lib/planbuilt";
 import { CROSSWALK } from "@/lib/scope";
 import type { PlanAdjustment, PlanEvent } from "@/lib/repo/client";
 import ReviewView, { type ReviewData } from "@/components/review/ReviewView";
@@ -52,6 +52,7 @@ export default async function Page() {
     getState(`planbuilt:${one.code}:${year}`).catch(() => undefined),
   ]);
   const baseReview = readBaseReview(brRaw);
+  const planBuilt = readPlanBuilt(pbRaw);
   const dv = readDistVerification(dvRaw);
   const adjs = (Array.isArray(adjRaw) ? adjRaw : []) as PlanAdjustment[];
   const ids = telusIdsFor(one.code);
@@ -94,7 +95,9 @@ export default async function Page() {
           kind: a.kind, pct: a.pct, from: a.from, to: a.to, note: a.note,
         })),
       baseReviewedAt: baseReview.verified_at,
-      planBuiltAt: readPlanBuilt(pbRaw).built_at,
+      planBuiltAt: planBuilt.built_at,
+      totals: planBuilt.totals ?? null,
+      totalsStale: !!planBuilt.totals && planBuilt.totals.sig !== planSig(events),
       base: live
         ? {
             total: live.totals.base,

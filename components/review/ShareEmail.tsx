@@ -30,6 +30,28 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
    mail apps (Outlook on Windows among them), so the draft is kept under it. */
 const MAILTO_MAX = 1900;
 
+const money = (v: number) => {
+  const x = Math.abs(v);
+  const t = x >= 1e6 ? `$${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `$${Math.round(x / 1e3).toLocaleString()}K` : `$${Math.round(x)}`;
+  return v < 0 ? `-${t}` : t;
+};
+
+/** The plan financials row — gross sales, margin after trade, trade spend —
+    each against the prior year; null until Build the plan is submitted. */
+function finLines(a: Account): [string, string, string][] | null {
+  const t = a.totals;
+  if (!t) return null;
+  const vs = (now: number, prior: number) =>
+    `${prior ? `${now >= prior ? "+" : "-"}${Math.abs((now / prior - 1) * 100).toFixed(1)}%` : "n/a"} vs FY${t.priorYear} ${money(prior)}`;
+  const m = t.gross - t.spend, mp = t.grossPrior - t.spendPrior;
+  const pct = (x: number, g: number) => (g > 0 ? `${((x / g) * 100).toFixed(1)}%` : "n/a");
+  return [
+    ["Gross sales plan", money(t.gross), `${vs(t.gross, t.grossPrior)}; target ${money(t.grossTarget)}`],
+    ["Gross margin after trade", `${money(m)} (${pct(m, t.gross)} of gross)`, vs(m, mp)],
+    ["Trade spend plan", money(t.spend), `${vs(t.spend, t.spendPrior)}; fund ${money(t.fund)}`],
+  ];
+}
+
 function statusLine(sub: Sub) {
   return sub ? `Submitted ${sub.takenAt.slice(0, 10)} as v${sub.seq}` : "Not yet submitted";
 }
@@ -57,6 +79,12 @@ function plainBody(a: Account, year: number, sub: Sub, owed: Owed, note: string,
   const L: string[] = [];
   if (note.trim()) L.push(note.trim(), "");
   L.push(`PLAN ${year} — ${a.name}`, `${statusLine(sub)} · NIQ through ${a.dataEdge}`, "");
+  const fin = finLines(a);
+  if (fin) {
+    L.push(...fin.map(([k, v, d]) => `${k}: ${v} (${d})`));
+    if (a.totalsStale) L.push("(events have changed since these were taken)");
+    L.push("");
+  }
   L.push(
     `Full-year plan base: ${a.base ? `${fmtK(a.base.adjusted)} units` : "—"}${a.base && a.base.adjusted !== a.base.total ? ` (unadjusted ${fmtK(a.base.total)})` : ""}`,
     `Distribution: ${a.distribution.verifiedAt ? "Verified" : "Unverified"} · ${a.distribution.out.length} no volume · ${a.newItems.additions.length} new`,
@@ -108,6 +136,12 @@ function htmlBody(a: Account, year: number, sub: Sub, owed: Owed, note: string) 
     ["Plan adjustments", String(a.adjustments.length)],
     ["Promotion events", `${a.events.count} · ${fmt$(a.events.spend)}`],
   ].map(([k, v]) => `<td style="padding:6px 14px 6px 0"><div style="font-size:11px;color:#555">${k}</div><b style="font-size:15px">${esc(v)}</b></td>`).join("")}</tr></table>`);
+  const fin = finLines(a);
+  if (fin) {
+    out.push(`<table style="border-collapse:collapse;margin:0 0 10px"><tr>${fin.map(([k, v, d]) =>
+      `<td style="padding:6px 16px 6px 0;vertical-align:top"><div style="font-size:11px;color:#555">${esc(k)}</div><b style="font-size:15px">${esc(v)}</b><div style="font-size:11px;color:#555">${esc(d)}</div></td>`).join("")}</tr></table>`);
+    if (a.totalsStale) out.push('<div style="font-size:11px;color:#e08a00">Events have changed since these were taken.</div>');
+  }
   if (owed.length) out.push(`<p style="background:#fff8e6;padding:8px 10px;border:1px solid #e08a00;border-radius:6px"><b>Still to do</b><br>${owed.map((o) => esc(o.text)).join("<br>")}</p>`);
   out.push(h(1, "Review distribution", s.dist));
   if (a.distribution.out.length) out.push(`<ul>${a.distribution.out.map((o) => `<li>No volume: ${esc(o.name)} · ${esc(o.brand)}</li>`).join("")}</ul>`);

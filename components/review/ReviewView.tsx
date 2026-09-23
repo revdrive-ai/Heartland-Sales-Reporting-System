@@ -6,6 +6,7 @@ import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { parseWorkPath, processPath } from "@/lib/process";
 import ShareEmail from "./ShareEmail";
+import type { PlanTotals } from "@/lib/planbuilt";
 
 /* The plan's read-back, and the one place it is submitted from.
 
@@ -51,6 +52,10 @@ export type ReviewData = {
     baseReviewedAt: string | null;
     /** when Build the plan was submitted from its events card, if it has been */
     planBuiltAt: string | null;
+    /** the plan's money as Build the plan had it when submitted, if it has been */
+    totals: PlanTotals | null;
+    /** the events have changed since those totals were taken */
+    totalsStale: boolean;
     base: null | { total: number; adjusted: number; byBrand: { brand: string; base: number; adjusted: number }[] };
     events: {
       count: number; spend: number; manual: number; carried: number;
@@ -67,6 +72,22 @@ export type ReviewData = {
 const fmtK = (n: number) => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000)}K` : Math.round(n).toLocaleString());
 const fmt$ = (n: number) => `$${fmtK(n)}`;
 const KIND: Record<string, string> = { distribution: "Distribution", price: "Base price", trend: "Trend" };
+const money = (v: number) => {
+  const x = Math.abs(v);
+  const t = x >= 1e6 ? `$${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `$${Math.round(x / 1e3).toLocaleString()}K` : `$${Math.round(x)}`;
+  return v < 0 ? `−${t}` : t;
+};
+/** "+2.4% vs FY2026 $1.20M", coloured by whether up is good for this number. */
+function VsPrior({ now, prior, year, up }: { now: number; prior: number; year: number; up: "good" | "neutral" }) {
+  const d = prior ? (now / prior - 1) * 100 : null;
+  const color = d === null || up === "neutral" || Math.abs(d) < 0.05 ? "var(--ink-2)" : d > 0 ? "var(--good)" : "var(--bad)";
+  return (
+    <div className="k-sub">
+      <b style={{ color }}>{d === null ? "—" : `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}%`}</b>
+      <span style={{ color: "var(--ink-3)" }}> vs FY{year} {money(prior)}</span>
+    </div>
+  );
+}
 
 export default function ReviewView({ data }: { data: ReviewData }) {
   const router = useRouter();
@@ -184,6 +205,82 @@ export default function ReviewView({ data }: { data: ReviewData }) {
             : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>not yet submitted</span>}
         </div>
       </div>
+
+      {/* The plan's money — the two numbers that drive it (gross sales and
+          trade) and what is left between them — each against the year
+          before. Taken from Build the plan when it was submitted, since they
+          need the whole planner to compute. Margin here is AFTER TRADE: gross
+          sales less trade spend. There is no product cost in the data yet. */}
+      {(() => {
+        const t = a.totals;
+        const planHref = stepHref("planner");
+        const margin = t ? t.gross - t.spend : 0;
+        const marginPrior = t ? t.grossPrior - t.spendPrior : 0;
+        const pctOf = (m: number, g: number) => (g > 0 ? `${((m / g) * 100).toFixed(1)}%` : "—");
+        const gap = t ? t.gross - t.grossTarget : 0;
+        const avail = t ? t.fund - t.spend : 0;
+        return (
+          <>
+            <div className="revfin-head">
+              <b>Plan financials</b>
+              <span>
+                {t && a.planBuiltAt
+                  ? <>as Build the plan had them when it was submitted, {a.planBuiltAt.slice(0, 10)} · gross sales at list price</>
+                  : <>fill in when Build the plan is submitted{planHref && <span className="noprint"> — <Link href={planHref}>go to that step →</Link></span>}</>}
+              </span>
+            </div>
+            {a.totalsStale && (
+              <div className="note revfin-stale">
+                ◇ The events have changed since these were taken — <b>Submit the plan</b> again on Build the plan to bring them up to date.
+                {planHref && <span className="noprint"> <Link href={planHref}>Go to Build the plan →</Link></span>}
+              </div>
+            )}
+            <div className="kpis three revfin">
+              <div className="kpi">
+                <div className="k-top"><span className="k-label">Gross sales plan</span></div>
+                <div className="k-val">{t ? money(t.gross) : "—"}</div>
+                {t ? (
+                  <>
+                    <VsPrior now={t.gross} prior={t.grossPrior} year={t.priorYear} up="good" />
+                    <div className="k-sub" style={{ color: "var(--ink-3)" }}>
+                      target {money(t.grossTarget)} ·{" "}
+                      <b style={{ color: gap >= 0 ? "var(--good)" : "var(--warn)" }}>{gap >= 0 ? `ahead ${money(gap)}` : `short ${money(-gap)}`}</b>
+                    </div>
+                  </>
+                ) : <div className="k-sub" style={{ color: "var(--ink-3)" }}>base + promotion lift, at list price</div>}
+              </div>
+              <div className="kpi">
+                <div className="k-top"><span className="k-label">Heartland gross margin · after trade</span></div>
+                <div className="k-val">
+                  {t ? money(margin) : "—"}
+                  {t && <span className="k-pct">{pctOf(margin, t.gross)} of gross</span>}
+                </div>
+                {t ? (
+                  <>
+                    <VsPrior now={margin} prior={marginPrior} year={t.priorYear} up="good" />
+                    <div className="k-sub" style={{ color: "var(--ink-3)" }}>
+                      FY{t.priorYear} {pctOf(marginPrior, t.grossPrior)} of gross · gross sales − trade spend
+                    </div>
+                  </>
+                ) : <div className="k-sub" style={{ color: "var(--ink-3)" }}>gross sales − trade spend</div>}
+              </div>
+              <div className="kpi">
+                <div className="k-top"><span className="k-label">Total trade spend plan</span></div>
+                <div className="k-val">{t ? money(t.spend) : "—"}</div>
+                {t ? (
+                  <>
+                    <VsPrior now={t.spend} prior={t.spendPrior} year={t.priorYear} up="neutral" />
+                    <div className="k-sub" style={{ color: "var(--ink-3)" }}>
+                      fund {money(t.fund)} ·{" "}
+                      <b style={{ color: avail >= 0 ? "var(--good)" : "var(--bad)" }}>{avail >= 0 ? `${money(avail)} available` : `over by ${money(-avail)}`}</b>
+                    </div>
+                  </>
+                ) : <div className="k-sub" style={{ color: "var(--ink-3)" }}>committed by the plan&apos;s events</div>}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       <div className="kpis">
         <div className="kpi">

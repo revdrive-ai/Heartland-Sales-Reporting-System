@@ -794,6 +794,17 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .revact input{flex:1 1 220px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
 .revact input:disabled{opacity:.6}
 
+/* Review & submit — the plan financials row */
+.revfin-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 8px}
+.revfin-head b{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.revfin-head span{font-size:12px;color:var(--ink-3)}
+.revfin-stale{margin:0 0 10px}
+.kpis.revfin{margin-bottom:14px}
+.kpis.revfin .kpi{border-top:3px solid var(--brand)}
+.kpis.revfin .k-sub+.k-sub{margin-top:3px}
+.kpis.revfin .k-pct{font-size:13px;font-weight:700;color:var(--ink-2);margin-left:8px}
+@media (max-width:900px){.kpis.revfin{grid-template-columns:1fr}}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}
@@ -836,6 +847,11 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   .revprint .pagehead .actions{display:none}
 
   .revprint .kpis{grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .revprint .kpis.three{grid-template-columns:repeat(3,1fr)}
+  .revprint .revfin-head{margin-bottom:5px}
+  .revprint .revfin-head b,.revprint .revfin-head span{font-size:9.5px}
+  .revprint .revfin-stale{font-size:9.5px;margin-bottom:6px}
+  .revprint .kpis.revfin .k-pct{font-size:10px}
   .revprint .kpi{padding:8px 10px;break-inside:avoid}
   .revprint .k-label{font-size:9.5px}
   .revprint .k-val{font-size:19px}

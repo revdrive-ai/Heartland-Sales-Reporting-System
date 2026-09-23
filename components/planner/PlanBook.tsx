@@ -7,6 +7,7 @@ import {
   getPlanBudget, getPlanEvents, replacePlanEvents, setPlanBudget, type PlanEvent,
 } from "@/lib/repo/client";
 import { getPlanBuilt, getPriceEdits, savePlanBuilt } from "@/lib/repo/client";
+import { planSig } from "@/lib/planbuilt";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -383,21 +384,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     if (!builtCode) return;
     getPlanBuilt(builtCode, year).then((b) => setBuiltAt(b.built_at));
   }, [builtCode, year]);
-  const submitBuilt = async () => {
-    if (!builtCode) return;
-    setBuiltBusy(true);
-    try {
-      if (liftTimer.current) { clearTimeout(liftTimer.current); liftTimer.current = null; enqueue(latestEvents.current); }
-      await persistQueue.current;
-      const at = new Date().toISOString();
-      await savePlanBuilt(builtCode, year, { built_at: at, events: planEvents.length });
-      setBuiltAt(at);
-      router.push(processPath("plan", "submit", year));
-      router.refresh();
-    } finally {
-      setBuiltBusy(false);
-    }
-  };
   const filtered = brandChip !== "All brands" || !!itemSel;
   const committedOther = Math.max(0, committedAll - committed);
   const over = budget > 0 && committedAll > budget;
@@ -605,6 +591,36 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const grossGrowth = fyGrossAll > 0 ? grossGoal / fyGrossAll - 1 : null;
   const grossGap = grossGoal - grossPlanAll;               // > 0 short, < 0 ahead
   const saveGross = (v: number) => { setGrossTarget(v); setGrossEdit(false); void setPlanBudget(grossKey, v); };
+
+  // Submit the plan (the button beside + New event) — see builtAt above.
+  const submitBuilt = async () => {
+    if (!builtCode) return;
+    setBuiltBusy(true);
+    try {
+      if (liftTimer.current) { clearTimeout(liftTimer.current); liftTimer.current = null; enqueue(latestEvents.current); }
+      await persistQueue.current;
+      const at = new Date().toISOString();
+      /* The money Review & submit shows, as the two cards on this page have
+         it: gross sales and trade committed, against the source year. The
+         fingerprint covers the account's own events — the same set the
+         review reads — so it can say when the plan has moved since. */
+      const own = planEvents.filter((e) => !!e.customer_id);
+      await savePlanBuilt(builtCode, year, {
+        built_at: at,
+        events: planEvents.length,
+        totals: {
+          gross: Math.round(grossPlanAll), grossPrior: Math.round(fyGrossAll), grossTarget: Math.round(grossGoal),
+          spend: Math.round(committedAll), spendPrior: Math.round(plan.priorPlannedTotal), fund: Math.round(budget),
+          priorYear: plan.fyGross?.year ?? plan.priorYear, sig: planSig(own),
+        },
+      });
+      setBuiltAt(at);
+      router.push(processPath("plan", "submit", year));
+      router.refresh();
+    } finally {
+      setBuiltBusy(false);
+    }
+  };
 
   const saveBudget = (v: number) => {
     setBudget(v);
