@@ -46,7 +46,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     signed: status.totals.signed,
     submitted: status.totals.submitted,
     events: status.totals.events,
-    taken: status.totals.taken,
+    /* The estimate is worked toward the NEXT lock: the rail's cycle, its
+       question and its lock step all key on the open cycle. */
+    taken: status.totals.takenOpen,
     leAnswered: status.totals.leAnswered,
     baseReviewed: status.totals.baseReviewed,
     planBuilt: status.totals.planBuilt,
@@ -54,8 +56,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
        answer is only meaningful when the top bar is on one. */
     leAnswer: status.customers.length === 1 ? status.customers[0].leAnswer : null,
     adjustments: status.totals.adjustments,
-    cycle: status.schedule?.due.key ?? "",
-    cycleLabel: status.schedule?.due.label ?? status.month,
+    cycle: status.schedule?.open.key ?? "",
+    cycleLabel: status.schedule?.open.label ?? status.month,
     year: status.year,
     promoChanges: status.totals.promoChanges,
   };

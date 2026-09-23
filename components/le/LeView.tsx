@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { LeCycle } from "@/lib/leSchedule";
 import type { LeCronRun } from "@/lib/server/leCron";
+import LockReadback, { type LockReadbackData } from "./LockReadback";
 
 /* Latest Estimate (LE) view — see app/le/page.tsx. */
 
@@ -19,6 +20,7 @@ export type LeRow = {
   versions: VersionLite[];
   live: { total: number; adjustments: number; distver: { out: number; added: number; verifiedAt: string | null } } | null;
   lockedForDue: boolean;
+  lockedForOpen: boolean;
   lockedCycle: string | null;
   signedOff: boolean;
   hasVersions: boolean;
@@ -35,7 +37,7 @@ export type LeData = {
   telusSnapshot: string;
   brands: string[];
   rows: LeRow[];
-  totals: { customers: number; taken: number; signed: number; verified: number; adjustments: number; events: number };
+  totals: { customers: number; taken: number; takenOpen: number; signed: number; verified: number; adjustments: number; events: number };
   portfolio: { months: string[]; latest: Record<string, number[]>; previous: Record<string, number[]>; live: Record<string, number[]> };
 };
 
@@ -51,7 +53,7 @@ const td: React.CSSProperties = { padding: "9px 12px", whiteSpace: "nowrap", fon
 const num: React.CSSProperties = { ...td, textAlign: "right" };
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 
-export default function LeView({ data }: { data: LeData }) {
+export default function LeView({ data, readback = null }: { data: LeData; readback?: LockReadbackData | null }) {
   const router = useRouter();
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState<string | null>(null);   // market code being taken, or "ALL"
@@ -67,7 +69,7 @@ export default function LeView({ data }: { data: LeData }) {
       try {
         const r = await fetch(`/api/plansnap/${code}/${data.year}`, {
           method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ note: note.trim(), ...(data.schedule ? { cycle: data.schedule.due.key } : {}) }),
+          body: JSON.stringify({ note: note.trim(), ...(data.schedule ? { cycle: data.schedule.open.key } : {}) }),
         });
         if (r.ok) ok++; else fail++;
       } catch { fail++; }
@@ -80,7 +82,7 @@ export default function LeView({ data }: { data: LeData }) {
 
   // bulk targets: LE — every account not yet locked for the due cycle;
   // Plan — verified but unsigned
-  const bulk = data.rows.filter((r) => (plan ? !r.signedOff && r.live?.distver.verifiedAt : !r.lockedForDue)).map((r) => r.code);
+  const bulk = data.rows.filter((r) => (plan ? !r.signedOff && r.live?.distver.verifiedAt : !r.lockedForOpen)).map((r) => r.code);
   const sched = data.schedule;
   const overdue = !plan && !!sched && sched.daysToLock <= 0;
 
@@ -97,7 +99,7 @@ export default function LeView({ data }: { data: LeData }) {
   const actionLabel = (r: LeRow) =>
     plan
       ? (r.hasVersions ? "Take LE" : "Take Plan of Record")
-      : (r.lockedForDue ? "Re-lock" : "Lock");
+      : (r.lockedForOpen ? "Re-lock" : "Lock");
 
   return (
     <div className="view active">
@@ -110,10 +112,10 @@ export default function LeView({ data }: { data: LeData }) {
                 Plan of Record sign-off that freezes v1. Later versions are the in-year Latest Estimates; each one is
                 diffable against the last and against the Plan of Record.</>
               : <>Every account locks on the same schedule: the forecast on record at the{" "}
-                <b>end of the second Friday</b> of each month becomes that month&apos;s Latest Estimate and never moves again. This is{" "}
-                {sched ? <><b>{sched.due.label}</b> (read {sched.due.lockDate})</> : "the current cycle"} against the
-                working forecast right now — actuals through the NIQ edge plus the forecast to year-end, with LE
-                adjustments. Versions are append-only and diffable.</>}
+                <b>end of the second Friday</b> of each month becomes that month&apos;s Latest Estimate and never moves again.
+                {sched ? <> <b>{sched.due.label}</b> is on record (read {sched.due.lockDate}); <b>{sched.open.label}</b> is being prepared and locks {sched.open.lockDate}.</> : null}{" "}
+                The working forecast is actuals through the NIQ edge plus the forecast to year-end, with the estimate&apos;s
+                changes. Versions are append-only and diffable.</>}
           </p>
         </div>
         <div className="actions">
@@ -129,11 +131,13 @@ export default function LeView({ data }: { data: LeData }) {
         </div>
       </div>
 
+      {readback && <LockReadback a={readback} />}
+
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">{plan ? "Plan of Record signed" : `Locked · ${sched?.due.label ?? "cycle"}`}</span></div>
-          <div className="k-val" style={!plan && data.totals.taken < data.totals.customers ? { color: "var(--warn)" } : undefined}>
-            {plan ? data.totals.signed : data.totals.taken} <span style={{ fontSize: 14, color: "var(--ink-3)" }}>of {data.totals.customers}</span>
+          <div className="k-top"><span className="k-label">{plan ? "Plan of Record signed" : `Locked · ${sched?.open.label ?? "cycle"}`}</span></div>
+          <div className="k-val" style={!plan && data.totals.takenOpen < data.totals.customers ? { color: "var(--warn)" } : undefined}>
+            {plan ? data.totals.signed : data.totals.takenOpen} <span style={{ fontSize: 14, color: "var(--ink-3)" }}>of {data.totals.customers}</span>
           </div>
           <div className="k-sub flat">
             {plan ? `${data.totals.verified} of ${data.totals.customers} distribution verified`
@@ -141,7 +145,7 @@ export default function LeView({ data }: { data: LeData }) {
               ? (sched.daysToLock > 0
                   ? `next lock ${sched.open.lockDate} · ${sched.daysToLock} day${sched.daysToLock === 1 ? "" : "s"}`
                   : "next lock due now")
-              : `${data.totals.customers - data.totals.taken} still open`}
+              : `${data.totals.customers - data.totals.takenOpen} still open`}
           </div>
         </div>
         <div className="kpi">
@@ -163,7 +167,7 @@ export default function LeView({ data }: { data: LeData }) {
 
       <div className="card" style={{ padding: 0 }}>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 9, alignItems: "center" }}>
-          <b>{plan ? `Customers — ${data.year} plan` : `Accounts — ${sched?.due.label ?? "LE"}`}</b>
+          <b>{plan ? `Customers — ${data.year} plan` : `Accounts — ${sched?.open.label ?? "LE"}`}</b>
           <input
             style={{ ...selStyle, flex: "1 1 260px", minWidth: 200, fontWeight: 500 }}
             placeholder={plan ? "Sign-off note (optional) — applies to the versions you take from here" : "Lock note (optional) — what moved and why; recorded on every account you lock from here"}
@@ -176,15 +180,15 @@ export default function LeView({ data }: { data: LeData }) {
             className="btn primary"
             style={{ ...selStyle, cursor: bulk.length && canAct ? "pointer" : "default", opacity: bulk.length && canAct ? 1 : 0.5 }}
             disabled={!bulk.length || !canAct || busy !== null}
-            title={plan ? "Take the Plan of Record for every customer whose distribution is verified and who has no sign-off yet" : `Lock ${sched?.due.label ?? "this cycle"} for every account not yet locked — the scheduled portfolio freeze`}
+            title={plan ? "Take the Plan of Record for every customer whose distribution is verified and who has no sign-off yet" : `Lock ${sched?.open.label ?? "this cycle"} now for every account not yet locked for it — the scheduled lock at the end of ${sched?.open.lockDate ?? "the second Friday"} takes the rest`}
             onClick={() => {
               if (!window.confirm(plan
                 ? `Sign off the Plan of Record for ${bulk.length} customer${bulk.length === 1 ? "" : "s"} (verified, unsigned)? Versions are append-only.`
-                : `Lock ${sched?.due.label ?? "this cycle"} for ${bulk.length} account${bulk.length === 1 ? "" : "s"}? The forecast on record for ${sched?.due.lockDate ?? "the lock date"} freezes and cannot be edited afterwards.`)) return;
+                : `Lock ${sched?.open.label ?? "this cycle"} for ${bulk.length} account${bulk.length === 1 ? "" : "s"}? Each takes a version of its estimate as it stands now; versions are append-only.`)) return;
               void take(bulk);
             }}
           >
-            {busy === "ALL" ? "Locking…" : plan ? `Sign off ${bulk.length} verified & unsigned` : `Lock ${sched?.due.label ?? "cycle"} · ${bulk.length} account${bulk.length === 1 ? "" : "s"}`}
+            {busy === "ALL" ? "Locking…" : plan ? `Sign off ${bulk.length} verified & unsigned` : `Lock ${sched?.open.label ?? "cycle"} · ${bulk.length} account${bulk.length === 1 ? "" : "s"}`}
           </button>
           {msg && <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>{msg}</span>}
         </div>
@@ -225,7 +229,7 @@ export default function LeView({ data }: { data: LeData }) {
                           {latest.scheduled_lock ? new Date(new Date(latest.scheduled_lock).getTime() - 86400000).toISOString().slice(0, 10) : latest.taken_at.slice(0, 10)}
                           {latest.locked_late ? " ·  late" : ""}
                         </span>
-                        {!plan && r.lockedForDue && <span style={{ marginLeft: 6, color: "var(--good)", fontWeight: 800, fontSize: 12 }}>✓ locked</span>}
+                        {!plan && r.lockedForOpen && <span style={{ marginLeft: 6, color: "var(--good)", fontWeight: 800, fontSize: 12 }}>✓ locked</span>}
                       </>) : (
                         <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>{plan ? "not signed off" : "no LE yet"}</span>
                       )}
@@ -247,12 +251,12 @@ export default function LeView({ data }: { data: LeData }) {
                     <td style={td}>
                       <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}>
                         <button
-                          className={"btn" + (latest && !moved && (plan || r.lockedForDue) ? "" : " primary")}
+                          className={"btn" + (latest && !moved && (plan || r.lockedForOpen) ? "" : " primary")}
                           style={{ ...selStyle, padding: "6px 10px", cursor: canAct ? "pointer" : "default", opacity: canAct ? 1 : 0.5 }}
                           disabled={!canAct || busy !== null}
                           title={plan
                             ? (r.hasVersions ? `Freeze the current ${data.year} plan base as the next LE version` : `Freeze the current ${data.year} plan base as v1 — the Plan of Record`)
-                            : `Lock this account's FY${data.year} forecast for ${sched?.due.label ?? "this cycle"} — every account locks on the same schedule, so do this only to catch one up`}
+                            : `Lock this account's FY${data.year} estimate for ${sched?.open.label ?? "this cycle"} as it stands now — the scheduled lock leaves an account already locked for its cycle alone`}
                           onClick={() => void take([r.code])}
                         >
                           {busy === r.code ? "Taking…" : actionLabel(r)}

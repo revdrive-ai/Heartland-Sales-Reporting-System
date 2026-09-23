@@ -58,7 +58,7 @@ function Vs({ now, base, label, fmt, up = "good" }: { now: number; base: number 
   const color = d === null || up === "neutral" || Math.abs(d) < 0.05 ? "var(--ink-2)" : d > 0 ? "var(--good)" : "var(--bad)";
   return (
     <div className="k-sub">
-      <b style={{ color }}>{d === null ? "—" : `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}%`}</b>
+      <b style={{ color }}>{d === null ? "—" : Math.abs(d) < 0.05 ? "0.0%" : `${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}%`}</b>
       <span style={{ color: "var(--ink-3)" }}> vs {label}{base !== null ? ` ${fmt(base)}` : ""}</span>
     </div>
   );

@@ -1,6 +1,6 @@
 import { getPriceList, getPromoOverlays, listItems, listWeekEndings, priceAsOf, type PriceRow } from "@/lib/repo";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
-import { getSnapshots, type PlanSnapshotVersion } from "@/lib/server/planSnapshot";
+import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 import { getState } from "@/lib/server/appstate";
 import { overlayCount, readLeOverlay } from "@/lib/leovl";
 
@@ -89,9 +89,11 @@ export const fy = (b: BrandRoll) => ({
 });
 
 export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
-  const [items, allWeeks, prices, versions] = await Promise.all([
-    listItems(), listWeekEndings(mkt), getPriceList(), getSnapshots(mkt, year),
+  const [items, allWeeks, prices, snapDoc] = await Promise.all([
+    listItems(), listWeekEndings(mkt), getPriceList(),
+    getState(`plansnap:${mkt}:${year}`).catch(() => undefined) as Promise<{ versions?: PlanSnapshotVersion[] } | undefined>,
   ]);
+  const versions = snapDoc?.versions ?? [];
   const latest = allWeeks[allWeeks.length - 1];
   const fyWeeks = saturdaysOfYear(year);
   const brands = [...new Set(items.filter((i) => i.is_own).map((i) => i.brand))].sort();

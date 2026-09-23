@@ -24,6 +24,7 @@ export type CustomerStatus = {
   versions: PlanSnapshotVersion[];
   latest: PlanSnapshotVersion | null;
   lockedForDue: boolean;         // locked for the cycle whose scheduled lock has passed
+  lockedForOpen: boolean;        // locked for the cycle being prepared — the next scheduled lock
   lockedCycle: string | null;    // the cycle its newest version belongs to
   signedOff: boolean;            // plan years: a Plan of Record exists
   submitted: boolean;            // plan years: a version was taken from the Review & submit step
@@ -59,13 +60,14 @@ export type ModeStatus = {
   totals: {
     customers: number;
     taken: number;               // LE: customers locked for the due cycle; Plan: customers with any version
+    takenOpen: number;           // LE: customers locked for the cycle being prepared (the next lock)
     signed: number;              // Plan of Record count (plan years)
     submitted: number;           // customers submitted from the Review & submit step
     verified: number;            // distribution verified
     newItems: number;            // the new-items question answered either way
     adjustments: number;
     events: number;              // plan events in the year document
-    leAnswered: number;          // LE: customers who answered the DUE cycle
+    leAnswered: number;          // LE: customers who answered for the cycle being prepared
     baseReviewed: number;        // plan: customers whose Base Business Review was submitted
     planBuilt: number;           // plan: customers whose Build the plan was submitted
     promoChanges: number;        // LE: promotions changed, cancelled or added this year (one account in scope)
@@ -112,6 +114,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       versions,
       latest,
       lockedForDue: versions.some((v) => (v.cycle ?? v.taken_at.slice(0, 7)) === due.key),
+      lockedForOpen: versions.some((v) => (v.cycle ?? v.taken_at.slice(0, 7)) === open.key),
       lockedCycle: versions.length ? (versions[versions.length - 1].cycle ?? versions[versions.length - 1].taken_at.slice(0, 7)) : null,
       signedOff: versions.some((v) => v.kind === "por"),
       submitted: versions.some((v) => v.submitted_from === "review"),
@@ -122,7 +125,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
         verifiedAt: dv?.verified_at ?? null,
         newItemsAnswered: !!dv?.no_additions || (dv?.additions ?? []).length > 0,
       },
-      leAnswer: leAnswerFor(readLeCycle(docs.get(`lecycle:${m.code}:${year}`)), due.key),
+      leAnswer: leAnswerFor(readLeCycle(docs.get(`lecycle:${m.code}:${year}`)), open.key),
       baseReviewedAt: readBaseReview(docs.get(`basereview:${m.code}:${year}`)).verified_at,
       planBuiltAt: readPlanBuilt(docs.get(`planbuilt:${m.code}:${year}`)).built_at,
       promoChanges: overlayCount(readLeOverlay(docs.get(`leovl:${m.code}:${year}`))),
@@ -140,6 +143,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     totals: {
       customers: customers.length,
       taken: mode.kind === "le" ? customers.filter((c) => c.lockedForDue).length : customers.filter((c) => c.versions.length > 0).length,
+      takenOpen: customers.filter((c) => c.lockedForOpen).length,
       signed: customers.filter((c) => c.signedOff).length,
       submitted: customers.filter((c) => c.submitted).length,
       verified: customers.filter((c) => c.distver.verifiedAt).length,

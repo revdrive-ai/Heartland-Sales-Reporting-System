@@ -5,6 +5,7 @@ import { readDistVerification, type DistAddition, type DistVerification } from "
 import type { PlanAdjustment } from "@/lib/repo/client";
 import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
+import { fy, leRollup } from "@/lib/server/leRollup";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
 
@@ -70,6 +71,8 @@ export type PlanSnapshotVersion = Omit<PlanBaseNow, "computed_at"> & {
       sales at list and trade for the full year — so a later cycle can be
       read against it in dollars as well as units. */
   money?: { gross: number; trade: number };
+  /** LE versions: promotions the estimate had cancelled, changed or added */
+  promoChanges?: number;
 };
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {
@@ -265,14 +268,17 @@ export async function takeSnapshot(
   cycleKey?: string,
   from?: "review",
 ): Promise<PlanSnapshotVersion> {
-  const [versions, now] = await Promise.all([getSnapshots(mkt, year), computePlanBase(mkt, year)]);
+  const [versions, now, allWeeks] = await Promise.all([getSnapshots(mkt, year), computePlanBase(mkt, year), listWeekEndings(mkt)]);
   const seq = versions.length + 1;
   const when = new Date();
   // a forward plan year's first version is the base sign-off (Plan of Record);
   // the in-flight (data-edge) year has its plan of record in Telus, so every
   // version there is an LE — the first one labeled as the baseline
-  const allWeeks = await listWeekEndings(mkt);
   const inFlight = year <= +allWeeks[allWeeks.length - 1].slice(0, 4);
+  /* An estimate freezes its money too — gross sales at list and trade for
+     the full year, with the promotion changes in — so the next cycle can be
+     read against it in dollars. A forward year's sign-off is units only. */
+  const roll = inFlight ? await leRollup(mkt, year) : null;
   /* An LE belongs to a scheduled cycle: the one asked for, else the cycle
      whose lock has most recently passed. A forward year's sign-off is not on
      that schedule, so it carries no cycle. */
@@ -298,6 +304,7 @@ export async function takeSnapshot(
     adjustments: now.adjustments,
     distver: now.distver,
     ...(from ? { submitted_from: from } : {}),
+    ...(roll ? { money: { gross: Math.round(fy(roll.totals).gross), trade: Math.round(roll.trade.estTotal) }, promoChanges: roll.promoChanges } : {}),
   };
   await setState(snapKey(mkt, year), { versions: [...versions, version] });
   return version;
