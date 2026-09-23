@@ -8,6 +8,7 @@ import { readLeCycle, leAnswerFor, type LeAnswer } from "@/lib/lecycle";
 import { readBaseReview } from "@/lib/basereview";
 import { readPlanBuilt } from "@/lib/planbuilt";
 import { overlayCount, readLeOverlay } from "@/lib/leovl";
+import { planLockedFrom, readPlanReopen } from "@/lib/planlock";
 
 /* Where the work stands for the mode year, across the customers IN SCOPE —
    the rollup behind the step rail, the strip under the top bar and the
@@ -28,6 +29,9 @@ export type CustomerStatus = {
   lockedCycle: string | null;    // the cycle its newest version belongs to
   signedOff: boolean;            // plan years: a Plan of Record exists
   submitted: boolean;            // plan years: a version was taken from the Review & submit step
+  /** plan years: submitted and not reopened since — read-only (lib/planlock) */
+  planLocked: boolean;
+  submittedAt: string | null;
   adjustments: number;
   distver: {
     out: number;
@@ -63,6 +67,7 @@ export type ModeStatus = {
     takenOpen: number;           // LE: customers locked for the cycle being prepared (the next lock)
     signed: number;              // Plan of Record count (plan years)
     submitted: number;           // customers submitted from the Review & submit step
+    planLocked: number;          // plan: customers whose plan is submitted and locked
     verified: number;            // distribution verified
     newItems: number;            // the new-items question answered either way
     adjustments: number;
@@ -97,6 +102,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     `basereview:${m.code}:${year}`,
     `planbuilt:${m.code}:${year}`,
     `leovl:${m.code}:${year}`,
+    `planreopen:${m.code}:${year}`,
   ]);
   keys.push(`events:${year}`);
   const docs = await getStates(keys);
@@ -108,6 +114,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     const latest = versions[versions.length - 1] ?? null;
     const adjs = (docs.get(`adj:${m.code}:${year}`) as PlanAdjustment[] | undefined) ?? [];
     const dv = docs.get(`distver:${m.code}:${year}`) as DistVerification | undefined;
+    const lock = planLockedFrom(versions, readPlanReopen(docs.get(`planreopen:${m.code}:${year}`)));
     return {
       code: m.code,
       name: m.name,
@@ -118,6 +125,8 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       lockedCycle: versions.length ? (versions[versions.length - 1].cycle ?? versions[versions.length - 1].taken_at.slice(0, 7)) : null,
       signedOff: versions.some((v) => v.kind === "por"),
       submitted: versions.some((v) => v.submitted_from === "review"),
+      planLocked: lock.locked,
+      submittedAt: lock.submittedAt,
       adjustments: adjs.length,
       distver: {
         out: Object.values(dv?.decisions ?? {}).filter((d) => d === "out").length,
@@ -146,6 +155,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       takenOpen: customers.filter((c) => c.lockedForOpen).length,
       signed: customers.filter((c) => c.signedOff).length,
       submitted: customers.filter((c) => c.submitted).length,
+      planLocked: customers.filter((c) => c.planLocked).length,
       verified: customers.filter((c) => c.distver.verifiedAt).length,
       newItems: customers.filter((c) => c.distver.newItemsAnswered).length,
       adjustments: customers.reduce((a, c) => a + c.adjustments, 0),

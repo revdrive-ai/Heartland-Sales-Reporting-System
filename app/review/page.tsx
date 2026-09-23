@@ -128,6 +128,7 @@ export default async function Page() {
       })),
       signedOff: one.signedOff,
       submitted: one.submitted,
+      locked: one.planLocked,
     },
   };
   return <ReviewView data={data} />;

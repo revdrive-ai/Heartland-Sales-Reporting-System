@@ -414,3 +414,11 @@ export async function getLeOverlay(market_code: string, year: number): Promise<L
 export async function saveLeOverlay(market_code: string, year: number, doc: LeOverlay): Promise<void> {
   await saveDoc(ovlKey(market_code, year), doc);
 }
+
+/* ---- reopening a submitted plan ----
+   A submission from Review & submit locks the plan year for that account;
+   this records a deliberate reopen (see lib/planlock). */
+
+export async function reopenPlan(market_code: string, plan_year: number, note: string): Promise<void> {
+  await saveDoc(`planreopen:${market_code}:${plan_year}`, { at: new Date().toISOString(), note });
+}

@@ -5,6 +5,7 @@ import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
+import { planLocked } from "@/lib/server/planLock";
 import { getState } from "@/lib/server/appstate";
 import { readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
 import type { PlanAdjustment } from "@/lib/repo/client";
@@ -539,6 +540,9 @@ export default async function Page() {
       divItemWk,
       custMarkets,
       marketCodes: markets.map((m) => m.code),
+      // a submitted plan is read-only until reopened (lib/planlock) — the
+      // rail holds the page; this keeps the opening pop-up from offering to write
+      locked: markets.length === 1 ? await planLocked(markets[0].code, year) : false,
       prices,
       brandListPrice,
       fyGross: { year: fyYear, edge: fyEdge, measured: Math.round(fyMeasured), forecast: Math.round(fyForecast), byMkt: fyGross, byItem: fyGrossItem },

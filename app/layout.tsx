@@ -60,6 +60,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     cycleLabel: status.schedule?.open.label ?? status.month,
     year: status.year,
     promoChanges: status.totals.promoChanges,
+    planLocked: status.totals.planLocked,
+    submittedAt: status.customers.length === 1 ? status.customers[0].submittedAt : null,
   };
 
   return (

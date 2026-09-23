@@ -9,6 +9,7 @@ import StepChoices from "./StepChoices";
 import LeChoices from "./LeChoices";
 import type { LeAnswer } from "@/lib/lecycle";
 import StepReset from "./StepReset";
+import PlanLock from "./PlanLock";
 
 /* The corridor. Inside a process there is no sidebar — just this: which
    process, which year, the steps of THIS process and nothing else, and what
@@ -51,6 +52,10 @@ export type RailStatus = {
   year: number;
   /** LE: promotions changed, cancelled or added for the year (one account) */
   promoChanges: number;
+  /** plan: customers whose plan is submitted and locked (lib/planlock) */
+  planLocked: number;
+  /** plan: when the one account in scope submitted, if it did */
+  submittedAt: string | null;
 };
 
 type StepState = { done: boolean; note?: string };
@@ -198,6 +203,10 @@ export default function ProcessRail({
   const urge = needsAccount || unanswered;
   const next = index < proc.steps.length - 1 ? proc.steps[index + 1] : null;
   const many = proc.steps.length > 1;
+  /* A submitted plan is locked: the rail says so and holds the working steps
+     until it is deliberately reopened. The last step stays live — it is
+     where the plan is printed, shared and, after a reopen, resubmitted. */
+  const planLocked = proc.kind === "plan" && oneAccount && !!status && status.planLocked === 1;
 
   return (
     <>
@@ -208,6 +217,10 @@ export default function ProcessRail({
         onClick={answerClick}
         title={needsAccount ? "Pick an account in the top bar first" : "Choose one of the two options above first"}
       />
+    )}
+    {planLocked && next && (
+      /* the locked plan's hold — outside the rail so the rail's Reopen stays clickable */
+      <div className="planscrim" aria-hidden="true" title={`Plan ${year} is submitted and locked — reopen it in the bar above to change it`} />
     )}
     <div ref={railRef} className={"prail " + proc.kind + (urge ? " needs" : "")}>
       <div className="prail-top">
@@ -224,7 +237,7 @@ export default function ProcessRail({
         </span>
         {urge && <span className="pneeds">{needsAccount ? "Pick an account" : "Choose one to continue"}</span>}
         {many && <span className="pcount">Step {index + 1} of {proc.steps.length}</span>}
-        {year && (
+        {year && !planLocked && (
           <StepReset
             year={year}
             markets={inScope}
@@ -233,6 +246,10 @@ export default function ProcessRail({
           />
         )}
       </div>
+
+      {planLocked && year && (
+        <PlanLock year={year} market={inScope[0]} scopeLabel={scopeLabel} submittedAt={status?.submittedAt ?? null} />
+      )}
 
       {many && (
         <ol className="psteps">

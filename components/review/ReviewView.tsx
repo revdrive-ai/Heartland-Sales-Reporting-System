@@ -66,6 +66,8 @@ export type ReviewData = {
     signedOff: boolean;
     /** a version was taken from THIS page — the only thing that reads as submitted */
     submitted: boolean;
+    /** submitted and not reopened since — read-only until it is (lib/planlock) */
+    locked: boolean;
   };
 };
 
@@ -201,7 +203,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <ShareEmail a={a} year={data.year} sub={sub} owed={owed} />
           <span className="pill">NIQ through {a.dataEdge}</span>
           {sub
-            ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {sub.takenAt.slice(0, 10)}</span>
+            ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {sub.takenAt.slice(0, 10)}{a.locked ? " · locked" : " · reopened"}</span>
             : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>not yet submitted</span>}
         </div>
       </div>
@@ -466,7 +468,9 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <span>
             {sub
               ? <>Submitted {sub.takenAt.slice(0, 16).replace("T", " ")} UTC as v{sub.seq} · {fmtK(sub.total)} units{sub.note ? <> · &ldquo;{sub.note}&rdquo;</> : null}.
-                 Submitting again records a revision alongside it — versions are never overwritten.</>
+                 {a.locked
+                   ? " The plan is locked: its steps are read-only until it is reopened from the bar above, and the next submission locks it again."
+                   : " It has been reopened — submit again to record the revision alongside it and lock it; versions are never overwritten."}</>
               : ready
                 ? <>Freezes the plan base above as a version{elsewhere.length ? "" : " — v1, the Plan of Record"}. The monthly Latest Estimates are then read against it.</>
                 : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the distribution is verified, the new-items question is answered, and the base review and the plan build are submitted.</>}
@@ -506,10 +510,10 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <button
             className={"btn" + (ready ? " primary" : "")}
             onClick={submit}
-            disabled={!ready || busy}
-            title={ready ? (sub ? "Take a revised version of the plan" : "Submit this account's plan") : "Finish the steps listed above first"}
+            disabled={!ready || busy || a.locked}
+            title={a.locked ? "The plan is submitted and locked — reopen it from the bar above to revise it" : ready ? (sub ? "Take a revised version of the plan" : "Submit this account's plan") : "Finish the steps listed above first"}
           >
-            {busy ? "Submitting…" : sub ? "Submit a revision" : "Submit the plan"}
+            {busy ? "Submitting…" : a.locked ? "Locked — reopen to revise" : sub ? "Submit a revision" : "Submit the plan"}
           </button>
           {err && <span className="dim" style={{ color: "var(--bad)" }}>{err}</span>}
         </div>

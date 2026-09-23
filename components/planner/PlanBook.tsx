@@ -669,7 +669,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   // decide once, when the events are in, whether this arrival asks the question
   const mine = events.filter((e) => custIds.has(e.customer_id));
   const alreadyCarried = mine.some((e) => e.origin === "carry");
-  const askNow = inPlanProcess && eventsLoaded && carryAsk === null && !alreadyCarried && (() => {
+  const askNow = inPlanProcess && !plan.locked && eventsLoaded && carryAsk === null && !alreadyCarried && (() => {
     if (search.get("carry") === "ask") return true;
     if (mine.length) return false;
     try { return localStorage.getItem(scratchKey) !== "1"; } catch { return true; }

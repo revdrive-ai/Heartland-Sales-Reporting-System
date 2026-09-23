@@ -844,6 +844,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .lockrb-foot input{flex:1 1 320px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
 @media (max-width:1100px){.lockrb-grid{grid-template-columns:1fr}.lockrb-grid>table{border-right:0;border-bottom:1px solid var(--line)}}
 
+/* The plan lock in the rail (lib/planlock) */
+.planlock{display:flex;align-items:center;gap:12px;margin:0 16px 10px;padding:10px 14px;border:1px solid var(--good);border-radius:12px;background:var(--good-soft);font-size:12.5px;color:var(--ink-2)}
+.planlock .pl-ic{font-size:16px}
+.planlock .pl-text{flex:1;line-height:1.45}
+.planlock .pl-text b{color:var(--ink)}
+.planscrim{position:fixed;inset:60px 0 0;z-index:44;background:rgba(15,23,41,.05);cursor:not-allowed}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}

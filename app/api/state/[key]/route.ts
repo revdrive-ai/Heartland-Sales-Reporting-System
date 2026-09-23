@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getState, setState } from "@/lib/server/appstate";
 import { invalidateForecastCaches } from "@/lib/server/fyForecast";
+import { planDocKey, planLocked } from "@/lib/server/planLock";
 
 /* Shared-state endpoint behind the client stores (lib/repo/client.ts):
    GET returns the document under a key (404 when none), PUT replaces it.
@@ -39,6 +40,13 @@ export async function PUT(
   }
   if (body.data === undefined) return NextResponse.json({ error: "missing data" }, { status: 400 });
   try {
+    /* A submitted plan is read-only: its per-account documents refuse writes
+       until the plan is reopened (lib/planlock). The reopen record itself,
+       the versions and the in-flight year's documents are not guarded. */
+    const pk = planDocKey(key);
+    if (pk && (await planLocked(pk.mkt, pk.year))) {
+      return NextResponse.json({ error: `Plan ${pk.year} is submitted and locked — reopen it to change it` }, { status: 423 });
+    }
     await setState(key, body.data);
     // the forecast caches these two documents briefly; a write must reach the next read
     if (key.startsWith("adj:") || key.startsWith("leovl:")) invalidateForecastCaches();
