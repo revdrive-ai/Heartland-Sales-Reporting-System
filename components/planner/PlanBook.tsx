@@ -345,12 +345,27 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   };
 
   const carriedCount = events.filter((e) => e.origin === "carry").length;
-  const committed = visible.reduce((a, e) => a + spendOf(e), 0);
-  const over = budget > 0 && committed > budget;
-  const overBy = Math.max(0, committed - budget);
-  const avail = Math.max(0, budget - committed);
-  const pct = budget > 0 ? Math.min(100, (committed / budget) * 100) : 0;
-  const inPct = over ? (budget / committed) * 100 : 0;
+  /* The fund is ONE number for the account — it does not split by brand or
+     item. So what is available is always the fund less everything committed
+     across the whole plan in scope; a brand or item selection only picks out
+     its own slice of that commitment. Measuring the fund against the
+     selection alone read every other brand's spend as money still free. */
+  const committed = visible.reduce((a, e) => a + spendOf(e), 0);          // this selection
+  const planEvents = useMemo(() => events.filter((e) =>
+    (!plan.scopeActive || !e.customer_id || scopeIds.has(e.customer_id)) && (!custSel || e.customer_id === custSel)
+  ), [events, plan.scopeActive, scopeIds, custSel]);
+  const committedAll = planEvents.reduce((a, e) => a + spendOf(e), 0);  // the whole plan
+  const filtered = brandChip !== "All brands" || !!itemSel;
+  const committedOther = Math.max(0, committedAll - committed);
+  const over = budget > 0 && committedAll > budget;
+  const overBy = Math.max(0, committedAll - budget);
+  const avail = Math.max(0, budget - committedAll);
+  const scale = Math.max(budget, committedAll, 1);
+  const pctSel = (committed / scale) * 100;
+  const pctOther = (committedOther / scale) * 100;
+  const pctAvail = (avail / scale) * 100;
+  const pctOver = (overBy / scale) * 100;
+  const selLabel = itemSel ? (itemMeta.get(itemSel)?.name ?? "this item") : brandChip === "MIXED" ? "Mixed / carried" : brandChip;
 
   // funding vehicles (EDLP, Slotting) at 0% lift make no incremental claim, so
   // the ROI guardrail doesn't apply to them; a manual lift override re-arms it
@@ -820,20 +835,35 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="card">
           <div className="c-head">
             <h3>Trade spend vs plan</h3>
-            <span className="sub">follows the customer, brand &amp; item selectors</span>
+            <span className="sub">
+              {filtered ? <>the whole fund · <b>{selLabel.length > 36 ? selLabel.slice(0, 35) + "…" : selLabel}</b> picked out</> : "the whole fund, all brands"}
+            </span>
           </div>
           <div style={{ display: "flex", height: 30, borderRadius: 8, overflow: "hidden", fontSize: 11, fontWeight: 800, color: "#fff" }}
             title={over ? `Over-committed by ${fmtMoney(overBy)} of the ${fmtMoney(budget)} fund` : `${fmtMoney(avail)} still available of the ${fmtMoney(budget)} fund`}>
-            {over ? (<>
-              <span style={{ width: `${inPct.toFixed(0)}%`, background: "var(--bad)", display: "flex", alignItems: "center", paddingLeft: 8 }}>{inPct >= 25 ? `Committed to fund ${fmtMoney(budget)}` : ""}</span>
-              <span style={{ width: `${(100 - inPct).toFixed(0)}%`, background: "#8f1d16", display: "flex", alignItems: "center", paddingLeft: 8 }}>{100 - inPct >= 16 ? `Over ${fmtMoney(overBy)}` : ""}</span>
-            </>) : (<>
-              <span style={{ width: `${pct.toFixed(1)}%`, background: "var(--accent)", display: "flex", alignItems: "center", paddingLeft: 8 }}>{pct >= 20 ? `Committed ${fmtMoney(committed)}` : ""}</span>
-              <span style={{ width: `${(100 - pct).toFixed(1)}%`, background: "var(--good)", display: "flex", alignItems: "center", paddingLeft: 8 }}>{pct <= 80 ? `Available ${fmtMoney(avail)}` : ""}</span>
-            </>)}
+            {filtered ? (
+              <span style={{ width: `${pctSel.toFixed(2)}%`, background: "var(--accent)", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}
+                title={`${selLabel}: ${fmtMoney(committed)} committed`}>
+                {pctSel >= 16 ? `${selLabel.length > 18 ? selLabel.slice(0, 17) + "…" : selLabel} ${fmtMoney(committed)}` : ""}
+              </span>
+            ) : null}
+            <span style={{ width: `${(filtered ? pctOther : pctSel).toFixed(2)}%`, background: filtered ? "#93a8d8" : "var(--accent)", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}
+              title={filtered ? `Committed on the rest of the plan: ${fmtMoney(committedOther)}` : `Committed: ${fmtMoney(committedAll)}`}>
+              {(filtered ? pctOther : pctSel) >= 18 ? (filtered ? `Rest of plan ${fmtMoney(committedOther)}` : `Committed ${fmtMoney(committedAll)}`) : ""}
+            </span>
+            {over ? (
+              <span style={{ width: `${pctOver.toFixed(2)}%`, background: "var(--bad)", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+                {pctOver >= 14 ? `Over ${fmtMoney(overBy)}` : ""}
+              </span>
+            ) : (
+              <span style={{ width: `${pctAvail.toFixed(2)}%`, background: "var(--good)", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+                {pctAvail >= 9 ? `Available ${fmtMoney(avail)}` : ""}
+              </span>
+            )}
           </div>
           <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: 12, color: "var(--ink-2)", fontWeight: 600, alignItems: "center" }}>
-            <span>Committed {fmtMoney(committed)}</span>
+            {filtered && <span style={{ color: "var(--accent)" }}>{selLabel.length > 30 ? selLabel.slice(0, 29) + "…" : selLabel} {fmtMoney(committed)}</span>}
+            <span>Committed {fmtMoney(committedAll)}{filtered ? " (whole plan)" : ""}</span>
             {over ? <b style={{ color: "var(--bad)" }}>Over-committed {fmtMoney(overBy)}</b> : <span>Available {fmtMoney(avail)}</span>}
             <span>
               Budget{" "}
