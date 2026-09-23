@@ -254,7 +254,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     !itemSel || (e.upcs ?? []).includes(itemSel)
   ).sort((a, b) => a.start.localeCompare(b.start)), [preItem, itemSel]);
   // brand-level events (no item detail) an item selection can't match
-  const noDetailHidden = itemSel ? preItem.filter((e) => !(e.upcs ?? []).length).length : 0;
+  const noDetailList = useMemo(() => (itemSel ? preItem.filter((e) => !(e.upcs ?? []).length) : []), [preItem, itemSel]);
+  const noDetailHidden = noDetailList.length;
+  /* Brand-level events can't be matched to an item, so an item view leaves
+     them out of its numbers — but they are still worth checking. The pill
+     lists them in the events table on request (for the item it was asked
+     for), without letting them into the item's spend or volume. */
+  const [showNoDetailFor, setShowNoDetailFor] = useState<string | null>(null);
+  const showNoDetail = !!itemSel && showNoDetailFor === itemSel && noDetailHidden > 0;
+  const noDetailIds = useMemo(() => new Set(noDetailList.map((e) => e.id)), [noDetailList]);
 
   /* Base / incremental / ROI per event: window base = weekly base run-rate ×
      weeks, scored at THIS EVENT'S customer's divisions — its items when the
@@ -407,14 +415,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     const r = calc(e).roi;
     return r === null ? "na" : r < ROI_GUARDRAIL ? "below" : "clear";
   };
-  const tableRows = useMemo(() => visible.filter((e) =>
+  const tableRows = useMemo(() => (showNoDetail ? [...visible, ...noDetailList].sort((a, b) => a.start.localeCompare(b.start)) : visible).filter((e) =>
     (efText === "" || `${e.title} ${e.brand} ${e.note ?? ""}`.toLowerCase().includes(efText.toLowerCase())) &&
     (efBrand === "all" || e.brand === efBrand) &&
     (efCust === "all" || e.customer === efCust) &&
     (efPerf === "all" || e.perf === efPerf) &&
     (efRoi === "all" || roiState(e) === efRoi)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [visible, efText, efBrand, efCust, efPerf, efRoi, plan, priceEdits]);
+  ), [visible, showNoDetail, noDetailList, efText, efBrand, efCust, efPerf, efRoi, plan, priceEdits]);
 
   /* month-by-month: this plan's spend vs the prior-year book (scoped) */
   const planByMonth = useMemo(() => {
@@ -828,10 +836,23 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             );
           })()}
           {noDetailHidden > 0 && (
-            <span className="pill" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}
-              title="Brand-level events carry no item list, so an item selection can't match them — clear the item to see them again">
-              {noDetailHidden} brand-level event{noDetailHidden === 1 ? "" : "s"} without item detail hidden
-            </span>
+            <button
+              className="pill"
+              style={{ color: "var(--warn)", borderColor: "var(--warn)", cursor: "pointer", background: showNoDetail ? "#fff8e6" : "transparent", font: "inherit", fontSize: 11, fontWeight: 700 }}
+              title={showNoDetail
+                ? "Take them back out of the events table"
+                : "Brand-level events carry no item list, so they can't count toward one item. Click to list them in the events table so you can check them — they still don't count in this item's spend or volume."}
+              onClick={() => {
+                if (showNoDetail) { setShowNoDetailFor(null); return; }
+                setShowNoDetailFor(itemSel);
+                setEvOpen(true);
+                setTimeout(() => document.getElementById("plan-events")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+              }}
+            >
+              {showNoDetail
+                ? `Showing ${noDetailHidden} brand-level event${noDetailHidden === 1 ? "" : "s"} below · hide`
+                : `${noDetailHidden} brand-level event${noDetailHidden === 1 ? "" : "s"} without item detail — show them →`}
+            </button>
           )}
         </div>
       </div>
@@ -920,9 +941,14 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, marginTop: 16 }}>
+      <div className="card" id="plan-events" style={{ padding: 0, marginTop: 16, scrollMarginTop: 90 }}>
         <div style={{ padding: "14px 16px", borderBottom: evOpen ? "1px solid var(--line)" : "none", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <b>{year} events</b>
+          {showNoDetail && (
+            <span className="pill" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}>
+              + {noDetailHidden} brand-level event{noDetailHidden === 1 ? "" : "s"} listed for checking · not in this item&apos;s totals
+            </span>
+          )}
           <span style={{ fontSize: 12, color: "var(--ink-3)", fontWeight: 600 }}>
             {efOn ? `${tableRows.length} of ${visible.length} events shown` : `${visible.length} events`} · {fmtExact(committed)} committed · click a lift cell to override
           </span>
@@ -1018,6 +1044,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                             ? ` · ${itemLabel(e.upcs[0]).length > 34 ? itemLabel(e.upcs[0]).slice(0, 33) + "…" : itemLabel(e.upcs[0])}`
                             : ` · ${e.upcs.length} items`
                           : " · brand level"}
+                        {noDetailIds.has(e.id) && showNoDetail && (
+                          <span style={{ color: "var(--warn)", fontWeight: 700 }}> · no item detail — not counted for this item</span>
+                        )}
                         {e.origin !== "manual" ? ` · ${e.origin === "carry" ? `carried FY${plan.priorYear}` : "imported"}` : ""}
                       </div>
                     </td>
