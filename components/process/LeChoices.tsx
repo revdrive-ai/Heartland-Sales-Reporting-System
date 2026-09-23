@@ -11,7 +11,7 @@ import type { LeAnswer } from "@/lib/lecycle";
 
    The difference from the plan's new-items question is where the work goes.
    "Add a new item" opens a form over the page, so the page stays held. Here,
-   "Adjust the estimate" IS the page: the planner underneath is the tool, and
+   "Adjust the estimate" IS the page: the base review underneath is the tool, and
    the answer's job is to hand it back. So this one records the answer and
    then gets out of the way — the rail lifts its hold, the chosen card stays
    marked, and the way on to the lock step appears.
@@ -31,6 +31,7 @@ export default function LeChoices({
   markets,
   scopeLabel,
   nextHref,
+  lockHref,
   answer,
   adjustments,
 }: {
@@ -39,7 +40,10 @@ export default function LeChoices({
   cycleLabel: string;
   markets: string[];
   scopeLabel: string;
+  /** the next step — the promotions — for someone adjusting */
   nextHref: string;
+  /** the lock step — where "nothing changed" goes straight to */
+  lockHref: string;
   answer: LeAnswer | null;
   adjustments: number;
 }) {
@@ -54,7 +58,7 @@ export default function LeChoices({
     try {
       await setLeCycleAnswer(markets[0], year, cycle, a);
       /* "Nothing changed" is finished business, so it moves on. "Adjusting"
-         stays put: the planner it just unlocked is on this very step. */
+         stays put: the base review it just unlocked is on this very step. */
       if (go) router.push(go);
       router.refresh();
     } finally {
@@ -66,7 +70,7 @@ export default function LeChoices({
     <div className="stepchoices">
       <button
         className={"gatepick go" + (answer === "none" ? " chosen" : "")}
-        onClick={() => record("none", nextHref)}
+        onClick={() => record("none", lockHref)}
         disabled={busy}
       >
         <b>{answer === "none" ? `Nothing changed — recorded` : `Nothing changed this month`}</b>
@@ -83,16 +87,16 @@ export default function LeChoices({
         onClick={() => record("adjusting")}
         disabled={busy}
       >
-        <b>{answer === "adjusting" ? "Adjusting — the planner is yours" : "Adjust the estimate"}</b>
+        <b>{answer === "adjusting" ? "Adjusting — the base below is yours" : "Adjust the estimate"}</b>
         <span>
           {answer === "adjusting"
-            ? `${adjustments ? `${adjustments} adjustment${adjustments === 1 ? "" : "s"} on ${scopeLabel} so far` : `Nothing moved on ${scopeLabel} yet`}. Lock the month when ${cycleLabel} is where you want it.`
-            : `Work the promotions and the forecast on the planner below — it unlocks as soon as you choose this.`}
+            ? `${adjustments ? `${adjustments} adjustment${adjustments === 1 ? "" : "s"} on ${scopeLabel}'s base so far` : `Nothing moved on ${scopeLabel}'s base yet`}. The promotions are the next step; lock the month when ${cycleLabel} is where you want it.`
+            : `Work the base business below for the months still to come — it unlocks as soon as you choose this — then the promotions on the next step.`}
         </span>
       </button>
       {answer === "adjusting" && (
         <Link className="btn primary lechoose-on" href={nextHref}>
-          Lock the month →
+          Adjust the promotions →
         </Link>
       )}
     </div>

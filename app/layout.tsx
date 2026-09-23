@@ -57,6 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     cycle: status.schedule?.due.key ?? "",
     cycleLabel: status.schedule?.due.label ?? status.month,
     year: status.year,
+    promoChanges: status.totals.promoChanges,
   };
 
   return (

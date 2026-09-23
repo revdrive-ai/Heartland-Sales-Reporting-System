@@ -805,6 +805,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .kpis.revfin .k-pct{font-size:13px;font-weight:700;color:var(--ink-2);margin-left:8px}
 @media (max-width:900px){.kpis.revfin{grid-template-columns:1fr}}
 
+/* Where the year stands — the estimate's first step */
+.kpis.stand .kpi{border-top:3px solid var(--accent)}
+.kpis.stand .k-sub+.k-sub{margin-top:3px}
+.kpis.stand .k-sub{flex-wrap:wrap}
+.kpis.stand .k-pct{font-size:13px;font-weight:700;color:var(--ink-2);margin-left:8px}
+@media (max-width:1100px){.kpis.stand{grid-template-columns:repeat(2,1fr)}}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}

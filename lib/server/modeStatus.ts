@@ -65,6 +65,7 @@ export type ModeStatus = {
     leAnswered: number;          // LE: customers who answered the DUE cycle
     baseReviewed: number;        // plan: customers whose Base Business Review was submitted
     planBuilt: number;           // plan: customers whose Build the plan was submitted
+    promoChanges: number;        // LE: promotions changed, cancelled or added this year (one account in scope)
   };
 };
 
@@ -143,6 +144,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       leAnswered: customers.filter((c) => c.leAnswer).length,
       baseReviewed: customers.filter((c) => c.baseReviewedAt).length,
       planBuilt: customers.filter((c) => c.planBuiltAt).length,
+      promoChanges: 0,
     },
   };
 }

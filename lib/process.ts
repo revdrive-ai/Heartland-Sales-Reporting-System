@@ -17,10 +17,11 @@ import type { ModeKind } from "@/lib/mode";
    is showing a base that already reflects the two steps before it. The
    distribution doc is saved per customer x year and BaseView reads it.
 
-   LE is the same shape over the in-flight year: its first two steps are both
-   the Promotional Planner, and the third is the versions screen where the
-   cycle is locked. Its question is asked once a MONTH rather than once a
-   year, because an estimate is taken every cycle against the same year. */
+   LE is the same shape over the in-flight year: a read of where the year
+   stands, the Base Business Review, the promotions, then the versions screen
+   where the cycle is locked. Its question — did anything move — is asked
+   once a MONTH rather than once a year, because an estimate is taken every
+   cycle against the same year. */
 
 /** A modal on the underlying view that a step opens on arrival. */
 export type StepModal = "distribution" | "newitem";
@@ -95,34 +96,41 @@ export const PROCESSES: ProcessDef[] = [
     kind: "le",
     label: "Latest Estimate",
     tagline: "The in-flight year",
-    detail: "Three steps: review where the year stands, adjust the estimate, then lock the month.",
+    detail: "Four steps: see where the year stands, adjust the base, adjust the promotions, then review and lock the month.",
     icon: "refresh",
     needsYear: false,
     accountWhy:
       "An estimate is taken one account at a time — the forecast you are adjusting is that customer's, and each month's version locks against it",
     steps: [
       {
-        key: "review",
-        label: "Review the estimate",
-        blurb: "Actuals through the data edge plus the forecast to year-end — what this month starts from.",
-        view: "planner",
+        key: "stand",
+        label: "Where the year stands",
+        blurb: "Actuals through the NIQ edge plus the estimate to year-end, against the plan and last year — what this month starts from.",
+        view: "stand",
         perAccount: true,
       },
       {
-        key: "adjust",
-        label: "Adjust the estimate",
-        blurb: "Move the promotions and the forecast to today's best view — or say nothing changed this month.",
-        view: "planner",
+        key: "lebase",
+        label: "Adjust the base",
+        blurb: "Say whether anything moved this month. If it did, work the base business below for the months still to come — the promotions are the next step.",
+        view: "base",
         chooser: "le-changes",
-        /* Choosing to adjust hands the planner back, so the hold ends with
-           the answer rather than with the step. */
+        /* Choosing to adjust hands the page back, so the hold ends with the
+           answer rather than with the step. */
         holdsUntil: "answer",
         perAccount: true,
       },
       {
+        key: "promos",
+        label: "Adjust the promotions",
+        blurb: "Confirm, change, cancel or add the promotions still to run this year. The Telus book stays as booked; the estimate carries your changes.",
+        view: "planner",
+        perAccount: true,
+      },
+      {
         key: "lock",
-        label: "Lock the month",
-        blurb: "Take this cycle's version. The forecast on record freezes and the month is closed.",
+        label: "Review & lock",
+        blurb: "Read the full year back against the plan, last year and the last estimate, then lock this cycle's version.",
         view: "le",
         perAccount: true,
       },

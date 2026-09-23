@@ -66,6 +66,10 @@ export type PlanSnapshotVersion = Omit<PlanBaseNow, "computed_at"> & {
       was not the act of submitting the plan, and the step must not read as
       done on the strength of it. */
   submitted_from?: "review";
+  /** LE versions: the money the estimate stood at when it locked — gross
+      sales at list and trade for the full year — so a later cycle can be
+      read against it in dollars as well as units. */
+  money?: { gross: number; trade: number };
 };
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {

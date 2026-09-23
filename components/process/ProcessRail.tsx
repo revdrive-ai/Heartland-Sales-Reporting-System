@@ -49,6 +49,8 @@ export type RailStatus = {
   cycle: string;
   cycleLabel: string;
   year: number;
+  /** LE: promotions changed, cancelled or added for the year (one account) */
+  promoChanges: number;
 };
 
 type StepState = { done: boolean; note?: string };
@@ -82,7 +84,13 @@ function stateOf(stepKey: string, s: RailStatus | null): StepState {
       return all && s.submitted === s.customers
         ? { done: true, note: s.customers === 1 ? "submitted" : `all ${s.customers} accounts` }
         : { done: false, note: `${s.submitted} of ${s.customers} submitted` };
-    case "adjust": {
+    case "stand":
+      /* A read, not a record: the step is where the month starts, and
+         moving on is what finishes it. */
+      return { done: false, note: `FY${s.year} · actuals + estimate` };
+    case "promos":
+      return { done: false, note: s.promoChanges ? `${s.promoChanges} change${s.promoChanges === 1 ? "" : "s"}` : "as booked" };
+    case "lebase": {
       if (!all || s.leAnswered < s.customers) return { done: false, note: `${s.leAnswered} of ${s.customers} answered` };
       /* Answered is not the same as unchanged: "adjusting" with nothing moved
          yet is a month in progress, and calling that "nothing changed" would
@@ -184,7 +192,7 @@ export default function ProcessRail({
   const unanswered = onChooser && !!status && !answered;
   /* How long the hold lasts is the step's to say. Plan's question is settled
      in the rail or in a modal above the page, so it holds for the whole step;
-     the estimate's "adjust" answer hands the planner back, so that one holds
+     the estimate's "adjust" answer hands the page back, so that one holds
      only until it is answered. */
   const hold = needsAccount || (onChooser && (step.holdsUntil !== "answer" || unanswered));
   const urge = needsAccount || unanswered;
@@ -284,6 +292,7 @@ export default function ProcessRail({
             markets={inScope}
             scopeLabel={scopeLabel}
             nextHref={processPath(proc.kind, next?.key ?? step.key)}
+            lockHref={processPath(proc.kind, proc.steps[proc.steps.length - 1].key)}
             answer={status.leAnswer}
             adjustments={status.adjustments}
           />
