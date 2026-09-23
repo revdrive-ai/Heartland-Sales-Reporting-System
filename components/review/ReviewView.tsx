@@ -47,6 +47,8 @@ export type ReviewData = {
     }[];
     /** when the Base Business Review was submitted from its own card, if it has been */
     baseReviewedAt: string | null;
+    /** when Build the plan was submitted from its events card, if it has been */
+    planBuiltAt: string | null;
     base: null | { total: number; adjusted: number; byBrand: { brand: string; base: number; adjusted: number }[] };
     events: {
       count: number; spend: number; manual: number; carried: number;
@@ -98,6 +100,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
   if (!a.distribution.verifiedAt) owed.push({ step: "distribution", text: "Distribution has not been verified for this account" });
   if (!a.newItems.answered) owed.push({ step: "new-items", text: "The new-items question has not been answered" });
   if (!a.baseReviewedAt) owed.push({ step: "base", text: "The Base Business Review has not been submitted" });
+  if (!a.planBuiltAt) owed.push({ step: "planner", text: "Build the plan has not been submitted" });
   const ready = owed.length === 0;
   /* "Submitted" is a submission from this page. A version taken elsewhere
      (the sign-off card, the LE screen) is listed with the others, but it is
@@ -298,6 +301,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
             <div>
               <b>Build the plan</b>
               <span>
+                {a.planBuiltAt ? `Submitted ${a.planBuiltAt.slice(0, 10)} · ` : "Not submitted yet · "}
                 {a.events.count
                   ? `${a.events.count} event${a.events.count === 1 ? "" : "s"} · ${fmt$(a.events.spend)} planned trade · ${a.events.manual} entered, ${a.events.carried} carried from the book`
                   : "No promotion events on the calendar yet"}

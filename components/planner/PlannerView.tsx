@@ -37,6 +37,7 @@ export type PlannerData = {
     divBrandWk: Record<string, Record<string, number>>;  // market → brand → weekly base (latest 52w)
     divItemWk: Record<string, Record<string, number>>;   // market → upc → weekly base (latest 52w)
     custMarkets: Record<string, string[]>;               // Telus customer id → scoped divisions covered
+    marketCodes: string[];                               // the accounts (divisions) the top bar has in scope
     prices: { upc: string; unit_price: number; effective_from: string }[]; // dated list prices
     brandListPrice: Record<string, number | null>;       // run-rate-weighted brand list price, plan-year start
     /** the source year's gross sales at list price — measured to the NIQ edge,

@@ -6,6 +6,7 @@ import type { WorkMode } from "@/lib/mode";
 import { daysUntilLock, dueCycle, openCycle, type LeCycle } from "@/lib/leSchedule";
 import { readLeCycle, leAnswerFor, type LeAnswer } from "@/lib/lecycle";
 import { readBaseReview } from "@/lib/basereview";
+import { readPlanBuilt } from "@/lib/planbuilt";
 
 /* Where the work stands for the mode year, across the customers IN SCOPE —
    the rollup behind the step rail, the strip under the top bar and the
@@ -38,6 +39,8 @@ export type CustomerStatus = {
   leAnswer: LeAnswer | null;
   /** plan years: the Base Business Review was submitted for this account */
   baseReviewedAt: string | null;
+  /** plan years: Build the plan was submitted for this account */
+  planBuiltAt: string | null;
 };
 
 export type ModeStatus = {
@@ -61,6 +64,7 @@ export type ModeStatus = {
     events: number;              // plan events in the year document
     leAnswered: number;          // LE: customers who answered the DUE cycle
     baseReviewed: number;        // plan: customers whose Base Business Review was submitted
+    planBuilt: number;           // plan: customers whose Build the plan was submitted
   };
 };
 
@@ -85,6 +89,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     `distver:${m.code}:${year}`,
     `lecycle:${m.code}:${year}`,
     `basereview:${m.code}:${year}`,
+    `planbuilt:${m.code}:${year}`,
   ]);
   keys.push(`events:${year}`);
   const docs = await getStates(keys);
@@ -114,6 +119,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       },
       leAnswer: leAnswerFor(readLeCycle(docs.get(`lecycle:${m.code}:${year}`)), due.key),
       baseReviewedAt: readBaseReview(docs.get(`basereview:${m.code}:${year}`)).verified_at,
+      planBuiltAt: readPlanBuilt(docs.get(`planbuilt:${m.code}:${year}`)).built_at,
     };
   });
   const events = docs.get(`events:${year}`);
@@ -136,6 +142,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       events: Array.isArray(events) ? events.length : 0,
       leAnswered: customers.filter((c) => c.leAnswer).length,
       baseReviewed: customers.filter((c) => c.baseReviewedAt).length,
+      planBuilt: customers.filter((c) => c.planBuiltAt).length,
     },
   };
 }

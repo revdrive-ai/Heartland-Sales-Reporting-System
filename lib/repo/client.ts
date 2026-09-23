@@ -13,6 +13,7 @@ import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
 import { readDistVerification, type DistVerification } from "@/lib/distver";
 import { readLeCycle, type LeAnswer, type LeCycleDoc } from "@/lib/lecycle";
 import { readBaseReview, type BaseReview } from "@/lib/basereview";
+import { readPlanBuilt, type PlanBuilt } from "@/lib/planbuilt";
 
 /* ---- shared-document plumbing ---- */
 
@@ -379,4 +380,20 @@ export async function getBaseReview(market_code: string, plan_year: number): Pro
 
 export async function saveBaseReview(market_code: string, plan_year: number, doc: BaseReview): Promise<void> {
   await saveDoc(brKey(market_code, plan_year), doc);
+}
+
+/* ---- Build the plan's submission (plan years) ----
+   Per customer × plan year: when the plan was submitted from the events card
+   on Build the plan, and how many events it held then. */
+
+export type { PlanBuilt } from "@/lib/planbuilt";
+
+const pbKey = (market_code: string, plan_year: number) => `planbuilt:${market_code}:${plan_year}`;
+
+export async function getPlanBuilt(market_code: string, plan_year: number): Promise<PlanBuilt> {
+  return readPlanBuilt(await loadDoc<PlanBuilt>(pbKey(market_code, plan_year), () => null));
+}
+
+export async function savePlanBuilt(market_code: string, plan_year: number, doc: PlanBuilt): Promise<void> {
+  await saveDoc(pbKey(market_code, plan_year), doc);
 }

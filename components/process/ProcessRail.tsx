@@ -25,8 +25,8 @@ import StepReset from "./StepReset";
    Plan of Record submission are all recorded per customer, so those steps can say
    "9 of 13" — and they count the customers the TOP BAR has in scope, not
    every customer on file. The base review is submitted from its own card on
-   that screen, so it ticks too; building the plan leaves events but no
-   finish line, so that step shows progress rather than a tick. */
+   that screen, and building the plan from the button beside + New event, so
+   both of those tick too. */
 
 export type RailStatus = {
   customers: number;
@@ -36,6 +36,7 @@ export type RailStatus = {
   signed: number;     // Plan of Record signed (from anywhere)
   submitted: number;  // submitted from the Review & submit step — the only thing step 5 ticks on
   baseReviewed: number; // the Base Business Review submitted from its own card
+  planBuilt: number;    // Build the plan submitted from the events card
   events: number;
   taken: number;      // LE: locked for the due cycle
   leAnswered: number; // LE: answered "did anything move" for the due cycle
@@ -69,10 +70,11 @@ function stateOf(stepKey: string, s: RailStatus | null): StepState {
         ? { done: true, note: s.customers === 1 ? "reviewed" : `all ${s.customers} accounts` }
         : { done: false, note: `${s.baseReviewed} of ${s.customers} reviewed` };
     case "planner":
-      /* Building the plan leaves events behind but has no finish line of its
-         own — the finish line is the submit step after it. So this shows
-         progress, never a tick. */
-      return { done: false, note: `${s.events} event${s.events === 1 ? "" : "s"}` };
+      /* Building the plan is finished when it is submitted from the events
+         card; until then the pill shows how many events are on it. */
+      return all && s.planBuilt === s.customers
+        ? { done: true, note: `${s.events} event${s.events === 1 ? "" : "s"} · submitted` }
+        : { done: false, note: `${s.events} event${s.events === 1 ? "" : "s"}` };
     case "submit":
       /* Only a submission made FROM this step counts. A Plan of Record
          taken from the sign-off card or the LE screen is a real version,

@@ -6,11 +6,11 @@ import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/char
 import {
   getPlanBudget, getPlanEvents, replacePlanEvents, setPlanBudget, type PlanEvent,
 } from "@/lib/repo/client";
-import { getPriceEdits } from "@/lib/repo/client";
+import { getPlanBuilt, getPriceEdits, savePlanBuilt } from "@/lib/repo/client";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { parseWorkPath } from "@/lib/process";
+import { parseWorkPath, processPath } from "@/lib/process";
 import { usePromoLines } from "./lines";
 import { eventBaseProfile, eventUnitPrice, itemBaseProfile, itemWeeklyBase, listPriceAsOf, windowIdx, type DatedPrice, type PlanPayload } from "./planMath";
 import type { PlannerData } from "./PlannerView";
@@ -127,10 +127,11 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [carryAsk, setCarryAsk] = useState<"done" | null>(null);
   const custIds = useMemo(() => new Set(plan.customers.map((c) => c.id)), [plan.customers]);
+  const railCount = useRef<number | null>(null);   // events the rail last counted
   const scratchKey = `hhPlanScratch:${year}:${[...custIds].sort().join(",")}`;
 
   useEffect(() => {
-    getPlanEvents(year).then((es) => { latestEvents.current = es; setEvents(es); setEventsLoaded(true); });
+    getPlanEvents(year).then((es) => { latestEvents.current = es; railCount.current = es.length; setEvents(es); setEventsLoaded(true); });
     getPlanBudget(budgetKey).then((b) => setBudget(b ?? plan.priorPlannedTotal));
   }, [year, budgetKey, plan.priorPlannedTotal]);
 
@@ -142,8 +143,15 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const latestEvents = useRef<PlanEvent[]>([]);
   const persistQueue = useRef<Promise<unknown>>(Promise.resolve());
   const liftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* The rail counts this year's events from the server render, so when a
+     save changes how many there are — added, carried, deleted, undone —
+     refresh it once that save has landed. Edits that keep the count (a lift
+     tweak, a date) don't need the round trip. */
   const enqueue = (snap: PlanEvent[]) => {
-    persistQueue.current = persistQueue.current.then(() => replacePlanEvents(year, snap)).catch(() => {});
+    persistQueue.current = persistQueue.current.then(async () => {
+      await replacePlanEvents(year, snap);
+      if (railCount.current !== snap.length) { railCount.current = snap.length; router.refresh(); }
+    }).catch(() => {});
   };
   const persistNow = (next: PlanEvent[]) => {
     latestEvents.current = next;
@@ -363,6 +371,33 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     (!plan.scopeActive || !e.customer_id || scopeIds.has(e.customer_id)) && (!custSel || e.customer_id === custSel)
   ), [events, plan.scopeActive, scopeIds, custSel]);
   const committedAll = planEvents.reduce((a, e) => a + spendOf(e), 0);  // the whole plan
+
+  /* Submitting the plan — the finish line of this step. Recorded per account
+     (the step is worked one account at a time), it ticks Build the plan on
+     the rail and moves on to Review & submit. Any pending edit is written
+     first so the review reads the plan as it stands. */
+  const [builtAt, setBuiltAt] = useState<string | null>(null);
+  const [builtBusy, setBuiltBusy] = useState(false);
+  const builtCode = plan.marketCodes.length === 1 ? plan.marketCodes[0] : null;
+  useEffect(() => {
+    if (!builtCode) return;
+    getPlanBuilt(builtCode, year).then((b) => setBuiltAt(b.built_at));
+  }, [builtCode, year]);
+  const submitBuilt = async () => {
+    if (!builtCode) return;
+    setBuiltBusy(true);
+    try {
+      if (liftTimer.current) { clearTimeout(liftTimer.current); liftTimer.current = null; enqueue(latestEvents.current); }
+      await persistQueue.current;
+      const at = new Date().toISOString();
+      await savePlanBuilt(builtCode, year, { built_at: at, events: planEvents.length });
+      setBuiltAt(at);
+      router.push(processPath("plan", "submit", year));
+      router.refresh();
+    } finally {
+      setBuiltBusy(false);
+    }
+  };
   const filtered = brandChip !== "All brands" || !!itemSel;
   const committedOther = Math.max(0, committedAll - committed);
   const over = budget > 0 && committedAll > budget;
@@ -631,9 +666,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     await carryForward();
     try { localStorage.removeItem(scratchKey); } catch {}
     closeCarryAsk();
-    // once the carried events have landed, let the rail count them
-    await persistQueue.current;
-    router.refresh();
   };
   const chooseScratch = () => {
     try { localStorage.setItem(scratchKey, "1"); } catch {}
@@ -885,6 +917,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           <button className="newevent" onClick={() => setWizardOpen(true)} title={`Add a promotion event to the ${year} plan`}>
             <span aria-hidden="true">＋</span> New event
           </button>
+          {inPlanProcess && builtCode && (
+            /* The step's finish line, pushed to the far end of the row. */
+            <button
+              className={"plansubmit" + (builtAt ? " done" : "")}
+              onClick={submitBuilt}
+              disabled={builtBusy || planEvents.length === 0}
+              title={planEvents.length === 0
+                ? "Add at least one event before submitting the plan"
+                : builtAt
+                  ? `Submitted ${builtAt.slice(0, 10)} — submit again to go back to Review & submit with the plan as it stands now`
+                  : "Mark Build the plan done and go to Review & submit"}
+            >
+              {builtBusy ? "Submitting…" : builtAt ? <>✓ Submitted · submit again →</> : <>Submit the plan →</>}
+            </button>
+          )}
           <span className="pill">{visible.length} events in scope · {year}</span>
           {itemSel && (() => {
             const wk = itemWeeklyBase(plan, custSel, itemSel, itemMeta.get(itemSel)?.wk ?? 0);

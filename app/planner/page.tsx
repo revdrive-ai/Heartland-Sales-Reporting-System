@@ -538,6 +538,7 @@ export default async function Page() {
       divBrandWk,
       divItemWk,
       custMarkets,
+      marketCodes: markets.map((m) => m.code),
       prices,
       brandListPrice,
       fyGross: { year: fyYear, edge: fyEdge, measured: Math.round(fyMeasured), forecast: Math.round(fyForecast), byMkt: fyGross, byItem: fyGrossItem },

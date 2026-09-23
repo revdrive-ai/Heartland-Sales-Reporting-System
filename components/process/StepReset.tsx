@@ -8,6 +8,7 @@ import {
   getPlanAdjustments, deletePlanAdjustment,
   getPlanEvents, replacePlanEvents,
   getBaseReview, saveBaseReview,
+  getPlanBuilt, savePlanBuilt,
   type PlanEvent,
 } from "@/lib/repo/client";
 import { DV_EMPTY } from "@/lib/distver";
@@ -25,7 +26,7 @@ import { OPEN_DISTRIBUTION_EVENT } from "@/lib/process";
 
      · the distribution answers, the new items and the "none this year" answer
      · the plan adjustments, and the Base Business Review submission
-     · promotion events someone entered by hand
+     · promotion events someone entered by hand, and the Build the plan submission
 
    It deliberately leaves two things. Carried events are the Telus book read
    in, not anyone's entry, and deleting them would throw away data rather
@@ -34,7 +35,7 @@ import { OPEN_DISTRIBUTION_EVENT } from "@/lib/process";
    taking a new version, not by erasing the old one. */
 
 type Counts = { decisions: number; out: number; additions: number; answered: boolean;
-                verified: number; adjustments: number; events: number; reviewed: boolean };
+                verified: number; adjustments: number; events: number; reviewed: boolean; built: boolean };
 
 const telusIdsFor = (marketCodes: string[]) => {
   const set = new Set<string>();
@@ -72,7 +73,7 @@ export default function StepReset({
     setCounts(null);
     if (markets.length !== 1) return;
     const ids = telusIdsFor(markets);
-    const c: Counts = { decisions: 0, out: 0, additions: 0, answered: false, verified: 0, adjustments: 0, events: 0, reviewed: false };
+    const c: Counts = { decisions: 0, out: 0, additions: 0, answered: false, verified: 0, adjustments: 0, events: 0, reviewed: false, built: false };
     for (const code of markets) {
       const dv = await getDistVerification(code, year);
       const vals = Object.values(dv.decisions);
@@ -83,6 +84,7 @@ export default function StepReset({
       if (dv.verified_at) c.verified += 1;
       c.adjustments += (await getPlanAdjustments(code, year)).length;
       c.reviewed = c.reviewed || !!(await getBaseReview(code, year)).verified_at;
+      c.built = c.built || !!(await getPlanBuilt(code, year)).built_at;
     }
     c.events = (await getPlanEvents(year)).filter((e) => isMine(e, ids)).length;
     setCounts(c);
@@ -98,6 +100,7 @@ export default function StepReset({
           await deletePlanAdjustment(a.id, code, year);
         }
         await saveBaseReview(code, year, { verified_at: null });
+        await savePlanBuilt(code, year, { built_at: null });
       }
       const all = await getPlanEvents(year);
       const keep = all.filter((e) => !isMine(e, ids));
@@ -114,7 +117,7 @@ export default function StepReset({
   };
 
   const nothing = counts && !counts.decisions && !counts.additions && !counts.answered
-    && !counts.verified && !counts.adjustments && !counts.events && !counts.reviewed;
+    && !counts.verified && !counts.adjustments && !counts.events && !counts.reviewed && !counts.built;
   const one = markets.length === 1;
 
   return (
@@ -172,6 +175,7 @@ export default function StepReset({
                     {counts.answered && <li>The recorded &ldquo;no new items this year&rdquo; answer</li>}
                     {counts.adjustments > 0 && <li>Plan adjustments — <b>{counts.adjustments}</b></li>}
                     {counts.reviewed && <li>The Base Business Review submission</li>}
+                    {counts.built && <li>The Build the plan submission</li>}
                     {counts.events > 0 && <li>Promotion events entered by hand — <b>{counts.events}</b></li>}
                   </ul>
                 </div>
