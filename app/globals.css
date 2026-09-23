@@ -794,6 +794,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .revact input{flex:1 1 220px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
 .revact input:disabled{opacity:.6}
 
+/* Email the plan — the share dialog on Review & submit */
+.shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
+.shareemail .f-row textarea:focus{outline:2px solid var(--brand)}
+.shareemail .se-preview{margin:0;max-height:190px;overflow:auto;white-space:pre-wrap;font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:9px;padding:10px 12px}
+.shareemail .m-foot{flex-wrap:wrap}
+
 /* ---- Review & submit on paper: US letter, portrait ----
    Only the read-back prints. The app around it (top bar, sidebar, step rail,
    Ask panel, toasts) and every control drop out; the two-column grid runs as
