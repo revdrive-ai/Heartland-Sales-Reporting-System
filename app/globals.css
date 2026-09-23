@@ -794,6 +794,72 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .revact input{flex:1 1 220px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface)}
 .revact input:disabled{opacity:.6}
 
+/* ---- Review & submit on paper: US letter, portrait ----
+   Only the read-back prints. The app around it (top bar, sidebar, step rail,
+   Ask panel, toasts) and every control drop out; the two-column grid runs as
+   one column on the 7.5in-wide page; cards lose their shadows and keep a
+   hairline; sections, rows and list items don't split across pages, and the
+   events table repeats its header on each page. Colours are kept exact so
+   the status chips and the green/red deltas still read. */
+.printhead,.printsign,.printonly{display:none}
+@page{size:letter portrait;margin:0.5in 0.5in 0.6in}
+@page{@bottom-right{content:"Page " counter(page) " of " counter(pages);font:9px/1 var(--font);color:#6e7889}}
+@media print{
+  body:has(.revprint){background:#fff;font-size:10.5px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body:has(.revprint) .topbar,body:has(.revprint) .side,body:has(.revprint) .prail,
+  body:has(.revprint) .askpanel,body:has(.revprint) .overlay,body:has(.revprint) .toast,
+  body:has(.revprint) .stepscrim,body:has(.revprint) .modal{display:none !important}
+  body:has(.revprint) .app{display:block;min-height:0}
+  body:has(.revprint) .main{padding:0}
+  .revprint .noprint,.revprint .revsec>header .btn{display:none !important}
+  .revprint tr.printonly{display:table-row}
+  .revprint .card,.revprint .kpi{box-shadow:none;border:1px solid #d5d9e0;border-radius:8px;background:#fff}
+
+  .revprint .printhead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;
+    padding-bottom:6px;margin-bottom:10px;border-bottom:2px solid #1a1d23}
+  .revprint .printhead>div{display:flex;flex-direction:column;gap:2px}
+  .revprint .printhead>div:last-child{text-align:right}
+  .revprint .printhead b{font-size:12px}
+  .revprint .printhead span{font-size:9.5px;color:#5b6472}
+
+  .revprint .pagehead{margin-bottom:10px;gap:10px}
+  .revprint .pagehead>div:first-child{flex:1 1 100%;min-width:0}
+  .revprint .pagehead h1{font-size:17px}
+  .revprint .pagehead p{font-size:10px;max-width:none}
+  .revprint .pagehead .actions{display:none}
+
+  .revprint .kpis{grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .revprint .kpi{padding:8px 10px;break-inside:avoid}
+  .revprint .k-label{font-size:9.5px}
+  .revprint .k-val{font-size:19px}
+  .revprint .k-sub{font-size:9px}
+
+  .revprint .revowed{padding:8px 12px;margin-bottom:10px;break-inside:avoid}
+  .revprint .revowed ul{font-size:10px;line-height:1.5}
+  .revprint .revgrid{grid-template-columns:1fr;gap:10px;margin-bottom:10px}
+  .revprint .revsec{overflow:visible}
+  .revprint .revsec>header{padding:7px 12px;gap:9px;break-after:avoid}
+  .revprint .revsec>header .n{width:20px;height:20px;font-size:10px}
+  .revprint .revsec>header b{font-size:12px}
+  .revprint .revsec>header span{font-size:9.5px}
+  .revprint .revlist{padding:4px 12px 6px;font-size:10px}
+  .revprint .revlist li{padding:3px 0;break-inside:avoid}
+  .revprint .revlist .dim,.revprint .revtable .dim{font-size:9px}
+  .revprint .revtable{font-size:9.5px}
+  .revprint .revtable thead{display:table-header-group}
+  .revprint .revtable tr{break-inside:avoid}
+  .revprint .revtable th{font-size:8.5px;padding:4px 12px}
+  .revprint .revtable td{padding:3px 12px}
+  .revprint .minichip{font-size:8.5px;padding:1px 6px}
+
+  .revprint .revsubmit{padding:10px 12px;gap:10px;break-inside:avoid;display:block}
+  .revprint .revsubmit>div:first-child>b{font-size:12px}
+  .revprint .revsubmit>div:first-child>span{font-size:10px}
+  .revprint .printsign{display:flex;gap:28px;margin-top:22px}
+  .revprint .printsign span{flex:1;border-top:1px solid #1a1d23;padding-top:3px;font-size:9px;color:#5b6472}
+  .revprint .printsign span:last-child{flex:0 0 1.6in}
+}
+
 /* ── The Base Business Review card ─────────────────────────────────────── */
 .brev.done{border-color:var(--good)}
 .brev-head{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}

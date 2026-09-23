@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { parseWorkPath, processPath } from "@/lib/process";
 
@@ -78,6 +79,19 @@ export default function ReviewView({ data }: { data: ReviewData }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  /* Printing. The page prints as a letter-size read-back (the print rules in
+     globals.css): app chrome and buttons drop out, the sections run one
+     column, every event is listed rather than the first 40, and a header
+     carries the account, the status and when it was printed. The stamp is
+     set as the print starts — from the button or the browser's own Print —
+     so it is the moment of printing, not of loading. */
+  const [printedAt, setPrintedAt] = useState("");
+  useEffect(() => {
+    const stamp = () => flushSync(() => setPrintedAt(new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })));
+    window.addEventListener("beforeprint", stamp);
+    return () => window.removeEventListener("beforeprint", stamp);
+  }, []);
+
   const a = data.account;
   if (!a) {
     return (
@@ -131,13 +145,24 @@ export default function ReviewView({ data }: { data: ReviewData }) {
     return (
       <li>
         {text}
-        {href && <> — <Link href={href}>go to that step →</Link></>}
+        {href && <span className="noprint"> — <Link href={href}>go to that step →</Link></span>}
       </li>
     );
   };
 
   return (
-    <div className="view active">
+    <div className="view active revprint">
+      {/* print only: what the sheet is, whose, and when */}
+      <div className="printhead" aria-hidden="true">
+        <div>
+          <b>Heartland Foods · Plan {data.year} — Review &amp; submit</b>
+          <span>{a.name} · NIQ through {a.dataEdge}</span>
+        </div>
+        <div>
+          <b>{sub ? `Submitted ${sub.takenAt.slice(0, 10)} · v${sub.seq}` : "Not yet submitted"}</b>
+          <span>{printedAt ? `Printed ${printedAt}` : ""}</span>
+        </div>
+      </div>
       <div className="pagehead">
         <div>
           <h1>Review &amp; submit — Plan {data.year}</h1>
@@ -148,6 +173,9 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           </p>
         </div>
         <div className="actions">
+          <button className="btn noprint" onClick={() => window.print()} title="Print this read-back on letter paper (8.5 × 11)">
+            <span aria-hidden="true">🖨</span> Print
+          </button>
           <span className="pill">NIQ through {a.dataEdge}</span>
           {sub
             ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {sub.takenAt.slice(0, 10)}</span>
@@ -313,8 +341,9 @@ export default function ReviewView({ data }: { data: ReviewData }) {
             <table className="revtable">
               <thead><tr><th>Event</th><th>Brand</th><th>Window</th><th style={{ textAlign: "right" }}>Lift</th><th style={{ textAlign: "right" }}>Trade $</th></tr></thead>
               <tbody>
-                {a.events.rows.slice(0, 40).map((e) => (
-                  <tr key={e.id}>
+                {/* the screen lists the first 40; paper lists them all */}
+                {a.events.rows.map((e, i) => (
+                  <tr key={e.id} className={i >= 40 ? "printonly" : undefined}>
                     <td><b>{e.title || e.perf}</b> <span className="dim">· {e.perf}{e.origin !== "manual" ? " · carried" : ""}</span></td>
                     <td>{e.brand}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{e.start} → {e.end}</td>
@@ -323,7 +352,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
                   </tr>
                 ))}
                 {a.events.rows.length > 40 && (
-                  <tr><td colSpan={5} className="dim">… and {a.events.rows.length - 40} more on the planner</td></tr>
+                  <tr className="noprint"><td colSpan={5} className="dim">… and {a.events.rows.length - 40} more on the planner</td></tr>
                 )}
               </tbody>
             </table>
@@ -341,7 +370,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
                  Submitting again records a revision alongside it — versions are never overwritten.</>
               : ready
                 ? <>Freezes the plan base above as a version{elsewhere.length ? "" : " — v1, the Plan of Record"}. The monthly Latest Estimates are then read against it.</>
-                : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the distribution is verified, the new-items question is answered and the base review is submitted.</>}
+                : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the distribution is verified, the new-items question is answered, and the base review and the plan build are submitted.</>}
           </span>
           {elsewhere.length > 0 && !sub && (
             <span className="dim" style={{ marginTop: 4 }}>
@@ -364,7 +393,11 @@ export default function ReviewView({ data }: { data: ReviewData }) {
             </ul>
           )}
         </div>
-        <div className="revact">
+        {/* print only: somewhere to sign the paper copy */}
+        <div className="printsign" aria-hidden="true">
+          <span>Reviewed by</span><span>Date</span>
+        </div>
+        <div className="revact noprint">
           <input
             placeholder={sub ? "Revision note (optional)" : "Submission note (optional) — travels with the version"}
             value={note}
