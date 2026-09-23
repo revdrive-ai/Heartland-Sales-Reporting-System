@@ -1271,11 +1271,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
         <div className="note">
           ◇ Plan bars are the plan&apos;s expected <b>total</b> {volMode === "units" ? "sales units" : "gross sales $"} —
-          the <b>seasonality-engine base</b> (the same construction as the Base Business Review plan view: each week carries
-          the year-ago measured base, and weeks not yet measured project as the latest-52-week run-rate shaped by that
-          division × brand&apos;s monthly index) plus each scored event&apos;s incremental (base × lift across its
+          the <b>plan base</b> (the same construction as the Base Business Review plan view: each week carries
+          the year-ago measured base, and weeks not yet measured project as last year&apos;s shape at this year&apos;s
+          run-rate) plus each scored event&apos;s incremental (base × lift across its
           window){volMode === "dollars" ? ", all at the dated list price" : ""}. An item view scales its brand&apos;s
-          seasonal curve by the item&apos;s share of the brand base. Events at customers with no NIQ divisions add
+          seasonal curve by the item&apos;s share of the brand base, and its gray bars are that item&apos;s own
+          FY{plan.priorYear} history. Events at customers with no NIQ divisions add
           nothing here (their dollars live in the spend chart above). Gray bars
           are FY{plan.priorYear}&apos;s <b>actual total</b> NIQ {volMode === "units" ? "units" : "gross $ (list price)"},
           and the dashed line is the promoted-week slice of it. NIQ is read through {plan.dataEdge}: later months
