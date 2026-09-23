@@ -717,13 +717,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="actions">
           {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
           <span className="pill" title="The plan year comes from the top bar — Working on: Plan">Plan — FY{year}</span>
-          <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={tmplDl} title="Download the year-plan CSV template — fill it out and bring it back through Import">
-            ⬇ CSV template
+          <button className="btn primary" style={{ ...selStyle, cursor: "pointer", background: "var(--brand)", color: "var(--brand-ink)", borderColor: "var(--brand)" }} onClick={() => setWizardOpen(true)}>
+            + New event
           </button>
-          <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => fileRef.current?.click()} title="Import a filled year-plan CSV — rows preview as events in the table">
-            ⬆ Import year plan
-          </button>
-          <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = ""; }} />
           <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={carryForward} title={`Copy the ${plan.copySource.length} FY${plan.priorYear} promotions in scope into ${year}, windows shifted to keep weekdays aligned`}>
             ⇄ Carry FY{plan.priorYear} forward
           </button>
@@ -754,9 +750,13 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               ✕ Clear plan
             </button>
           )}
-          <button className="btn primary" style={{ ...selStyle, cursor: "pointer", background: "var(--brand)", color: "var(--brand-ink)", borderColor: "var(--brand)" }} onClick={() => setWizardOpen(true)}>
-            + New event
+          <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={tmplDl} title="Download the year-plan CSV template — fill it out and bring it back through Import">
+            ⬇ CSV template
           </button>
+          <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={() => fileRef.current?.click()} title="Import a filled year-plan CSV — rows preview as events in the table">
+            ⬆ Import year plan
+          </button>
+          <input ref={fileRef} type="file" accept=".csv,text/csv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importCsv(f); e.target.value = ""; }} />
         </div>
       </div>
 
