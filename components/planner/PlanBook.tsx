@@ -463,7 +463,11 @@ export default function PlanBook({ data }: { data: PlannerData }) {
      NIQ volume, with promoted-week volume as the dashed context line.
      "dollars" prices both sides at the dated list price. */
   const [volMode, setVolMode] = useState<"units" | "dollars">("units");
-  const volChart = useMemo(() => {
+  /* The plan's expected total volume by month for any selection — units, or
+     gross $ at the dated list price. The chart below uses it with the page's
+     filters; the gross-sales card uses it for the whole plan and the slice. */
+  const computeVol = (mode: "units" | "dollars", bChip: string, iSel: string, evs: PlanEvent[]) => {
+    const volMode = mode, brandChip = bChip, itemSel = iSel, visible = evs;
     const jan1 = `${year}-01-01`;
     const mkts = custSel ? (plan.custMarkets[custSel] ?? []) : Object.keys(plan.divBrandWk);
     const brands = brandChip !== "All brands" && brandChip !== "MIXED" ? [brandChip] : Object.keys(plan.brandStats);
@@ -524,7 +528,36 @@ export default function PlanBook({ data }: { data: PlannerData }) {
     // the month the prior-year NIQ reads stop — later months have nothing measured
     const edgeMo = plan.dataEdge.startsWith(String(plan.priorYear)) ? +plan.dataEdge.slice(5, 7) - 1 : 11;
     return { planM: planM.map(Math.round), promo: promo.map(Math.round), total: total.map(Math.round), edgeMo };
-  }, [visible, volMode, custSel, brandChip, itemSel, plan, priceEdits, year, itemMeta]);
+  };
+  const volChart = useMemo(() => computeVol(volMode, brandChip, itemSel, visible),
+    [visible, volMode, custSel, brandChip, itemSel, plan, priceEdits, year, itemMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Gross sales vs plan — the other driving number, beside the fund ──
+     Planned gross: the whole plan's expected gross sales (base + each event's
+     incremental, at the dated list price). Target: the source year's gross
+     sales × (1 + growth) — 2% by default, editable, kept per scope × year
+     like the fund. Like the fund it is ONE number for the account; a brand or
+     item selection picks out its slice and never moves the gap. */
+  const grossKey = `gross|${budgetKey}`;
+  const [grossTarget, setGrossTarget] = useState<number | null>(null);
+  const [grossEdit, setGrossEdit] = useState(false);
+  // a stored 0 means "the default" — FY gross + 2%, recomputed as the FY forecast moves
+  useEffect(() => { getPlanBudget(grossKey).then((v) => setGrossTarget(v && v > 0 ? v : null)).catch(() => {}); }, [grossKey]);
+  const fyGrossAll = useMemo(() => {
+    const mkts = custSel ? (plan.custMarkets[custSel] ?? []) : Object.keys(plan.divBrandWk);
+    let t = 0;
+    for (const mc of mkts) for (const arr of Object.values(plan.fyGross?.byMkt?.[mc] ?? {})) t += arr.reduce((a, v) => a + v, 0);
+    return t;
+  }, [plan, custSel]);
+  const grossPlanAll = useMemo(() => computeVol("dollars", "All brands", "", planEvents).planM.reduce((a, v) => a + v, 0),
+    [planEvents, custSel, plan, priceEdits, year, itemMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const grossPlanSel = useMemo(() => (filtered ? computeVol("dollars", brandChip, itemSel, visible).planM.reduce((a, v) => a + v, 0) : grossPlanAll),
+    [filtered, brandChip, itemSel, visible, grossPlanAll, plan, priceEdits, year, itemMeta]); // eslint-disable-line react-hooks/exhaustive-deps
+  const GROWTH_DEFAULT = 0.02;
+  const grossGoal = grossTarget ?? Math.round(fyGrossAll * (1 + GROWTH_DEFAULT));
+  const grossGrowth = fyGrossAll > 0 ? grossGoal / fyGrossAll - 1 : null;
+  const grossGap = grossGoal - grossPlanAll;               // > 0 short, < 0 ahead
+  const saveGross = (v: number) => { setGrossTarget(v); setGrossEdit(false); void setPlanBudget(grossKey, v); };
 
   const saveBudget = (v: number) => {
     setBudget(v);
@@ -857,7 +890,9 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
       </div>
 
-      <div className="grid2">
+      {/* The plan's two driving numbers side by side — the trade fund and the
+          gross sales target — with the guardrails across the row beneath. */}
+      <div className="grid2b">
         <div className="card">
           <div className="c-head">
             <h3>Trade spend vs plan</h3>
@@ -912,6 +947,78 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           </div>
         </div>
         <div className="card">
+          <div className="c-head">
+            <h3>Gross sales vs plan</h3>
+            <span className="sub">
+              {filtered ? <>the whole plan · <b>{selLabel.length > 36 ? selLabel.slice(0, 35) + "…" : selLabel}</b> picked out</> : "the whole plan, all brands · at list price"}
+            </span>
+          </div>
+          {(() => {
+            const scaleG = Math.max(grossGoal, grossPlanAll, 1);
+            const selW = filtered ? (grossPlanSel / scaleG) * 100 : 0;
+            const restW = ((filtered ? grossPlanAll - grossPlanSel : grossPlanAll) / scaleG) * 100;
+            const short = grossGap > 0;
+            const gapW = (Math.abs(grossGap) / scaleG) * 100;
+            return (
+              <div style={{ display: "flex", height: 30, borderRadius: 8, overflow: "hidden", fontSize: 11, fontWeight: 800, color: "#fff", background: "var(--surface-2)" }}
+                title={short ? `${fmtMoney(grossGap)} short of the ${fmtMoney(grossGoal)} gross target` : `${fmtMoney(-grossGap)} ahead of the ${fmtMoney(grossGoal)} gross target`}>
+                {filtered && (
+                  <span style={{ width: `${selW.toFixed(2)}%`, background: "#7c3aed", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+                    {selW >= 16 ? `${selLabel.length > 18 ? selLabel.slice(0, 17) + "…" : selLabel} ${fmtMoney(grossPlanSel)}` : ""}
+                  </span>
+                )}
+                <span style={{ width: `${restW.toFixed(2)}%`, background: filtered ? "#b9a3ec" : "#7c3aed", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+                  {restW >= 18 ? (filtered ? `Rest of plan ${fmtMoney(grossPlanAll - grossPlanSel)}` : `Planned ${fmtMoney(grossPlanAll)}`) : ""}
+                </span>
+                {short ? (
+                  <span style={{ width: `${gapW.toFixed(2)}%`, background: "repeating-linear-gradient(135deg,#f3d9a8 0 6px,#f8e8c8 6px 12px)", color: "#8a5a00", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+                    {gapW >= 6 ? `Gap ${fmtMoney(grossGap)}` : ""}
+                  </span>
+                ) : (
+                  <span style={{ width: `${gapW.toFixed(2)}%`, background: "var(--good)", display: "flex", alignItems: "center", paddingLeft: 8, whiteSpace: "nowrap", overflow: "hidden" }}>
+                    {gapW >= 6 ? `Ahead ${fmtMoney(-grossGap)}` : ""}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 10, fontSize: 12, color: "var(--ink-2)", fontWeight: 600, alignItems: "center" }}>
+            {filtered && <span style={{ color: "#7c3aed" }}>{selLabel.length > 30 ? selLabel.slice(0, 29) + "…" : selLabel} {fmtMoney(grossPlanSel)}</span>}
+            <span>Planned {fmtMoney(grossPlanAll)}{filtered ? " (whole plan)" : ""}</span>
+            {grossGap > 0 ? <b style={{ color: "var(--warn)" }}>Gap {fmtMoney(grossGap)}</b> : <b style={{ color: "var(--good)" }}>Ahead {fmtMoney(-grossGap)}</b>}
+            <span>
+              Target{" "}
+              {grossEdit ? (
+                <input
+                  style={{ ...selStyle, width: 130, padding: "3px 8px" }}
+                  type="number"
+                  defaultValue={grossGoal}
+                  autoFocus
+                  onBlur={(e) => saveGross(Math.max(0, parseFloat(e.target.value) || 0))}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                />
+              ) : (
+                <span className="minichip" style={{ cursor: "pointer" }} onClick={() => setGrossEdit(true)}
+                  title={`Edit the ${year} gross sales target for this scope — defaults to FY${plan.fyGross?.year ?? plan.priorYear} gross sales + 2%`}>
+                  {fmtMoney(grossGoal)} ✎
+                </span>
+              )}
+              <span style={{ color: "var(--ink-3)" }}>
+                {" "}({grossGrowth !== null ? `${grossGrowth >= 0 ? "+" : "−"}${Math.abs(grossGrowth * 100).toFixed(1)}%` : "—"} on FY{plan.fyGross?.year ?? plan.priorYear} {fmtMoney(fyGrossAll)}
+                {grossTarget === null ? " · default +2%" : ""})
+              </span>
+              {grossTarget !== null && (
+                <span className="minichip" style={{ cursor: "pointer", marginLeft: 6 }} onClick={() => { setGrossTarget(null); void setPlanBudget(grossKey, 0); }}
+                  title="Put the target back to FY gross sales + 2%">↺ +2%</span>
+              )}
+            </span>
+          </div>
+          <div className="note" style={{ marginTop: 8 }}>
+            ◇ FY{plan.fyGross?.year} gross sales = units × the list price in force each week: measured through {plan.fyGross?.edge}, the LE
+            forecast after. Planned = the {year} plan base plus each scored event&apos;s incremental, at the dated list price.
+          </div>
+        </div>
+        <div className="card" style={{ gridColumn: "1 / -1" }}>
           <div className="c-head">
             <h3>Guardrails</h3>
             <span className="sub">recalculate as you edit · ROI = incremental gross $ (dated list price) ÷ trade $</span>

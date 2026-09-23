@@ -39,6 +39,13 @@ export type PlannerData = {
     custMarkets: Record<string, string[]>;               // Telus customer id → scoped divisions covered
     prices: { upc: string; unit_price: number; effective_from: string }[]; // dated list prices
     brandListPrice: Record<string, number | null>;       // run-rate-weighted brand list price, plan-year start
+    /** the source year's gross sales at list price — measured to the NIQ edge,
+        LE forecast after — per division × brand by month, and per item */
+    fyGross: {
+      year: number; edge: string; measured: number; forecast: number;
+      byMkt: Record<string, Record<string, number[]>>;
+      byItem: Record<string, Record<string, number>>;
+    };
     telusUpcs: Record<string, string[]>;                 // Telus item number → NIQ UPCs (book SKUs only)
     /** plan-year monthly base per division × brand, via the seasonality
         engine: year-ago base carried where measured, shaped projection after */

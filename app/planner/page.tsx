@@ -1,4 +1,5 @@
-import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, priceAsOf } from "@/lib/repo";
+import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, listWeekEndings, priceAsOf } from "@/lib/repo";
+import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
@@ -440,6 +441,44 @@ export default async function Page() {
       brandListPrice[b] = w > 0 ? +(pw / w).toFixed(4) : null;
     }
 
+    /* The source year's GROSS SALES — the base the plan's gross target is set
+       on. It is the in-flight year as the LE sees it: measured units through
+       the NIQ edge, then the LE forecast to year-end (last year's shape at this
+       year's run-rate, × each open Telus window's expected lift), every unit
+       priced at the list price in force that week. Per division × brand by
+       month, plus per item, so a brand or item selection can read its slice. */
+    const fyYear = year - 1;
+    const fyWeeks: string[] = [];
+    {
+      let t = Date.UTC(fyYear, 0, 1);
+      while (new Date(t).getUTCDay() !== 6) t += DAY;
+      for (; new Date(t).getUTCFullYear() === fyYear; t += 7 * DAY) fyWeeks.push(new Date(t).toISOString().slice(0, 10));
+    }
+    const fyGross: Record<string, Record<string, number[]>> = {};
+    const fyGrossItem: Record<string, Record<string, number>> = {};
+    let fyMeasured = 0, fyForecast = 0, fyEdge = "";
+    for (const m of markets) {
+      const allW = await listWeekEndings(m.code);
+      const latestW = allW[allW.length - 1];
+      if (!latestW) continue;
+      if (latestW > fyEdge) fyEdge = latestW;
+      for (const b of HEARTLAND_BRANDS) {
+        const byItem = await fyWeeklyByItem(m.code, b, fyWeeks, allW, latestW);
+        const mon = Array(12).fill(0);
+        for (const [upc, series] of byItem) {
+          let itemTot = 0;
+          for (const x of series) {
+            const g = x.tyU * (listAt(upc, x.w) ?? 0);
+            mon[+x.w.slice(5, 7) - 1] += g;
+            itemTot += g;
+            if (x.measured) fyMeasured += g; else fyForecast += g;
+          }
+          if (itemTot > 0) (fyGrossItem[m.code] ??= {})[upc] = Math.round((fyGrossItem[m.code]?.[upc] ?? 0) + itemTot);
+        }
+        if (mon.some((v) => v > 0)) (fyGross[m.code] ??= {})[b] = mon.map(Math.round);
+      }
+    }
+
     /* Funding split per promo, from its Telus component lines, normalized to
        the planner's {oi, scan, fixed} model: Scan lines feed the scan rate
        and Off Invoice / Billback lines the O/I rate — "Each" rates as-is,
@@ -501,6 +540,7 @@ export default async function Page() {
       custMarkets,
       prices,
       brandListPrice,
+      fyGross: { year: fyYear, edge: fyEdge, measured: Math.round(fyMeasured), forecast: Math.round(fyForecast), byMkt: fyGross, byItem: fyGrossItem },
       telusUpcs,
       divBrandBaseM,
       planWeeks,
