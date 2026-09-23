@@ -132,6 +132,9 @@ export default async function Page() {
        the like-for-like read against plan volume on deal. */
     const zeros = () => Array(12).fill(0) as number[];
     const priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>> = {};
+    // the same, per division × ITEM — so an item selection compares the item
+    // with its own prior year, not with the whole brand
+    const priorItemMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>> = {};
     let dataEdge = "";
 
     /* Distribution verification (per customer division × plan year, shared
@@ -213,6 +216,10 @@ export default async function Page() {
             mm.u[mo] += un;
             mm.g[mo] += un * p;
             if ((r.acv_any_promo ?? 0) >= 10) { mm.pu[mo] += un; mm.pg[mo] += un * p; }
+            const mi = ((priorItemMonthly[m.code] ??= {})[r.upc] ??= { u: zeros(), g: zeros(), pu: zeros(), pg: zeros() });
+            mi.u[mo] += un;
+            mi.g[mo] += un * p;
+            if ((r.acv_any_promo ?? 0) >= 10) { mi.pu[mo] += un; mi.pg[mo] += un * p; }
           }
         }
         // this division's latest-52w weekly base run-rate, brand and per item
@@ -500,6 +507,12 @@ export default async function Page() {
       divBrandWkly,
       divItemWkly,
       adjustments: adjCount,
+      priorItemMonthly: Object.fromEntries(Object.entries(priorItemMonthly).map(([mc, byItem]) => [
+        mc,
+        Object.fromEntries(Object.entries(byItem)
+          .filter(([, s]) => s.u.some((v) => v > 0))
+          .map(([u, s]) => [u, { u: s.u.map(Math.round), g: s.g.map(Math.round), pu: s.pu.map(Math.round), pg: s.pg.map(Math.round) }])),
+      ])),
       priorMonthly: Object.fromEntries(Object.entries(priorMonthly).map(([mc, byBrand]) => [
         mc,
         Object.fromEntries(Object.entries(byBrand).map(([b, s]) => [

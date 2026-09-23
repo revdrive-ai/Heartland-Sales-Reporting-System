@@ -497,16 +497,21 @@ export default function PlanBook({ data }: { data: PlannerData }) {
       prof.forEach((v, i) => { planM[+plan.planWeeks[idx[i]].slice(5, 7) - 1] += v * share * (e.lift_pct! / 100) * price; });
     }
 
+    /* The prior year under the SAME selection as the plan bars: the item's
+       own FY history when an item is picked, else the brands'. Comparing an
+       item's plan with its whole brand's actuals read as the plan being five
+       times short. */
     const promo = Array(12).fill(0), total = Array(12).fill(0);
-    for (const mc of mkts) {
-      for (const b of brands) {
-        const s = plan.priorMonthly[mc]?.[b];
-        if (!s) continue;
-        for (let i = 0; i < 12; i++) {
-          promo[i] += volMode === "units" ? s.pu[i] : s.pg[i];
-          total[i] += volMode === "units" ? s.u[i] : s.g[i];
-        }
+    const addPrior = (s: { u: number[]; g: number[]; pu: number[]; pg: number[] } | undefined) => {
+      if (!s) return;
+      for (let i = 0; i < 12; i++) {
+        promo[i] += volMode === "units" ? s.pu[i] : s.pg[i];
+        total[i] += volMode === "units" ? s.u[i] : s.g[i];
       }
+    };
+    for (const mc of mkts) {
+      if (itemSel) addPrior(plan.priorItemMonthly?.[mc]?.[itemSel]);
+      else for (const b of brands) addPrior(plan.priorMonthly[mc]?.[b]);
     }
     // the month the prior-year NIQ reads stop — later months have nothing measured
     const edgeMo = plan.dataEdge.startsWith(String(plan.priorYear)) ? +plan.dataEdge.slice(5, 7) - 1 : 11;

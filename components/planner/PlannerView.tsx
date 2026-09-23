@@ -55,6 +55,8 @@ export type PlannerData = {
     /** prior-year NIQ volume by month per division × brand: u/g = total units
         and gross $ (dated list price), pu/pg = the promoted-week slices */
     priorMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;
+    /** division → item → prior-year monthly units/gross, total and promoted weeks */
+    priorItemMonthly: Record<string, Record<string, { u: number[]; g: number[]; pu: number[]; pg: number[] }>>;
     dataEdge: string;                                    // latest NIQ week on file
     /** distribution verification rollup (per-division docs from Base Business Review) */
     distVer: { verified: number; customers: number; excluded: number; added: number };
