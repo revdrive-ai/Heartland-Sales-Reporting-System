@@ -781,9 +781,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="actions">
           {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
           <span className="pill" title="The plan year comes from the top bar — Working on: Plan">Plan — FY{year}</span>
-          <button className="btn primary" style={{ ...selStyle, cursor: "pointer", background: "var(--brand)", color: "var(--brand-ink)", borderColor: "var(--brand)" }} onClick={() => setWizardOpen(true)}>
-            + New event
-          </button>
           <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={carryForward} title={`Copy the ${plan.copySource.length} FY${plan.priorYear} promotions in scope into ${year}, windows shifted to keep weekdays aligned`}>
             ⇄ Carry FY{plan.priorYear} forward
           </button>
@@ -857,6 +854,12 @@ export default function PlanBook({ data }: { data: PlannerData }) {
               </optgroup>
             ))}
           </select>
+          {/* The one thing most visits come here to do, placed where the plan
+              is being filtered — right after the item picker — and made to
+              stand out from the row of pills around it. */}
+          <button className="newevent" onClick={() => setWizardOpen(true)} title={`Add a promotion event to the ${year} plan`}>
+            <span aria-hidden="true">＋</span> New event
+          </button>
           <span className="pill">{visible.length} events in scope · {year}</span>
           {itemSel && (() => {
             const wk = itemWeeklyBase(plan, custSel, itemSel, itemMeta.get(itemSel)?.wk ?? 0);
