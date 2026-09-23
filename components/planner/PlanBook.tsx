@@ -80,7 +80,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
 
   const [events, setEvents] = useState<PlanEvent[]>([]);
   const [brandChip, setBrandChip] = useState("All brands");
-  const [custSel, setCustSel] = useState("");   // "" = all customers
+  /* The customer is the top bar's to choose — the scope pill says which —
+     so the plan level has no customer picker of its own. With one account in
+     scope the plan reads "at this customer"; with several, across them. */
+  const custSel = plan.customers.length === 1 ? plan.customers[0].id : "";
   const [itemSel, setItemSel] = useState("");   // "" = all items; else a UPC
   const [limit, setLimit] = useState(100);
   const [budget, setBudget] = useState<number>(plan.priorPlannedTotal);
@@ -776,15 +779,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           ))}
           <span style={{ color: "var(--line)", margin: "0 6px" }}>|</span>
           <select
-            style={selStyle}
-            value={custSel}
-            onChange={(e) => setCustSel(e.target.value)}
-            title="Narrow the plan to one customer — spend, guardrails and the monthly read all follow"
-          >
-            <option value="">All customers</option>
-            {plan.customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          <select
             style={{ ...selStyle, maxWidth: 340 }}
             value={itemSel}
             onChange={(e) => setItemSel(e.target.value)}
@@ -803,23 +797,6 @@ export default function PlanBook({ data }: { data: PlannerData }) {
             ))}
           </select>
           <span className="pill">{visible.length} events in scope · {year}</span>
-          {plan.distVer.verified > 0 ? (
-            <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
-              title={`Distribution verified at ${plan.distVer.verified} of ${plan.distVer.customers} divisions (in Base Business Review's plan year): ${plan.distVer.excluded} item${plan.distVer.excluded === 1 ? "" : "s"} carry no volume, ${plan.distVer.added} added on a proxy — event bases and the volume chart reflect it`}>
-              ✓ distribution: {plan.distVer.verified}/{plan.distVer.customers} divisions · {plan.distVer.excluded} out · {plan.distVer.added} added
-            </span>
-          ) : (
-            <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-              title={`No division has been through distribution verification for ${year} yet — plan bases carry every item from last year. Verify in the Base Business Review's Total year ${year} view.`}>
-              ⚠ distribution unverified
-            </span>
-          )}
-          {plan.adjustments > 0 && (
-            <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}
-              title={`${plan.adjustments} plan adjustment${plan.adjustments === 1 ? "" : "s"} from Base Business Review (distribution / price / trend levers) are applied to the ${year} bases here — event volume and rate-funded spend follow them`}>
-              ⇅ {plan.adjustments} adjustment{plan.adjustments === 1 ? "" : "s"} applied
-            </span>
-          )}
           {itemSel && (() => {
             const wk = itemWeeklyBase(plan, custSel, itemSel, itemMeta.get(itemSel)?.wk ?? 0);
             return (
