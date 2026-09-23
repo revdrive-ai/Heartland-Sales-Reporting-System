@@ -14,6 +14,7 @@ import { readDistVerification, type DistVerification } from "@/lib/distver";
 import { readLeCycle, type LeAnswer, type LeCycleDoc } from "@/lib/lecycle";
 import { readBaseReview, type BaseReview } from "@/lib/basereview";
 import { readPlanBuilt, type PlanBuilt } from "@/lib/planbuilt";
+import { readLeOverlay, type LeOverlay } from "@/lib/leovl";
 
 /* ---- shared-document plumbing ---- */
 
@@ -396,4 +397,20 @@ export async function getPlanBuilt(market_code: string, plan_year: number): Prom
 
 export async function savePlanBuilt(market_code: string, plan_year: number, doc: PlanBuilt): Promise<void> {
   await saveDoc(pbKey(market_code, plan_year), doc);
+}
+
+/* ---- the estimate's promotion changes (in-flight year) ----
+   Per customer × year: booked promotions cancelled or changed, and
+   promotions added, laid over the Telus book. See lib/leovl. */
+
+export type { LeOverlay, LeAddedEvent, LeOverlayChange } from "@/lib/leovl";
+
+const ovlKey = (market_code: string, year: number) => `leovl:${market_code}:${year}`;
+
+export async function getLeOverlay(market_code: string, year: number): Promise<LeOverlay> {
+  return readLeOverlay(await loadDoc<LeOverlay>(ovlKey(market_code, year), () => null));
+}
+
+export async function saveLeOverlay(market_code: string, year: number, doc: LeOverlay): Promise<void> {
+  await saveDoc(ovlKey(market_code, year), doc);
 }

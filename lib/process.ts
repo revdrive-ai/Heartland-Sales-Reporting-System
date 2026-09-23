@@ -124,7 +124,7 @@ export const PROCESSES: ProcessDef[] = [
         key: "promos",
         label: "Adjust the promotions",
         blurb: "Confirm, change, cancel or add the promotions still to run this year. The Telus book stays as booked; the estimate carries your changes.",
-        view: "planner",
+        view: "promos",
         perAccount: true,
       },
       {

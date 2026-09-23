@@ -1,6 +1,8 @@
 import { getPriceList, getPromoOverlays, listItems, listWeekEndings, priceAsOf, type PriceRow } from "@/lib/repo";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import { getSnapshots, type PlanSnapshotVersion } from "@/lib/server/planSnapshot";
+import { getState } from "@/lib/server/appstate";
+import { overlayCount, readLeOverlay } from "@/lib/leovl";
 
 /* The Latest Estimate's roll-up for ONE account × in-flight year — the four
    numbers the estimate is worked in (units, gross sales at list, trade
@@ -75,6 +77,7 @@ export type LeRollup = {
     gross: number | null; trade: number | null;   // stored from the money the version froze, when it did
   };
   planGrowth: number;
+  promoChanges: number;    // promotions cancelled, changed or added by the estimate
 };
 
 /** The full-year figure: actuals to date plus the estimate to go. */
@@ -148,11 +151,25 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
   // days. Corporate (all-Albertsons) promotions lift every division's volume
   // but their dollars are booked once, at corporate — counting them here
   // would book them thirteen times over, so the money stays the account's own.
-  const book = zero();
+  const book = zero(), est = zero();
+  const ovl = readLeOverlay(await getState(`leovl:${mkt}:${year}`).catch(() => undefined));
   for (const o of await getPromoOverlays({ market_code: mkt, from: `${year}-01-01`, to: `${year}-12-31` })) {
     if (o.corporate) continue;
     spreadByMonth(book, o.planned_amount, o.start_date, o.end_date, year);
+    /* The estimate's view of the same dollars: a cancelled promotion keeps
+       only what it spent up to the edge; a changed one spends its new amount
+       over its new window. */
+    if (ovl.cancelled[o.promo_id]) {
+      // the days already run keep their share of the dollars; the rest is not spent
+      const days = (utcOf(o.end_date) - utcOf(o.start_date)) / DAY + 1;
+      const ran = Math.max(0, Math.min(days, (utcOf(latest) - utcOf(o.start_date)) / DAY + 1));
+      if (ran > 0) spreadByMonth(est, o.planned_amount * (ran / days), o.start_date, latest < o.end_date ? latest : o.end_date, year);
+      continue;
+    }
+    const c = ovl.changes[o.promo_id];
+    spreadByMonth(est, c?.spend ?? o.planned_amount, c?.start ?? o.start_date, c?.end ?? o.end_date, year);
   }
+  for (const a of ovl.added) spreadByMonth(est, a.spend, a.start, a.end, year);
 
   const edgeMonth = +latest.slice(5, 7) - 1;
   const monthWeeks = fyWeeks.filter((w) => +w.slice(5, 7) - 1 === edgeMonth);
@@ -172,7 +189,8 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
   return {
     year, priorYear: year - 1, edge: latest, edgeMonth, edgeComplete,
     brands: out, totals,
-    trade: { book, est: book.slice(), bookTotal: sum(book), estTotal: sum(book) },
+    trade: { book, est, bookTotal: sum(book), estTotal: sum(est) },
+    promoChanges: overlayCount(ovl),
     ytd, brandYtd, lastLE, planGrowth: PLAN_GROWTH,
   };
 }

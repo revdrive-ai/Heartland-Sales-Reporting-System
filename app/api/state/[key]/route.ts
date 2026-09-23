@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getState, setState } from "@/lib/server/appstate";
+import { invalidateForecastCaches } from "@/lib/server/fyForecast";
 
 /* Shared-state endpoint behind the client stores (lib/repo/client.ts):
    GET returns the document under a key (404 when none), PUT replaces it.
@@ -39,6 +40,8 @@ export async function PUT(
   if (body.data === undefined) return NextResponse.json({ error: "missing data" }, { status: 400 });
   try {
     await setState(key, body.data);
+    // the forecast caches these two documents briefly; a write must reach the next read
+    if (key.startsWith("adj:") || key.startsWith("leovl:")) invalidateForecastCaches();
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "state store unavailable" }, { status: 503 });

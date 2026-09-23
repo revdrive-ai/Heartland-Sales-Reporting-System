@@ -4,6 +4,7 @@ import { getState } from "@/lib/server/appstate";
 import type { NielsenWeeklyRow } from "@/lib/types/db";
 import type { PlanAdjustment } from "@/lib/repo/client";
 import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/projection";
+import { readLeOverlay, type LeOverlay } from "@/lib/leovl";
 
 /* The FY forecast construction, shared by the Sales Dashboard's FY mode and
    the Monthly Forecast Review (and matching the Base Business Review Total-year view):
@@ -32,6 +33,25 @@ async function adjustmentsFor(mkt: string, year: number): Promise<PlanAdjustment
   const adjs = ((await getState(`adj:${mkt}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined) ?? [];
   adjCache.set(key, { at: Date.now(), adjs });
   return adjs;
+}
+
+// the estimate's promotion changes (leovl:<mkt>:<year>) — same short cache
+const ovlCache = new Map<string, { at: number; ovl: LeOverlay }>();
+async function overlayFor(mkt: string, year: number): Promise<LeOverlay> {
+  const key = `${mkt}:${year}`;
+  const hit = ovlCache.get(key);
+  if (hit && Date.now() - hit.at < 5000) return hit.ovl;
+  const ovl = readLeOverlay(await getState(`leovl:${mkt}:${year}`).catch(() => undefined));
+  ovlCache.set(key, { at: Date.now(), ovl });
+  return ovl;
+}
+
+/** Drop the cached adjustments and overlays — called when either is written,
+    so the very next forecast reads the new document rather than a copy up to
+    five seconds old. */
+export function invalidateForecastCaches() {
+  adjCache.clear();
+  ovlCache.clear();
 }
 
 export type FyWeek = {
@@ -160,12 +180,25 @@ async function brandContext(code: string, brand: string, facts: NielsenWeeklyRow
     }
     return bb > 0 ? (a - bb) / bb : null;
   };
+  /* The book's windows, read through the estimate's overlay: a cancelled
+     promotion carries no lift, a changed one runs on its new window (and
+     its stated lift, when one was given), and an added one is a window of
+     its own. All of it only ever reaches the FORECAST weeks — a promotion
+     that has already run is in the actuals whatever the overlay says. */
+  const ovl = await overlayFor(code, fyYear);
+  const liftFor = (sISO: string, eISO: string, stated: number | null | undefined) =>
+    stated === null || stated === undefined ? (liftOver(yearAgoWeek(sISO), yearAgoWeek(eISO)) ?? fallbackLift) : stated / 100;
   const lifts = (await getPromoOverlays({ market_code: code, brand }))
-    .filter((o) => !isNonPerformance(o.performance_type))
-    .map((o) => ({
-      s: utcOf(o.start_date), e: utcOf(o.end_date),
-      lift: liftOver(yearAgoWeek(o.start_date), yearAgoWeek(o.end_date)) ?? fallbackLift,
-    }));
+    .filter((o) => !isNonPerformance(o.performance_type) && !ovl.cancelled[o.promo_id])
+    .map((o) => {
+      const c = ovl.changes[o.promo_id];
+      const sISO = c?.start ?? o.start_date, eISO = c?.end ?? o.end_date;
+      return { s: utcOf(sISO), e: utcOf(eISO), lift: liftFor(sISO, eISO, c?.lift_pct) };
+    });
+  for (const a of ovl.added) {
+    if (a.brand !== brand || isNonPerformance(a.perf)) continue;
+    lifts.push({ s: utcOf(a.start), e: utcOf(a.end), lift: liftFor(a.start, a.end, a.lift_pct) });
+  }
 
   const brandAdjs = (await adjustmentsFor(code, fyYear)).filter((a) => a.brand === brand);
   return { engine, live, trend$, trendU, lifts, brandAdjs };

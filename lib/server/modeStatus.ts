@@ -7,6 +7,7 @@ import { daysUntilLock, dueCycle, openCycle, type LeCycle } from "@/lib/leSchedu
 import { readLeCycle, leAnswerFor, type LeAnswer } from "@/lib/lecycle";
 import { readBaseReview } from "@/lib/basereview";
 import { readPlanBuilt } from "@/lib/planbuilt";
+import { overlayCount, readLeOverlay } from "@/lib/leovl";
 
 /* Where the work stands for the mode year, across the customers IN SCOPE —
    the rollup behind the step rail, the strip under the top bar and the
@@ -41,6 +42,8 @@ export type CustomerStatus = {
   baseReviewedAt: string | null;
   /** plan years: Build the plan was submitted for this account */
   planBuiltAt: string | null;
+  /** LE: promotions cancelled, changed or added by the estimate */
+  promoChanges: number;
 };
 
 export type ModeStatus = {
@@ -91,6 +94,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
     `lecycle:${m.code}:${year}`,
     `basereview:${m.code}:${year}`,
     `planbuilt:${m.code}:${year}`,
+    `leovl:${m.code}:${year}`,
   ]);
   keys.push(`events:${year}`);
   const docs = await getStates(keys);
@@ -121,6 +125,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       leAnswer: leAnswerFor(readLeCycle(docs.get(`lecycle:${m.code}:${year}`)), due.key),
       baseReviewedAt: readBaseReview(docs.get(`basereview:${m.code}:${year}`)).verified_at,
       planBuiltAt: readPlanBuilt(docs.get(`planbuilt:${m.code}:${year}`)).built_at,
+      promoChanges: overlayCount(readLeOverlay(docs.get(`leovl:${m.code}:${year}`))),
     };
   });
   const events = docs.get(`events:${year}`);
@@ -144,7 +149,7 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       leAnswered: customers.filter((c) => c.leAnswer).length,
       baseReviewed: customers.filter((c) => c.baseReviewedAt).length,
       planBuilt: customers.filter((c) => c.planBuiltAt).length,
-      promoChanges: 0,
+      promoChanges: customers.reduce((a, c) => a + c.promoChanges, 0),
     },
   };
 }
