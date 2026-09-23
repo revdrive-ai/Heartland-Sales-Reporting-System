@@ -401,6 +401,18 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   const [efPerf, setEfPerf] = useState("all");
   const [efRoi, setEfRoi] = useState("all");
   const [evOpen, setEvOpen] = useState(true);
+  // the title bar's height, so the column headers can stick just under it
+  const evCardRef = useRef<HTMLDivElement>(null);
+  const evHeadRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const card = evCardRef.current, head = evHeadRef.current;
+    if (!card || !head) return;
+    const put = () => card.style.setProperty("--evhead-h", `${head.getBoundingClientRect().height}px`);
+    put();
+    const ro = new ResizeObserver(put);
+    ro.observe(head);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => { try { setEvOpen(localStorage.getItem("hhPlanEventsOpen") !== "0"); } catch {} }, []);
   const toggleEvOpen = () => setEvOpen((o) => { try { localStorage.setItem("hhPlanEventsOpen", o ? "0" : "1"); } catch {} return !o; });
   useEffect(() => { setEfText(""); setEfBrand("all"); setEfCust("all"); setEfPerf("all"); setEfRoi("all"); },
@@ -1064,8 +1076,10 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         </div>
       </div>
 
-      <div className="card" id="plan-events" style={{ padding: 0, marginTop: 16, scrollMarginTop: 90 }}>
-        <div style={{ padding: "14px 16px", borderBottom: evOpen ? "1px solid var(--line)" : "none", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      {/* While the event list scrolls, its title bar and column headers stay
+          put right under the step rail (see .evcard in globals.css). */}
+      <div className="card evcard" id="plan-events" ref={evCardRef} style={{ padding: 0, marginTop: 16 }}>
+        <div className="evhead" ref={evHeadRef} style={{ padding: "14px 16px", borderBottom: evOpen ? "1px solid var(--line)" : "none", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <b>{year} events</b>
           {showNoDetail && (
             <span className="pill" style={{ color: "var(--warn)", borderColor: "var(--warn)" }}>
@@ -1090,7 +1104,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           </button>
         </div>
         {evOpen && (<>
-        <div style={{ overflowX: "auto" }}>
+        <div className="evscroll">
           <table>
             <thead>
               <tr>
@@ -1107,10 +1121,13 @@ export default function PlanBook({ data }: { data: PlannerData }) {
                 <th>
                   Customer
                   <span style={{ display: "flex", gap: 5 }}>
-                    <select style={{ ...thSel, maxWidth: 130 }} value={efCust} onChange={(e) => setEfCust(e.target.value)}>
-                      <option value="all">All ({efCustOpts.length})</option>
-                      {efCustOpts.map((c) => <option key={c} value={c}>{c.length > 24 ? c.slice(0, 23) + "…" : c}</option>)}
-                    </select>
+                    {/* one account in scope → nothing to filter by customer */}
+                    {efCustOpts.length > 1 && (
+                      <select style={{ ...thSel, maxWidth: 130 }} value={efCust} onChange={(e) => setEfCust(e.target.value)}>
+                        <option value="all">All ({efCustOpts.length})</option>
+                        {efCustOpts.map((c) => <option key={c} value={c}>{c.length > 24 ? c.slice(0, 23) + "…" : c}</option>)}
+                      </select>
+                    )}
                     <select style={thSel} value={efPerf} onChange={(e) => setEfPerf(e.target.value)}>
                       <option value="all">All tactics</option>
                       {efPerfOpts.map((t) => <option key={t}>{t}</option>)}

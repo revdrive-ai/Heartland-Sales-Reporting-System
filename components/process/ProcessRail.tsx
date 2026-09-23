@@ -130,6 +130,20 @@ export default function ProcessRail({
      live — dimmed, but live — and a button that swallows a click in silence
      reads as broken. */
   const railRef = useRef<HTMLDivElement>(null);
+  /* Publish the rail's bottom edge as --rail-bottom, so a card further down
+     the page can keep its header stuck right under the steps while its body
+     scrolls. The rail is sticky at the top bar's height and its own height
+     changes with the step (a chooser footer is taller), so it is measured. */
+  useEffect(() => {
+    const el = railRef.current;
+    const root = document.documentElement;
+    if (!el) return;
+    const put = () => root.style.setProperty("--rail-bottom", `${60 + el.getBoundingClientRect().height}px`);
+    put();
+    const ro = new ResizeObserver(put);
+    ro.observe(el);
+    return () => { ro.disconnect(); root.style.removeProperty("--rail-bottom"); };
+  });
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const answerClick = () => {
     const el = railRef.current;

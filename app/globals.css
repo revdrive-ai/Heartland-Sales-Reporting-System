@@ -821,3 +821,19 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .newevent span{font-size:16px;line-height:1}
 .newevent:hover{transform:translateY(-1px);box-shadow:0 0 0 4px rgba(250,204,21,.4),0 6px 16px rgba(20,24,35,.18)}
 .newevent:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+
+/* The planner's event list: as the page scrolls, the card's title bar sticks
+   right under the step rail (or the top bar when there is no rail) and the
+   column headers stick right under the title bar, so the columns stay
+   labelled all the way down the list. Sticky needs no scrolling box between
+   it and the page, so the table is set to fit a laptop screen (tighter cell
+   padding); only below that width does it get its own horizontal scroll, and
+   there the headers scroll with it. */
+.evcard{scroll-margin-top:calc(var(--rail-bottom, 60px) + 8px)}
+.evcard .evhead{position:sticky;top:var(--rail-bottom, 60px);z-index:30;background:var(--surface);border-radius:var(--radius) var(--radius) 0 0}
+.evcard .evscroll thead th{position:sticky;top:calc(var(--rail-bottom, 60px) + var(--evhead-h, 52px));z-index:29;box-shadow:0 1px 0 var(--line)}
+.evcard .evscroll th,.evcard .evscroll td{padding-left:9px !important;padding-right:9px !important}
+@media (max-width:1380px){
+  .evcard .evscroll{overflow-x:auto}
+  .evcard .evscroll thead th{position:static}
+}
