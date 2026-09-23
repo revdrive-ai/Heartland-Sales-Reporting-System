@@ -576,6 +576,8 @@ export default function PlanBook({ data }: { data: PlannerData }) {
   };
 
   const carryForward = async () => {
+    // never twice for the same account: a second carry would double every deal
+    if (latestEvents.current.some((e) => e.origin === "carry" && custIds.has(e.customer_id))) return;
     const shiftIso = (iso: string) => new Date(utc(iso) + shift * DAY).toISOString().slice(0, 10);
     const rows: PlanEvent[] = plan.copySource.map((p) => ({
       id: newId(), plan_year: year,
@@ -781,8 +783,19 @@ export default function PlanBook({ data }: { data: PlannerData }) {
         <div className="actions">
           {data.scopeLabel && <span className="pill" style={{ borderColor: "var(--accent)", color: "var(--accent)" }}>Scope: {data.scopeLabel}</span>}
           <span className="pill" title="The plan year comes from the top bar — Working on: Plan">Plan — FY{year}</span>
-          <button className="btn" style={{ ...selStyle, cursor: "pointer" }} onClick={carryForward} title={`Copy the ${plan.copySource.length} FY${plan.priorYear} promotions in scope into ${year}, windows shifted to keep weekdays aligned`}>
-            ⇄ Carry FY{plan.priorYear} forward
+          {/* Once this account's FY deals are carried, carrying again would
+              double them — the button stays visible but locked, and says why.
+              Undo carry is the way back if the carry needs redoing. */}
+          <button
+            className="btn"
+            style={{ ...selStyle, cursor: alreadyCarried ? "not-allowed" : "pointer", opacity: alreadyCarried ? 0.5 : 1 }}
+            onClick={carryForward}
+            disabled={alreadyCarried || !plan.copySource.length}
+            title={alreadyCarried
+              ? `Already carried — the FY${plan.priorYear} deals for this account are in the ${year} plan. Use Undo carry first if you need to carry them again.`
+              : `Copy the ${plan.copySource.length} FY${plan.priorYear} promotions in scope into ${year}, windows shifted to keep weekdays aligned`}
+          >
+            {alreadyCarried ? `✓ FY${plan.priorYear} carried` : `⇄ Carry FY${plan.priorYear} forward`}
           </button>
           {carriedCount > 0 && (
             <button
