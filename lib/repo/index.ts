@@ -77,6 +77,22 @@ export async function getItemCrosswalk(): Promise<{
       if (!upc) continue; // Telus item exists but that UPC isn't in the NIQ pull
       (telusUpcs[t.item_number] ??= []).push(upc);
     }
+    /* Telus writes some item numbers with a prefix the crosswalk workbook
+       leaves off — the Equal packets are "FGMA20015446" on a deal line and
+       "20015446" in the crosswalk — so a line that finds no row under its
+       own number is tied by its digits, where those digits name exactly one
+       crosswalk item. The alias is added under the Telus spelling, so every
+       lookup by line item number just works. */
+    const byDigits = new Map<string, string[]>();
+    for (const num of Object.keys(telusUpcs)) {
+      const d = num.replace(/\D/g, "");
+      if (d) (byDigits.get(d) ?? byDigits.set(d, []).get(d)!).push(num);
+    }
+    for (const l of promoLines()) {
+      if (l.item_number in telusUpcs) continue;
+      const hits = byDigits.get(l.item_number.replace(/\D/g, "")) ?? [];
+      if (hits.length === 1) telusUpcs[l.item_number] = telusUpcs[hits[0]];
+    }
     const attrs: Record<string, NiqItemAttrs> = {};
     for (const n of fx.niq_items) {
       const upc = coreToUpc.get(n.upc_core);
@@ -110,12 +126,26 @@ export async function getTieList(): Promise<TieRow[]> {
   const coreToUpc = new Map(ITEMS.map((i) => [upcCore(i.upc), i.upc]));
   const staticByCore = new Map(fx.niq_items.map((n) => [n.upc_core, n]));
 
-  // FY promo dollars per Telus item number
+  // FY promo dollars per Telus item number — a line whose number the
+  // crosswalk spells without its prefix (FGMA20015446 → 20015446) lands on
+  // that row, as getItemCrosswalk ties it
+  const known = new Set(fx.telus_items.map((t) => t.item_number));
+  const byDigits = new Map<string, string[]>();
+  for (const num of known) {
+    const d = num.replace(/\D/g, "");
+    if (d) (byDigits.get(d) ?? byDigits.set(d, []).get(d)!).push(num);
+  }
+  const canon = (num: string) => {
+    if (known.has(num)) return num;
+    const hits = byDigits.get(num.replace(/\D/g, "")) ?? [];
+    return hits.length === 1 ? hits[0] : num;
+  };
   const lineAgg = new Map<string, { planned: number; n: number; desc: string; brand: string }>();
   for (const l of promoLines()) {
-    const a = lineAgg.get(l.item_number) ?? { planned: 0, n: 0, desc: l.item_description ?? "", brand: l.brand };
+    const key = canon(l.item_number);
+    const a = lineAgg.get(key) ?? { planned: 0, n: 0, desc: l.item_description ?? "", brand: l.brand };
     a.planned += l.planned_amount; a.n += 1;
-    lineAgg.set(l.item_number, a);
+    lineAgg.set(key, a);
   }
 
   const rows: TieRow[] = [];

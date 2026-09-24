@@ -10,7 +10,7 @@
    "last_week": "2027-01-02",
    "edge": "2026-09-19",
    "items": 55,
-   "items_with_upc": 36,
+   "items_with_upc": 42,
    "rows": 5830
   },
   {
@@ -22,7 +22,7 @@
    "last_week": "2027-01-02",
    "edge": "2026-09-12",
    "items": 37,
-   "items_with_upc": 15,
+   "items_with_upc": 17,
    "rows": 3922
   }
  ],
@@ -88,18 +88,6 @@
    "item_name": "Equal ASP 12/230 PKT"
   },
   {
-   "item_code": "FGMA20015446",
-   "item_name": "Equal ASP 12/230ct PKT"
-  },
-  {
-   "item_code": "FGMA20025672",
-   "item_name": "Swerve Confection Erythritol 6/12oz PCH"
-  },
-  {
-   "item_code": "FGMA20025673",
-   "item_name": "Swerve Brown Erythritol 6/12oz PCH"
-  },
-  {
    "item_code": "FGMA20029739",
    "item_name": "Whole Earth STV 12/80 PKT"
   },
@@ -108,24 +96,8 @@
    "item_name": "SAF SI 1:1 Vanilla CBR 6/32oz"
   },
   {
-   "item_code": "FGP0104100",
-   "item_name": "SAF SI 1:1 Black CBR 6/32oz"
-  },
-  {
    "item_code": "FGP0105300",
    "item_name": "PUB LWE SwtTea-B LWE 12/48mL US"
-  },
-  {
-   "item_code": "FGP0105400",
-   "item_name": "PUB LWE BryPMG-B 12/48mL US"
-  },
-  {
-   "item_code": "FGP0105500",
-   "item_name": "PUB LWE Blk-Chr-E 12/48mL US"
-  },
-  {
-   "item_code": "FGP0105600",
-   "item_name": "PUB LWE OrgTng-B 12/48mL US"
   },
   {
    "item_code": "FGP0105700",

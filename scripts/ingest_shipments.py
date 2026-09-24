@@ -104,12 +104,24 @@ def load_maps():
             for k in (sp, item_no):
                 if k:
                     by_code.setdefault(str(k).strip(), upc)
-    return by_code
+    # a code with no row of its own ties by its digits when they name exactly
+    # one known code — Telus/the planner write "FGMA20015446" where the
+    # crosswalk has "20015446"
+    by_digits = {}
+    for k in list(by_code):
+        by_digits.setdefault(re.sub(r"\D", "", k), set()).add(k)
+    return by_code, by_digits
 
 
 def main() -> None:
     wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
-    code_to_upc = load_maps()
+    code_to_upc, by_digits = load_maps()
+
+    def upc_for(code: str):
+        if code in code_to_upc:
+            return code_to_upc[code]
+        hits = by_digits.get(re.sub(r"\D", "", code), set())
+        return code_to_upc[next(iter(hits))] if len(hits) == 1 else None
     OUT.mkdir(parents=True, exist_ok=True)
     meta = {"source_file": SRC.name, "accounts": []}
     unmatched = {}
@@ -140,7 +152,7 @@ def main() -> None:
             if item is None or label not in ("Actual", "Last Year"):
                 continue
             kind = "actual" if label == "Actual" else "last_year"
-            upc = code_to_upc.get(item[0])
+            upc = upc_for(item[0])
             if upc is None:
                 unmatched[item[0]] = item[1]
             for w, v in zip(weeks, r[off + 3:off + 3 + len(weeks)]):
