@@ -677,13 +677,22 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   /* What is still needed, in the order someone would fill it. The item and
      the lever arrive prefilled from the insight, so the work that remains is
      the size of the move, when it applies, and why. */
+  /* The window a lever may cover. In the estimate the weeks already measured
+     are actuals — a lever over them would change nothing — so the pickers
+     run from the first forecast week to year-end. A plan year is all open. */
+  const adjMin = !planYear && data.forecast ? data.forecast.from : snapYear ? `${snapYear}-01-01` : "";
+  const adjMax = snapYear ? `${snapYear}-12-31` : "";
+  const datesOk = !!aFrom && !!aTo && aTo >= aFrom && (!adjMin || aFrom >= adjMin) && (!adjMax || aTo <= adjMax);
+
   const adjSteps = [
     { key: "pct", label: "Set the expected impact",
       hint: "How much base volume moves — negative for a loss, say −12 for distribution lost in the largest stores.",
       done: !!parseFloat(aPct) },
     { key: "dates", label: "Set when it applies",
-      hint: "The first and last day the change is in effect. Only weeks inside it move.",
-      done: !!aFrom && !!aTo && aTo >= aFrom },
+      hint: !planYear && data.forecast
+        ? `The first and last day the change is in effect — the months still to come, from ${data.forecast.from}. Weeks already measured are actuals and cannot move.`
+        : "The first and last day the change is in effect. Only weeks inside it move.",
+      done: datesOk },
     { key: "reason", label: "Pick a reason",
       hint: "Why the base is moving. It travels with the adjustment into the plan and the sign-off.",
       done: !!aReason },
@@ -703,7 +712,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
 
   const addAdj = async () => {
     const pct = parseFloat(aPct);
-    if (!snapYear || !pct || !aFrom || !aTo || aTo < aFrom || !aReason || !adjBrand) return;
+    if (!snapYear || !pct || !datesOk || !aReason || !adjBrand) return;
     setAdjs(await savePlanAdjustment({
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       market_code: data.mkt, plan_year: snapYear, brand: adjBrand,
@@ -1719,10 +1728,11 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             value={aPct}
             onChange={(e) => { setAPct(e.target.value); touchAdj(); }}
           />
-          <input style={{ ...selStyle, width: 140, ...adjRing("dates") }} type="date" value={aFrom}
-            onChange={(e) => { setAFrom(e.target.value); touchAdj(); }} title="Takes effect" />
+          <input style={{ ...selStyle, width: 140, ...adjRing("dates") }} type="date" value={aFrom} min={adjMin || undefined} max={adjMax || undefined}
+            onChange={(e) => { setAFrom(e.target.value); touchAdj(); }}
+            title={!planYear && data.forecast ? `Takes effect — no earlier than the first forecast week, ${data.forecast.from}` : "Takes effect"} />
           <span style={{ color: "var(--ink-3)", fontSize: 12 }}>→</span>
-          <input style={{ ...selStyle, width: 140, ...adjRing("dates") }} type="date" value={aTo}
+          <input style={{ ...selStyle, width: 140, ...adjRing("dates") }} type="date" value={aTo} min={aFrom || adjMin || undefined} max={adjMax || undefined}
             onChange={(e) => { setATo(e.target.value); touchAdj(); }} title="Ends" />
           <select
             style={{ ...selStyle, width: 190, ...adjRing("reason") }}
