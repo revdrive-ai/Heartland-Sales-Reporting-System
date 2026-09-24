@@ -882,6 +882,12 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .chartread .cr-extra{flex-basis:100%;font-size:11.5px;color:var(--ink-3)}
 .chartread .cr-idle{color:var(--ink-3);font-weight:600}
 
+/* a Key insight that an adjustment has answered */
+.ins-done{background:var(--good-soft);border-radius:10px}
+.ins-done+div{border-top-color:transparent !important}
+.ins-answer{margin-top:5px;font-size:12px;color:var(--good);font-weight:600;line-height:1.5}
+.ins-answer b{font-weight:800}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}

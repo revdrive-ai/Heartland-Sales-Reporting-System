@@ -131,6 +131,9 @@ export type PlanAdjustment = {
   to: string;              // ISO date it ends
   note: string;
   created_at: string;
+  /** the Key insight this was set up from ("volume:<upc>", "distribution:ALL", …),
+      so the insight can show it has been addressed */
+  insight?: string;
 };
 
 const adjKey = (market_code: string, plan_year: number) => `adj:${market_code}:${plan_year}`;

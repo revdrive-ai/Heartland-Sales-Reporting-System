@@ -335,6 +335,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
      plan", or by touching a field. Off by default: a card that nags before
      anyone has engaged with it is noise. */
   const [adjGuide, setAdjGuide] = useState(false);
+  // the Key insight the form was opened from, if any — saved on the adjustment
+  const [aInsight, setAInsight] = useState<string | null>(null);
   useEffect(() => {
     if (snapYear) {
       getPlanAdjustments(data.mkt, snapYear).then(setAdjs);
@@ -353,10 +355,13 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const ADJ_KIND: Record<string, PlanAdjustment["kind"]> = {
     distribution: "distribution", delisted: "distribution", price: "price", volume: "trend",
   };
+  /** a stable name for an insight — what an adjustment records to say it answered it */
+  const insightKey = (kind: string, upc?: string) => `${kind}:${upc ?? "ALL"}`;
   const prefillAdj = (kind: string, upc?: string) => {
     setAKind(ADJ_KIND[kind] ?? "trend");
     setAUpc(upc && data.items.some((i) => i.upc === upc) ? upc : "ALL");
     setAReason("");
+    setAInsight(insightKey(kind, upc));
     setAdjGuide(true);   // the insight filled in what it knows; say what is left
     /* Not scrollIntoView: the step rail is sticky under the top bar, so
        "block: start" parks the card's header — the callout and the fields it
@@ -749,9 +754,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       upc: aUpc, kind: aKind, pct, from: aFrom, to: aTo,
       // one stored field: the reason, with any detail after it
       note: aNote.trim() ? `${aReason} — ${aNote.trim()}` : aReason,
+      ...(aInsight ? { insight: aInsight } : {}),
       created_at: new Date().toISOString(),
     }));
-    setAPct(""); setANote(""); setAReason(""); setAdjGuide(false);
+    setAPct("");    setAInsight(null); setANote(""); setAReason(""); setAdjGuide(false);
   };
   /* In the roll-up every brand's levers are in play — the total has to show
      the adjustments already made underneath it. */
@@ -1667,20 +1673,39 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 promo: "Promo support", delisted: "Delisted?", listprice: "List price",
               };
               const actionable = ins.kind !== "listprice" && ins.kind !== "promo";
+              /* Addressed: an adjustment on this year's plan was set up from
+                 this insight (it carries the insight's key), or — for an
+                 item-level flag — one of the same kind sits on that item. */
+              const key = insightKey(ins.kind, ins.upc);
+              const answered = adjs.filter((a) =>
+                a.insight === key || (!!ins.upc && a.upc === ins.upc && a.kind === (ADJ_KIND[ins.kind] ?? "trend")));
+              const done = actionable && answered.length > 0;
               return (
-                <div key={i} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 2px", borderTop: i ? "1px solid var(--line)" : "none" }}>
-                  <span style={{ color, fontWeight: 900, fontSize: 15, lineHeight: "19px" }}>
-                    {ins.severity === "bad" ? "▼" : ins.severity === "good" ? "▲" : "◇"}
+                <div key={i} className={done ? "ins-done" : undefined} style={{ display: "flex", gap: 11, alignItems: "flex-start", padding: "10px 8px", margin: "0 -6px", borderTop: i ? "1px solid var(--line)" : "none" }}>
+                  <span style={{ color: done ? "var(--good)" : color, fontWeight: 900, fontSize: 15, lineHeight: "19px" }}>
+                    {done ? "✓" : ins.severity === "bad" ? "▼" : ins.severity === "good" ? "▲" : "◇"}
                   </span>
                   <div style={{ flex: 1 }}>
                     <b style={{ fontSize: 13 }}>{ins.title}</b>
                     <span className="badge" style={{ marginLeft: 8, background: "var(--surface-2)", color: "var(--ink-3)" }}>{KIND[ins.kind]}</span>
                     <div style={{ fontSize: 12.5, color: "var(--ink-2)", marginTop: 3, lineHeight: 1.5 }}>{ins.detail}</div>
+                    {done && (
+                      <div className="ins-answer">
+                        ✓ Addressed in Plan {planYear ?? nextPlanYear}:{" "}
+                        {answered.map((a, j) => (
+                          <span key={a.id}>
+                            {j ? " · " : ""}
+                            <b style={{ color: a.pct >= 0 ? "var(--good)" : "var(--bad)" }}>{a.pct >= 0 ? "+" : "−"}{Math.abs(a.pct)}%</b>{" "}
+                            {a.kind === "distribution" ? "distribution" : a.kind === "price" ? "base price" : "trend"} {a.from} → {a.to}{a.note ? ` — ${a.note}` : ""}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {actionable && (
                     <span
-                      className="minichip"
-                      style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2 }}
+                      className={"minichip" + (done ? "" : "")}
+                      style={{ cursor: "pointer", whiteSpace: "nowrap", marginTop: 2, ...(done ? { color: "var(--ink-3)" } : {}) }}
                       title={ins.trend
                         ? "See this item's base trend behind the flag, then set up the adjustment — item and lever pre-filled"
                         : data.plan
@@ -1688,7 +1713,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                         : `Open the ${nextPlanYear} plan view with this adjustment set up — item and lever pre-filled, enter the impact %`}
                       onClick={() => (ins.trend ? setInsModal(ins) : goAdjust(ins))}
                     >
-                      Adjust in Plan {planYear ?? nextPlanYear} →
+                      {done ? "Adjust again →" : <>Adjust in Plan {planYear ?? nextPlanYear} →</>}
                     </span>
                   )}
                 </div>
@@ -1840,7 +1865,10 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       {a.pct >= 0 ? "+" : "−"}{Math.abs(a.pct)}%
                     </td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{a.from} → {a.to}</td>
-                    <td style={{ padding: "9px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>{a.note || "—"}</td>
+                    <td style={{ padding: "9px 14px", fontSize: 12.5, color: "var(--ink-2)" }}>
+                      {a.note || "—"}
+                      {a.insight && <span className="minichip" style={{ marginLeft: 6 }} title="Set up from a Key insight above">from insight</span>}
+                    </td>
                     <td style={{ padding: "9px 14px", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontSize: 12 }}>{a.created_at.slice(0, 10)}</td>
                     <td style={{ padding: "9px 14px" }}>
                       <span
