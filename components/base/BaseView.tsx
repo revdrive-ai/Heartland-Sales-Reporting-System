@@ -300,13 +300,17 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   useEffect(() => {
     try {
       setSeasHide(localStorage.getItem(SEAS_KEY) === "1");
-      setShowPY(localStorage.getItem(PY_KEY) === "1");
+      /* The year-ago actuals stay OFF on a plan year however they were left
+         elsewhere: their promotion spikes stretch the axis and flatten the
+         base and plan lines the screen is for. The chip still turns them on
+         for a look; it just does not carry over. */
+      setShowPY(!data.plan && localStorage.getItem(PY_KEY) === "1");
       setShowYB(localStorage.getItem(YB_KEY) === "1");
       setShowYB2(localStorage.getItem(YB2_KEY) === "1");
       setInsHide(localStorage.getItem(INS_KEY) === "1");
       setEngHide(localStorage.getItem(ENG_KEY) === "1");
     } catch {}
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- once, on mount; data.plan is the mounted year's
 
   // Coming into a customer's plan-year view logs that customer as registered
   // for that year (first visit stamps the date; later visits are no-ops).
@@ -806,7 +810,8 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   }, [data.forecast, data.points, adjFactors]);
   const togglePY = () => {
     setShowPY((v) => {
-      try { localStorage.setItem(PY_KEY, v ? "0" : "1"); } catch {}
+      // a plan year's look at the actuals is for this visit only (see above)
+      if (!data.plan) { try { localStorage.setItem(PY_KEY, v ? "0" : "1"); } catch {} }
       return !v;
     });
   };
