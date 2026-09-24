@@ -12,6 +12,7 @@ import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import EventWizard from "./EventWizard";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseWorkPath, processPath } from "@/lib/process";
+import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 import { usePromoLines } from "./lines";
 import { eventBaseProfile, eventUnitPrice, itemBaseProfile, itemWeeklyBase, listPriceAsOf, windowIdx, type DatedPrice, type PlanPayload } from "./planMath";
 import type { PlannerData } from "./PlannerView";
@@ -26,7 +27,7 @@ import type { PromoLine } from "@/lib/types/db";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DAY = 86400000;
 const ROI_GUARDRAIL = 1.5;
-const BRAND_CHOICES = ["SPLENDA", "SLIMFAST", "JAVA HOUSE", "MIXED"];
+const BRAND_CHOICES = [...HEARTLAND_BRANDS, "MIXED"];
 
 const selStyle: React.CSSProperties = {
   font: "inherit", fontSize: 12.5, fontWeight: 600, color: "var(--ink)",
@@ -1132,7 +1133,7 @@ export default function PlanBook({ data }: { data: PlannerData }) {
           <div className="note" style={{ marginTop: 10 }}>
             ◇ Lift pre-fills from <b>measured lift by tactic</b> — each FY{plan.priorYear} window of that type in
             scope, actual vs NIQ base — falling back to the brand average
-            ({BRAND_CHOICES.slice(0, 3).map((b) => `${b} +${plan.brandStats[b]?.avgLift ?? 0}%`).join(" · ")}) for
+            ({HEARTLAND_BRANDS.map((b) => `${b} +${plan.brandStats[b]?.avgLift ?? 0}%`).join(" · ")}) for
             tactics with no reads yet. <b>EDLP and Slotting pre-fill 0%</b>: they are funding vehicles, not in-store
             performance — EDLP&apos;s effect is already inside the base. Override any cell where you know better.
           </div>

@@ -37,7 +37,7 @@ function allocateByMonth(totalByMonth: number[], amount: number, startISO: strin
   }
 }
 
-const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
+import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 
 export default async function Page() {
   const [allPromos, allCustomers, meta, enums, gscope, mode] = await Promise.all([

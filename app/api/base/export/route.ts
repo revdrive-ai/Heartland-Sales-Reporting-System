@@ -12,7 +12,7 @@ import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/pr
    the column header).
    Planner adjustments are browser-local and are NOT applied here. */
 
-const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"];
+import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 const ALL_BRANDS = "ALL"; // the selection's all-brands roll-up
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
 const DAY = 86400000;

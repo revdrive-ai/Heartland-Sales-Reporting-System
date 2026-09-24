@@ -48,6 +48,9 @@ MARKETS = {
 }
 
 OWN_MANUFACTURER = "HEARTLAND FOOD PRODUCTS GROUP"
+# brands Heartland plans and sells that NIQ files under another manufacturer
+# (Equal sits under Whole Earth Sweetener) — see lib/data/heartlandBrands.ts
+OWN_BRANDS = {"EQUAL"}
 
 def week_to_iso(period: str) -> str:
     """'1 w/e 07/29/23' -> '2023-07-29' (must be a Saturday)."""
@@ -85,7 +88,7 @@ def main() -> None:
             "super_category": r._5,  # SUPER CATEGORY
             "category": r.CATEGORY,
             "sub_category": r._7,    # SUB CATEGORY
-            "is_own": r.MANUFACTURER == OWN_MANUFACTURER,
+            "is_own": r.MANUFACTURER == OWN_MANUFACTURER or str(r._4).strip().upper() in OWN_BRANDS,
         }
         for r in items.itertuples()
     ]

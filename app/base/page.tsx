@@ -17,7 +17,7 @@ import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
    including future years, which render as a planning view until their NIQ
    weeks land. Controls travel in the URL. */
 
-const HEARTLAND_BRANDS = ["SPLENDA", "SLIMFAST", "JAVA HOUSE"]; // the Heartland brands NIQ carries
+import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 /* The brand selector's first entry: every Heartland brand at once, so the
    division reads as one business before it is read brand by brand. It is a
    roll-up of exactly the three brands below it — the same weeks, the same

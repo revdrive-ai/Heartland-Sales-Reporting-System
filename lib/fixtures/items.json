@@ -7,7 +7,7 @@
   "super_category": "SUGAR AND SWEETENERS",
   "category": "SUGAR SUBSTITUTES",
   "sub_category": "ARTIFICIAL",
-  "is_own": false
+  "is_own": true
  },
  {
   "upc": "030025810935",
@@ -17,7 +17,7 @@
   "super_category": "SUGAR AND SWEETENERS",
   "category": "SUGAR SUBSTITUTES",
   "sub_category": "ARTIFICIAL",
-  "is_own": false
+  "is_own": true
  },
  {
   "upc": "030025890196",
@@ -27,7 +27,7 @@
   "super_category": "SUGAR AND SWEETENERS",
   "category": "SUGAR SUBSTITUTES",
   "sub_category": "ARTIFICIAL",
-  "is_own": false
+  "is_own": true
  },
  {
   "upc": "030025827511",
@@ -37,7 +37,7 @@
   "super_category": "SUGAR AND SWEETENERS",
   "category": "SUGAR SUBSTITUTES",
   "sub_category": "ARTIFICIAL",
-  "is_own": false
+  "is_own": true
  },
  {
   "upc": "081331401817",
