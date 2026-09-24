@@ -52,3 +52,32 @@ export function gridOptions() {
 
 export const fmtMoney = (v: number) =>
   v >= 1e6 ? `$${(v / 1e6).toFixed(2)}M` : v >= 1e3 ? `$${Math.round(v / 1e3).toLocaleString()}K` : `$${Math.round(v)}`;
+
+/* A tooltip that sits in a strip UNDER the chart instead of following the
+   cursor over it. Chart.js draws its own tooltip on the canvas, right on
+   top of the lines being read; this hands the same content (the week, one
+   line per series with its swatch, and any extra lines the chart's
+   callbacks add) to an element the page keeps below the plot, so nothing
+   is covered while the cursor moves. Takes the element's id and looks it
+   up when a hover fires, so the options can be built before it is mounted
+   and no ref is read in a render. */
+export function readoutTooltip(elementId: string, idle = "Move across the chart for a week's values") {
+  const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  return {
+    enabled: false,
+    external: (ctx: { tooltip: { opacity: number; title?: string[]; body?: { lines: string[] }[]; labelColors?: { borderColor?: unknown; backgroundColor?: unknown }[]; afterBody?: string[] } }) => {
+      const el = typeof document === "undefined" ? null : document.getElementById(elementId);
+      if (!el) return;
+      const t = ctx.tooltip;
+      if (!t.opacity) { el.innerHTML = `<span class="cr-idle">${esc(idle)}</span>`; return; }
+      const title = (t.title ?? []).join(" ");
+      const rows = (t.body ?? []).map((b, i) => {
+        const c = t.labelColors?.[i];
+        const col = String(c?.borderColor ?? c?.backgroundColor ?? "#888");
+        return `<span class="cr-item"><i style="background:${esc(col)}"></i>${esc(b.lines.join(" "))}</span>`;
+      });
+      const extra = (t.afterBody ?? []).filter((l) => l.trim()).map((l) => `<span class="cr-extra">${esc(l)}</span>`);
+      el.innerHTML = `<b class="cr-title">${esc(title)}</b>${rows.join("")}${extra.join("")}`;
+    },
+  };
+}

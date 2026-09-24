@@ -7,7 +7,7 @@ import { ADD_ITEM_EVENT, OPEN_DISTRIBUTION_EVENT, parseWorkPath, processPath, vi
 import Link from "next/link";
 import { Line } from "react-chartjs-2";
 import type { Plugin } from "chart.js";
-import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
+import { cssToken, fmtMoney, gridOptions, readoutTooltip, useThemeTick } from "@/components/charts/themed";
 import {
   deletePlanAdjustment, getDistVerification, getPlanAdjustments, getPlanRegistry, getPriceEdits,
   registerPlanYear, saveDistVerification, savePlanAdjustment,
@@ -1069,6 +1069,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     return { ...o, plugins: { ...o.plugins, legend: { ...o.plugins.legend, ...legendHandlers("season") } } };
   }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* The main chart's values read out in a strip below it rather than in a
+     box over the lines — see readoutTooltip; the strip is found by id. */
+  const READOUT_ID = "base-chartread";
   const opts = useMemo(() => {
     const o = gridOptions();
     const laneSpace = showLanes && bands.lanes.length ? 18 + bands.lanes.length * LANE_H + (bands.laneOverflow ? 14 : 0) : 0;
@@ -1080,6 +1083,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
         ...o.plugins,
         legend: { ...o.plugins.legend, ...legendHandlers("main") },
         tooltip: {
+          ...readoutTooltip(READOUT_ID),
           callbacks: {
             afterBody: (items: { dataIndex: number }[]) => {
               const i = items[0]?.dataIndex ?? 0;
@@ -1542,6 +1546,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
               options={opts}
             />
             )}
+          </div>
+          <div id={READOUT_ID} className="chartread" aria-live="polite">
+            <span className="cr-idle">Move across the chart for a week&apos;s values</span>
           </div>
           <div className="note">
             {data.plan
