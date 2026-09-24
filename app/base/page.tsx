@@ -438,6 +438,15 @@ export default async function Page({
       added: dv.additions.length,
       items: dvItems,
       master: allItems.filter((i) => i.is_own).map((i) => ({ upc: i.upc, name: i.name, brand: i.brand })),
+      /* units per case by UPC, from the price list's latest record — the
+         pipeline fill is entered in cases and converted with this */
+      casePack: (() => {
+        const out: Record<string, number> = {};
+        for (const r of priceRows) { // sorted fg → effective_from, so the last wins
+          if (r.upc && r.units_per_case && r.units_per_case > 0) out[r.upc] = r.units_per_case;
+        }
+        return out;
+      })(),
     };
     // Each item's share of the brand base over the latest 52 weeks — the
     // weight an item-level planner adjustment carries in the all-items view.

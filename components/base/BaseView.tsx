@@ -68,6 +68,7 @@ export type BaseData = {
     added: number;
     items: { upc: string; name: string; brand: string; acv: number; lastSale: string; baseWk: number; seasonality: number[] }[];
     master: { upc: string; name: string; brand: string }[];
+    casePack: Record<string, number>;   // units per case by UPC (price list)
   };
   // data-edge year: weeks forecast past the edge
   forecast: null | {
@@ -224,6 +225,10 @@ const YEAR_STYLES = [
   { color: "--good", dash: [] as number[], width: 1.5 },
   { color: "--bad", dash: [] as number[], width: 1.3 },
 ];
+
+// ids for records the browser creates (adjustments, new items) — outside the
+// component so it is not impure work in a render
+const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
 export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?: "distribution" | "newitem" }) {
   const tick = useThemeTick();
@@ -391,8 +396,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
   const [dvSeeSeas, setDvSeeSeas] = useState(false);
   const [dvShip, setDvShip] = useState("");      // the day it ships to the customer
   const [dvShelf, setDvShelf] = useState("");    // projected first day on shelf
-  const [dvLoadU, setDvLoadU] = useState("");
-  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const [dvLoadC, setDvLoadC] = useState("");    // pipeline fill, in cases
 
   const openDv = async () => {
     if (!data.distVer) return;
@@ -579,7 +583,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
 
   const dvResetAdd = () => {
     setDvNew(null); setDvSearch(""); setDvProxy(""); setDvAcv(""); setDvSeeSeas(false);
-    setDvShip(""); setDvShelf(""); setDvLoadU("");
+    setDvShip(""); setDvShelf(""); setDvLoadC("");
     setDvHand(false); setDvHandName(""); setDvHandBrand(""); setDvHandUpc("");
   };
 
@@ -639,6 +643,26 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     return steps.sort((a, b) => a - b);
   })();
 
+  /* The pipeline fill is entered in cases and kept in units too: cases ×
+     the price list's units per case for the new item, or cases as-is when
+     no pack is on file. */
+  const dvPack = dvNew ? (data.distVer?.casePack[dvNew.upc] ?? 0) : 0;
+  const dvLoadCases = Math.max(0, parseFloat(dvLoadC) || 0);
+  const dvLoadUnits = Math.round(dvLoadCases * (dvPack || 1));
+  /* What the item adds up to on the shelf: the weekly rate above × the
+     copied item's seasonality, week by week from the shelf week to the end
+     of the plan year — and the same over a full 52 weeks, for a run-rate
+     read that does not depend on the launch date. */
+  const dvVolume = (() => {
+    if (!dvProxyItem || !dvShelf) return null;
+    const first = weekFor(dvShelf);
+    const weeks = data.points.map((p) => p.week).filter((w) => w >= first);
+    const idx = (w: string) => { const v = dvProxyItem.seasonality[+w.slice(5, 7) - 1]; return v > 0 ? v : 1; };
+    const inYear = weeks.reduce((a, w) => a + dvEstWk * idx(w), 0);
+    const full52 = dvProxyItem.seasonality.reduce((a, v) => a + (v > 0 ? v : 1), 0) / 12 * 52 * dvEstWk;
+    return { first, weeks: weeks.length, inYear, full52 };
+  })();
+
   const dvAddItem = async () => {
     if (!dvDoc || !dvNew || !dvProxy || !dvShelf || !dvShip) return;
     const add: DistAddition = {
@@ -651,7 +675,9 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       ship_date: dvShip,
       shelf_date: dvShelf,
       first_week: weekFor(dvShelf),
-      loadin_units: Math.max(0, parseFloat(dvLoadU) || 0),
+      loadin_cases: dvLoadCases,
+      loadin_units: dvLoadUnits,
+      ...(dvPack ? { units_per_case: dvPack } : {}),
     };
     // adding one retracts any earlier "there are none this year"
     await dvPersist({ ...dvDoc, additions: [...dvDoc.additions, add], no_additions: null });
@@ -2466,7 +2492,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                           {" · ships "}{a.ship_date.slice(0, 10)}
                           {" · on shelf "}{a.shelf_date.slice(0, 10)}
                           {a.loadin_units > 0
-                            ? ` · pipeline fill ${Math.round(a.loadin_units).toLocaleString()} u (not in the base)`
+                            ? ` · pipeline fill ${a.loadin_cases ? `${a.loadin_cases.toLocaleString()} cs · ` : ""}${Math.round(a.loadin_units).toLocaleString()} u (not in the base)`
                             : ""}
                         </span>
                       </span>
@@ -2599,8 +2625,13 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                       ))}
                     </select>
                   </label>
-                  <label className="fld">Pipeline fill <span className="dim">(retail units · not in the base)</span>
-                    <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={0} placeholder="0" value={dvLoadU} onChange={(e) => setDvLoadU(e.target.value)} />
+                  <label className="fld">Pipeline fill <span className="dim">(<b>cases</b> · shipped into the warehouse · not in the base)</span>
+                    <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="number" min={0} step={1} placeholder="0 cases" value={dvLoadC} onChange={(e) => setDvLoadC(e.target.value)} />
+                    <span className="dim" style={{ display: "block", marginTop: 4, fontWeight: 600 }}>
+                      {dvPack
+                        ? `${dvPack} units per case on the price list${dvLoadCases ? ` → ${dvLoadUnits.toLocaleString()} retail units` : ""}`
+                        : "no case pack on the price list for this item — counted as 1 unit per case until one is added"}
+                    </span>
                   </label>
                   <label className="fld">Ship date
                     <input style={{ ...selStyle, width: "100%", marginTop: 4 }} type="date" value={dvShip}
@@ -2623,6 +2654,30 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                         {dvSeeSeas ? "Hide seasonality" : "See its seasonality"}
                       </button>
                     </div>
+                    {dvVolume && (
+                      <div className="dvvol">
+                        <div>
+                          <span className="k-label">Plan {data.distVer!.year} volume · from the shelf week</span>
+                          <b>{Math.round(dvVolume.inYear).toLocaleString()} units</b>
+                          <span className="dim">
+                            {dvPack ? `≈ ${Math.round(dvVolume.inYear / dvPack).toLocaleString()} cases · ` : ""}
+                            {dvVolume.weeks} week{dvVolume.weeks === 1 ? "" : "s"} from {dvVolume.first} at {dvEstWk.toLocaleString()} u/wk × the seasonality above
+                          </span>
+                        </div>
+                        <div>
+                          <span className="k-label">A full 52 weeks on shelf</span>
+                          <b>{Math.round(dvVolume.full52).toLocaleString()} units</b>
+                          <span className="dim">{dvPack ? `≈ ${Math.round(dvVolume.full52 / dvPack).toLocaleString()} cases · ` : ""}the run-rate read, whatever the launch date</span>
+                        </div>
+                        {dvLoadCases > 0 && (
+                          <div>
+                            <span className="k-label">Pipeline fill · on top</span>
+                            <b>{dvLoadCases.toLocaleString()} cases</b>
+                            <span className="dim">{dvLoadUnits.toLocaleString()} retail units into the warehouse · not in the base</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {dvSeeSeas && (() => {
                       /* Scaled to this item's own range, not to an absolute
                          axis: a 0.83–1.14 shape is real seasonality but would

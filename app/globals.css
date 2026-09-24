@@ -866,6 +866,13 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .pillbtn u{text-decoration-thickness:1px;text-underline-offset:2px}
 .pillbtn:hover{background:var(--surface-2)}
 
+/* the new-item form's volume read-out */
+.dvvol{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.dvvol>div{display:flex;flex-direction:column;gap:2px}
+.dvvol .k-label{font-size:11px;font-weight:700;color:var(--ink-2)}
+.dvvol b{font-size:18px;font-weight:800;letter-spacing:-.3px;color:var(--ink)}
+.dvvol .dim{font-size:11px;line-height:1.4}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}

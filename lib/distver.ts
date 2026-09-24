@@ -19,11 +19,16 @@ export type DistAddition = {
   ship_date: string;      // the day it ships to the customer — when the pipeline fill leaves the plant
   shelf_date: string;     // projected first day on shelf — what the forecast starts from
   first_week: string;     // the NIQ Saturday shelf_date falls into; ongoing volume starts here
-  /* One-time pipeline fill, retail units: the stock bought to fill the
-     shelves before the item ever sells. Deliberately NOT part of the base,
-     which is a consumption model; it is carried here for the shipment
-     forecast to lay on by month once the plan is built. */
+  /* One-time pipeline fill: the stock bought to fill the shelves before the
+     item ever sells. Entered in CASES (that is how it ships); loadin_units is
+     the same fill in retail units — cases × the price list's units per case,
+     or cases as-is when the pack is unknown — so downstream reads stay in
+     units. Deliberately NOT part of the base, which is a consumption model;
+     it is carried here for the shipment forecast to lay on by month once
+     the plan is built. */
   loadin_units: number;
+  loadin_cases?: number;
+  units_per_case?: number;   // the pack the units were derived with, when known
 };
 
 export type DistVerification = {
@@ -57,6 +62,8 @@ function readAddition(a: StoredAddition): DistAddition {
     shelf_date: shelf,
     first_week: a.first_week ?? shelf,
     loadin_units: a.loadin_units ?? 0,
+    ...(typeof a.loadin_cases === "number" ? { loadin_cases: a.loadin_cases } : {}),
+    ...(typeof a.units_per_case === "number" ? { units_per_case: a.units_per_case } : {}),
   };
 }
 

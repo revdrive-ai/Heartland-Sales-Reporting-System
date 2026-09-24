@@ -41,7 +41,7 @@ export type ReviewData = {
       additions: {
         name: string; brand: string; manual: boolean;
         proxyName: string; proxyPct: number; estAcv: number | null;
-        shipDate: string; shelfDate: string; loadin: number;
+        shipDate: string; shelfDate: string; loadin: number; loadinCases: number | null;
       }[];
     };
     adjustments: {
@@ -367,7 +367,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
                   <b>{n.name}</b> <span className="dim">· {n.brand}{n.manual ? " · by hand" : ""}</span>
                   <div className="dim">
                     {n.proxyPct}% of {n.proxyName}{n.estAcv !== null ? ` · ${n.estAcv}% ACV` : ""} · ships {n.shipDate} · on shelf {n.shelfDate}
-                    {n.loadin > 0 ? ` · pipeline fill ${Math.round(n.loadin).toLocaleString()} u (not in the base)` : ""}
+                    {n.loadin > 0 ? ` · pipeline fill ${n.loadinCases ? `${n.loadinCases.toLocaleString()} cs · ` : ""}${Math.round(n.loadin).toLocaleString()} u (not in the base)` : ""}
                   </div>
                 </li>
               ))}

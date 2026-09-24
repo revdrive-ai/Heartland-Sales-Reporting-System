@@ -84,7 +84,7 @@ export default async function Page() {
         additions: dv.additions.map((a) => ({
           name: a.name, brand: a.brand, manual: !!a.manual,
           proxyName: nameOf.get(a.proxy_upc) ?? a.proxy_upc, proxyPct: a.proxy_pct, estAcv: a.est_acv ?? null,
-          shipDate: a.ship_date.slice(0, 10), shelfDate: a.shelf_date.slice(0, 10), loadin: a.loadin_units,
+          shipDate: a.ship_date.slice(0, 10), shelfDate: a.shelf_date.slice(0, 10), loadin: a.loadin_units, loadinCases: a.loadin_cases ?? null,
         })),
       },
       adjustments: adjs
