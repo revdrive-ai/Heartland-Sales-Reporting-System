@@ -861,6 +861,11 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .shipgrid .shiptable th,.shipgrid .shiptable td{padding:6px 10px}
 @media (max-width:1100px){.shipgrid{grid-template-columns:1fr}}
 
+/* a pill that is also a button — same look, a hand cursor */
+.pillbtn{font:inherit;cursor:pointer;background:var(--surface)}
+.pillbtn u{text-decoration-thickness:1px;text-underline-offset:2px}
+.pillbtn:hover{background:var(--surface-2)}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}

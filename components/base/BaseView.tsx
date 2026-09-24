@@ -1086,18 +1086,21 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             ⬇ Export base
           </button>
           {planYear ? (<>
-            {/* No "Verify distribution" button: step 1 of the plan process owns
-                that, the same way step 2 owns new items. The pills below still
-                report where it stands, which is what this row is for. */}
+            {/* Step 1 of the plan process opens the distribution list on
+                arrival; once it has been verified and saved the list is shut,
+                so this pill is the way back in — to look it over again, or to
+                change an answer. The unverified pill opens it too. */}
             {data.distVer && (data.distVer.verifiedAt
-              ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}
-                  title={`Verified ${data.distVer.verifiedAt.slice(0, 10)} — ${data.distVer.excluded} item${data.distVer.excluded === 1 ? "" : "s"} taken out, ${data.distVer.added} added`}>
-                  ✓ distribution verified · {data.distVer.excluded} out · {data.distVer.added} added
-                </span>
-              : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
-                  title={`Carried volume includes every item ${planYear - 1} sold until someone verifies the list — that is step 1 of Plan ${planYear}`}>
-                  ⚠ distribution unverified
-                </span>)}
+              ? <button className="pill pillbtn" style={{ borderColor: "var(--good)", color: "var(--good)" }}
+                  title={`Verified ${data.distVer.verifiedAt.slice(0, 10)} — ${data.distVer.excluded} item${data.distVer.excluded === 1 ? "" : "s"} taken out, ${data.distVer.added} added. Open the list again to review or change it.`}
+                  onClick={() => void openDv()}>
+                  ✓ distribution verified · {data.distVer.excluded} out · {data.distVer.added} added · <u>open</u>
+                </button>
+              : <button className="pill pillbtn" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}
+                  title={`Carried volume includes every item ${planYear - 1} sold until someone verifies the list — that is step 1 of Plan ${planYear}. Open the list.`}
+                  onClick={() => void openDv()}>
+                  ⚠ distribution unverified · <u>open</u>
+                </button>)}
             {snapPill}
             <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
               ✓ {planYear} registered for {marketName}
