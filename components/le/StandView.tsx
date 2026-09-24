@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Chart } from "react-chartjs-2";
-import { cssToken, gridOptions, useThemeTick } from "@/components/charts/themed";
+import { cssToken, gridOptions, readoutTooltip, useThemeTick } from "@/components/charts/themed";
 import { parseWorkPath, processPath } from "@/lib/process";
 
 /* Where the year stands — see app/stand/page.tsx.
@@ -49,6 +49,8 @@ export type StandData = {
     };
   };
 };
+
+const STAND_READOUT_ID = "stand-chartread";
 
 const fmtU = (v: number) =>
   Math.abs(v) >= 1e6 ? `${(v / 1e6).toFixed(2)}M` : Math.abs(v) >= 1e3 ? `${Math.round(v / 1e3).toLocaleString()}K` : String(Math.round(v));
@@ -128,7 +130,17 @@ export default function StandView({ data }: { data: StandData }) {
       x: { ...opts.scales.x, stacked: true },
       y: { ...opts.scales.y, stacked: true, ticks: { ...opts.scales.y.ticks, callback: (v: number | string) => fmt(+v) } },
     },
-    plugins: { ...opts.plugins, tooltip: { callbacks: { label: (c: { dataset: { label?: string }; parsed: { y: number | null } }) => `${c.dataset.label}: ${c.parsed.y === null ? "—" : fmt(c.parsed.y)}` } } },
+    interaction: { mode: "index" as const, intersect: false },
+    plugins: {
+      ...opts.plugins,
+      // the month's values read out in the strip under the chart, not in a box over the bars
+      tooltip: {
+        ...readoutTooltip(STAND_READOUT_ID, "Move across the chart for a month's values"),
+        // a measured month has no estimate and a month to come has no actual — leave those out
+        filter: (c: { parsed: { y: number | null } }) => c.parsed.y !== null,
+        callbacks: { label: (c: { dataset: { label?: string }; parsed: { y: number | null } }) => `${c.dataset.label}: ${c.parsed.y === null ? "—" : fmt(c.parsed.y)}` },
+      },
+    },
   };
 
   const gapU = k.units.fy - k.units.plan;
@@ -261,6 +273,9 @@ export default function StandView({ data }: { data: StandData }) {
         </div>
         <div className="chartbox" style={{ height: 260 }}>
           <Chart key={"stand" + tick + metric} type="bar" data={{ labels: a.months, datasets: datasets as never }} options={chartOpts as never} />
+        </div>
+        <div id={STAND_READOUT_ID} className="chartread" aria-live="polite">
+          <span className="cr-idle">Move across the chart for a month&apos;s values</span>
         </div>
       </div>
 
