@@ -71,6 +71,13 @@ export default function PromosView({ data }: { data: PromosData }) {
   const [busy, setBusy] = useState(false);
 
   const toRun = useMemo(() => (a ? a.rows.filter((r) => r.end > a.edge) : []), [a]);
+  /* The days a change may cover: from the day after the NIQ edge (the first
+     unmeasured day) to year-end — the same rule as the base levers. Weeks
+     already measured are actuals and would not move. A window that is
+     already running keeps its booked start; only its end, lift and spend
+     can change. */
+  const minDay = a ? new Date(Date.UTC(+a.edge.slice(0, 4), +a.edge.slice(5, 7) - 1, +a.edge.slice(8, 10)) + 86400000).toISOString().slice(0, 10) : "";
+  const maxDay = `${data.year}-12-31`;
   const rows = show === "toRun" ? toRun : (a?.rows ?? []);
 
   if (!a) {
@@ -128,7 +135,7 @@ export default function PromosView({ data }: { data: PromosData }) {
     return persist({ ...ovl, changes });
   };
   const saveAdd = () => {
-    if (!add.start || !add.end || add.end < add.start || !add.brand) return;
+    if (!addOk) return;
     const ev: LeAddedEvent = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       brand: add.brand, title: add.title.trim() || `${add.brand} ${add.perf}`, perf: add.perf,
@@ -140,6 +147,14 @@ export default function PromosView({ data }: { data: PromosData }) {
     return persist({ ...ovl, added: [...ovl.added, ev] });
   };
   const removeAdded = (id: string) => persist({ ...ovl, added: ovl.added.filter((x) => x.id !== id) });
+
+  /* Dates inside the open window. A start the book already has (a running
+     promotion) stands; a moved start, and any end, must fall after the edge
+     and inside the year. */
+  const draftOk = (row: PromoRow) =>
+    !!draft.start && !!draft.end && draft.end >= draft.start && draft.end <= maxDay
+    && (draft.start === row.start || draft.start >= minDay) && (draft.end !== row.end ? draft.end >= minDay : true);
+  const addOk = !!add.brand && !!add.start && !!add.end && add.start >= minDay && add.end >= add.start && add.end <= maxDay;
 
   const changes = overlayCount(ovl);
   const r = a.rollup;
@@ -268,16 +283,19 @@ export default function PromosView({ data }: { data: PromosData }) {
                       <tr className="pr-edit">
                         <td colSpan={9}>
                           <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", padding: "4px 0" }}>
-                            <label className="pr-f">Start<input type="date" style={inStyle} value={draft.start} min={a.edge} onChange={(e) => setDraft({ ...draft, start: e.target.value })} /></label>
-                            <label className="pr-f">End<input type="date" style={inStyle} value={draft.end} min={draft.start} onChange={(e) => setDraft({ ...draft, end: e.target.value })} /></label>
+                            <label className="pr-f">Start<input type="date" style={inStyle} value={draft.start} min={row.start < minDay ? row.start : minDay} max={maxDay}
+                              disabled={row.start < minDay} title={row.start < minDay ? "This promotion is already running — its start is in the actuals" : `No earlier than ${minDay}, the first day after the NIQ edge`}
+                              onChange={(e) => setDraft({ ...draft, start: e.target.value })} /></label>
+                            <label className="pr-f">End<input type="date" style={inStyle} value={draft.end} min={draft.start > minDay ? draft.start : minDay} max={maxDay}
+                              onChange={(e) => setDraft({ ...draft, end: e.target.value })} /></label>
                             <label className="pr-f">Spend $<input type="number" style={{ ...inStyle, width: 110 }} value={draft.spend} onChange={(e) => setDraft({ ...draft, spend: e.target.value })} /></label>
                             <label className="pr-f">Expected lift %<input type="number" style={{ ...inStyle, width: 90 }} placeholder="history" value={draft.lift} onChange={(e) => setDraft({ ...draft, lift: e.target.value })} /></label>
                             <label className="pr-f" style={{ flex: "1 1 200px" }}>Why<input type="text" style={inStyle} placeholder="optional — travels with the estimate" value={draft.note} onChange={(e) => setDraft({ ...draft, note: e.target.value })} /></label>
-                            <button className="btn primary sm" onClick={() => saveEdit(row)} disabled={busy || !draft.start || !draft.end || draft.end < draft.start}>Save change</button>
+                            <button className="btn primary sm" onClick={() => saveEdit(row)} disabled={busy || !draftOk(row)}>Save change</button>
                             <button className="btn sm" onClick={() => setEditing(null)}>Cancel</button>
                           </div>
                           <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
-                            Leave lift blank to let the forecast read it from last year&apos;s matching weeks. Only weeks after the NIQ edge move — a window that has started keeps its measured weeks.
+                            Dates run from {minDay}, the first day after the NIQ edge, to {maxDay}: weeks already measured are actuals and cannot move, and a window already running keeps its start. Leave lift blank to let the forecast read it from last year&apos;s matching weeks.
                           </div>
                         </td>
                       </tr>
@@ -339,8 +357,8 @@ export default function PromosView({ data }: { data: PromosData }) {
               <div className="f-row"><label>Title</label>
                 <input type="text" placeholder={`${add.brand} ${add.perf}`} value={add.title} onChange={(e) => setAdd({ ...add, title: e.target.value })} /></div>
               <div className="f-2col">
-                <div className="f-row"><label>Start</label><input type="date" min={a.edge} value={add.start} onChange={(e) => setAdd({ ...add, start: e.target.value })} /></div>
-                <div className="f-row"><label>End</label><input type="date" min={add.start || a.edge} value={add.end} onChange={(e) => setAdd({ ...add, end: e.target.value })} /></div>
+                <div className="f-row"><label>Start</label><input type="date" min={minDay} max={maxDay} value={add.start} onChange={(e) => setAdd({ ...add, start: e.target.value })} /></div>
+                <div className="f-row"><label>End</label><input type="date" min={add.start || minDay} max={maxDay} value={add.end} onChange={(e) => setAdd({ ...add, end: e.target.value })} /></div>
               </div>
               <div className="f-2col">
                 <div className="f-row"><label>Trade $</label><input type="number" value={add.spend} onChange={(e) => setAdd({ ...add, spend: e.target.value })} /></div>
@@ -349,8 +367,8 @@ export default function PromosView({ data }: { data: PromosData }) {
               <div className="f-row"><label>Why</label><input type="text" placeholder="optional" value={add.note} onChange={(e) => setAdd({ ...add, note: e.target.value })} /></div>
             </div>
             <div className="m-foot">
-              <span className="summ">Lift applies to the brand&apos;s forecast weeks in the window; trade spreads over its days.</span>
-              <button className="btn primary" style={{ marginLeft: "auto" }} onClick={saveAdd} disabled={busy || !add.start || !add.end || add.end < add.start}>Add to the estimate</button>
+              <span className="summ">Dates run from {minDay} (the day after the NIQ edge) to year-end. Lift applies to the brand&apos;s forecast weeks in the window; trade spreads over its days.</span>
+              <button className="btn primary" style={{ marginLeft: "auto" }} onClick={saveAdd} disabled={busy || !addOk}>Add to the estimate</button>
             </div>
           </div>
         </div>
