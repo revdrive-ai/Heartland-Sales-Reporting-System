@@ -681,7 +681,6 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 /* The way on, once the estimate step has been answered "adjusting": the
    planner below is live, so this sits under both cards rather than beside
    them, where it would read as a third choice. */
-.stepchoices .lechoose-on{grid-column:1/-1;justify-self:start}
 
 /* A step that asks a question holds the page until it is answered: the work
    below is dimmed and made inert, because it is about to change depending on

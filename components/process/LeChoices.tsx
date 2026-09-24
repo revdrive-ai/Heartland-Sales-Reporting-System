@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { setLeCycleAnswer } from "@/lib/repo/client";
@@ -30,7 +29,6 @@ export default function LeChoices({
   cycleLabel,
   markets,
   scopeLabel,
-  nextHref,
   lockHref,
   answer,
   adjustments,
@@ -40,8 +38,6 @@ export default function LeChoices({
   cycleLabel: string;
   markets: string[];
   scopeLabel: string;
-  /** the next step — the promotions — for someone adjusting */
-  nextHref: string;
   /** the lock step — where "nothing changed" goes straight to */
   lockHref: string;
   answer: LeAnswer | null;
@@ -94,11 +90,6 @@ export default function LeChoices({
             : `Work the base business below for the months still to come — it unlocks as soon as you choose this — then the promotions on the next step.`}
         </span>
       </button>
-      {answer === "adjusting" && (
-        <Link className="btn primary lechoose-on" href={nextHref}>
-          Adjust the promotions →
-        </Link>
-      )}
     </div>
   );
 }

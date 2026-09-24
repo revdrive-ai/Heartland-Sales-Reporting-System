@@ -308,7 +308,6 @@ export default function ProcessRail({
             cycleLabel={status.cycleLabel}
             markets={inScope}
             scopeLabel={scopeLabel}
-            nextHref={processPath(proc.kind, next?.key ?? step.key)}
             lockHref={processPath(proc.kind, proc.steps[proc.steps.length - 1].key)}
             answer={status.leAnswer}
             adjustments={status.adjustments}
