@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import path from "node:path";
-import type { Market, Item, NielsenWeeklyRow } from "@/lib/types/db";
+import type { Market, Item, NielsenWeeklyRow, ShipmentWeeklyRow } from "@/lib/types/db";
 import marketsJson from "@/lib/fixtures/markets.json";
 import itemsJson from "@/lib/fixtures/items.json";
 import itemXwalkJson from "@/lib/fixtures/item-crosswalk.json";
@@ -271,6 +271,43 @@ export async function getWeeklyFacts(f: WeeklyFactsFilter): Promise<NielsenWeekl
 /** Distinct week-endings on file for a market, ascending. */
 export async function listWeekEndings(market_code: string): Promise<string[]> {
   return [...new Set(loadFacts(market_code).map((r) => r.week_ending))].sort();
+}
+
+/* ---------------------------------------------------------------- SHIPMENTS
+   Weekly sell-in per account × item from the Retail Planner export
+   (data/shipments/<ACCOUNT>.json.gz, scripts/ingest_shipments.py). Same seam
+   rules as the NIQ facts: server-only reads, Supabase (shipments_weekly)
+   later. An account here may have no NIQ market (Publix). */
+
+export type ShipmentsMeta = {
+  source_file: string;
+  accounts: { account_code: string; account_name: string; year: number; weeks: number; first_week: string; last_week: string; edge: string | null; items: number; items_with_upc: number; rows: number }[];
+  unmatched_items: { item_code: string; item_name: string }[];
+};
+
+const shipCache = new Map<string, ShipmentWeeklyRow[]>();
+
+/** Every shipment row for an account; [] when none are on file. */
+export async function getShipments(account_code: string): Promise<ShipmentWeeklyRow[]> {
+  let rows = shipCache.get(account_code);
+  if (!rows) {
+    const file = path.join(process.cwd(), "data", "shipments", `${account_code}.json.gz`);
+    try {
+      rows = JSON.parse(gunzipSync(readFileSync(file)).toString("utf-8")) as ShipmentWeeklyRow[];
+    } catch {
+      rows = [];
+    }
+    shipCache.set(account_code, rows);
+  }
+  return rows;
+}
+
+export async function getShipmentsMeta(): Promise<ShipmentsMeta | null> {
+  try {
+    return JSON.parse(readFileSync(path.join(process.cwd(), "data", "shipments", "meta.json"), "utf-8")) as ShipmentsMeta;
+  } catch {
+    return null;
+  }
 }
 
 /* -------------------------------------------------------------- PROMOTIONS

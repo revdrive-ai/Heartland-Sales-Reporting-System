@@ -114,6 +114,13 @@ def rows_crosswalk_telus_customers():
 
 
 # table → (row producer, on_conflict natural key). Order matters: FK parents first.
+def rows_shipments_weekly():
+    out = []
+    for path in sorted(glob.glob(f"{ROOT}/data/shipments/*.json.gz")):
+        out.extend(read_json(path))
+    return out
+
+
 TABLES = [
     ("markets", rows_markets, "code"),
     ("items", rows_items, "upc"),
@@ -125,6 +132,7 @@ TABLES = [
     ("price_list", rows_price_list, "fg,effective_from"),
     ("customer_crosswalk", rows_customer_crosswalk, "id"),
     ("crosswalk_telus_customers", rows_crosswalk_telus_customers, "crosswalk_id,telus_customer_id"),
+    ("shipments_weekly", rows_shipments_weekly, "account_code,item_code,week_ending,kind"),
 ]
 
 

@@ -72,6 +72,14 @@ export default async function Page() {
         .sort((a, b) => b.fy - a.fy),
       lastLE: r.lastLE ? { label: r.lastLE.label, takenAt: r.lastLE.takenAt } : null,
       adjustments: one.adjustments,
+      shipments: r.shipments
+        ? {
+            edge: r.shipments.edge, weeksPastEdge: r.shipments.weeksPastEdge,
+            ytd: r.shipments.ytd, sinceEdge: r.shipments.sinceEdge,
+            byMonth: { units: r.shipments.byMonth.units.map(Math.round), lyUnits: r.shipments.byMonth.lyUnits.map(Math.round) },
+            items: r.shipments.items, itemsTied: r.shipments.itemsTied,
+          }
+        : null,
     },
   };
   return <StandView data={data} />;

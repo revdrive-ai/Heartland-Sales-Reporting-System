@@ -850,6 +850,17 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 .planlock .pl-text b{color:var(--ink)}
 .planscrim{position:fixed;inset:60px 0 0;z-index:44;background:rgba(15,23,41,.05);cursor:not-allowed}
 
+/* Shipments on Where the year stands */
+.shipcard{padding:0}
+.shipcard .c-head{padding:14px 16px 8px}
+.shipgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:0 16px;padding:0 16px 8px;align-items:start}
+.shipkpi{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2)}
+.shipkpi>b{font-size:22px;font-weight:800;letter-spacing:-.4px}
+.shipkpi.lead{border-color:var(--accent)}
+.shipgrid .shiptable{grid-column:1/-1;margin-top:10px}
+.shipgrid .shiptable th,.shipgrid .shiptable td{padding:6px 10px}
+@media (max-width:1100px){.shipgrid{grid-template-columns:1fr}}
+
 /* Email the plan — the share dialog on Review & submit */
 .shareemail .f-row textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;font:inherit;font-weight:500;background:var(--surface-2);resize:vertical}
 .shareemail .f-row textarea:focus{outline:2px solid var(--brand)}

@@ -1,4 +1,4 @@
-import { getPriceList, getPromoOverlays, listItems, listWeekEndings, priceAsOf, type PriceRow } from "@/lib/repo";
+import { getPriceList, getPromoOverlays, getShipments, listItems, listWeekEndings, priceAsOf, type PriceRow } from "@/lib/repo";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 import { getState } from "@/lib/server/appstate";
@@ -78,6 +78,17 @@ export type LeRollup = {
   };
   planGrowth: number;
   promoChanges: number;    // promotions cancelled, changed or added by the estimate
+  /** Shipments (sell-in) from the Retail Planner export, when the account has
+      them: the year to date against last year, and the weeks AFTER the NIQ
+      edge — the leading read on the months consumption has not landed. */
+  shipments: null | {
+    edge: string;                                // last week with shipments
+    weeksPastEdge: number;                       // shipment weeks after the NIQ edge
+    ytd: { units: number; lyUnits: number };     // through the shipment edge
+    sinceEdge: { units: number; lyUnits: number }; // the weeks after the NIQ edge
+    byMonth: { units: Monthly; lyUnits: Monthly };
+    items: number; itemsTied: number;            // items on file, and those tied to a NIQ item
+  };
 };
 
 /** The full-year figure: actuals to date plus the estimate to go. */
@@ -177,6 +188,30 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
   const monthWeeks = fyWeeks.filter((w) => +w.slice(5, 7) - 1 === edgeMonth);
   const edgeComplete = monthWeeks.length > 0 && monthWeeks.every((w) => w <= latest);
 
+  // shipments — the Retail Planner export, where this account has one
+  const ship = (await getShipments(mkt)).filter((r) => r.week_ending.startsWith(String(year)));
+  let shipments: LeRollup["shipments"] = null;
+  if (ship.length) {
+    const edgeS = ship.filter((r) => r.kind === "actual" && r.units > 0).map((r) => r.week_ending).sort().at(-1) ?? latest;
+    const bm = { units: zero(), lyUnits: zero() };
+    const ytd = { units: 0, lyUnits: 0 }, since = { units: 0, lyUnits: 0 };
+    for (const r of ship) {
+      const m = +r.week_ending.slice(5, 7) - 1;
+      if (r.kind === "actual") bm.units[m] += r.units; else bm.lyUnits[m] += r.units;
+      if (r.week_ending <= edgeS) {
+        if (r.kind === "actual") ytd.units += r.units; else ytd.lyUnits += r.units;
+        if (r.week_ending > latest) { if (r.kind === "actual") since.units += r.units; else since.lyUnits += r.units; }
+      }
+    }
+    const codes = new Set(ship.map((r) => r.item_code));
+    shipments = {
+      edge: edgeS,
+      weeksPastEdge: new Set(ship.filter((r) => r.week_ending > latest && r.week_ending <= edgeS).map((r) => r.week_ending)).size,
+      ytd, sinceEdge: since, byMonth: bm,
+      items: codes.size, itemsTied: new Set(ship.filter((r) => r.upc).map((r) => r.item_code)).size,
+    };
+  }
+
   const last: PlanSnapshotVersion | undefined = versions[versions.length - 1];
   const lastLE = last
     ? {
@@ -193,6 +228,6 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
     brands: out, totals,
     trade: { book, est, bookTotal: sum(book), estTotal: sum(est) },
     promoChanges: overlayCount(ovl),
-    ytd, brandYtd, lastLE, planGrowth: PLAN_GROWTH,
+    ytd, brandYtd, lastLE, planGrowth: PLAN_GROWTH, shipments,
   };
 }

@@ -24,6 +24,11 @@
   157 weeks, 100 items) lives in `data/raw/` and is transformed by
   `scripts/ingest_albsco.py` (python3 + pandas) into `data/nielsen/` and
   `lib/fixtures/{markets,items}.json`. Never hand-edit the outputs; re-run the script.
+- **Shipments (sell-in)** come from the Retail Planner export in `data/raw/` (Publix and
+  Jewel, weekly by item, Actual + Last Year) via `scripts/ingest_shipments.py` into
+  `data/shipments/<ACCOUNT>.json.gz` + `meta.json` (unmatched item codes listed there);
+  table `shipments_weekly` (migration 00014). Weeks are converted to NIQ week-ending
+  Saturdays. Publix is a shipments-only account with no NIQ market.
 - **Global scope**: the topbar's five cascading selectors (lib/scope.ts + components/ScopeBar)
   persist in the `hh-scope` cookie; server pages call `getScope()` (lib/server/scope.ts) and
   intersect their reads with `marketCodes` / `telusCustomerIds`. New views must do the same.

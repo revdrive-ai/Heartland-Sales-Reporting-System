@@ -40,6 +40,13 @@ export type StandData = {
     brands: { brand: string; ytd: number; ytdLy: number; fy: number; plan: number; ly: number; gross: number; planGross: number; lyGross: number }[];
     lastLE: { label: string; takenAt: string } | null;
     adjustments: number;
+    /** shipments (sell-in) from the Retail Planner export, when on file */
+    shipments: null | {
+      edge: string; weeksPastEdge: number;
+      ytd: { units: number; lyUnits: number }; sinceEdge: { units: number; lyUnits: number };
+      byMonth: { units: number[]; lyUnits: number[] };
+      items: number; itemsTied: number;
+    };
   };
 };
 
@@ -195,8 +202,51 @@ export default function StandView({ data }: { data: StandData }) {
         </div>
       </div>
 
+      {a.shipments && (() => {
+        const sh = a.shipments;
+        const d = (now: number, base: number) => (base ? (now / base - 1) * 100 : null);
+        const dy = d(sh.ytd.units, sh.ytd.lyUnits), ds = d(sh.sinceEdge.units, sh.sinceEdge.lyUnits);
+        const tone = (x: number | null) => ({ color: x === null ? "var(--ink-3)" : x >= 0 ? "var(--good)" : "var(--bad)" });
+        const show = (x: number | null) => (x === null ? "—" : Math.abs(x) < 0.05 ? "0.0%" : `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}%`);
+        const months = a.months.map((m, i) => ({ m, u: sh.byMonth.units[i], ly: sh.byMonth.lyUnits[i] })).filter((x) => x.u > 0 || x.ly > 0);
+        return (
+          <div className="card shipcard" style={{ marginBottom: 16 }}>
+            <div className="c-head" style={{ flexWrap: "wrap", gap: 10 }}>
+              <h3>Shipments — sell-in through {sh.edge}</h3>
+              <span className="sub" style={{ marginLeft: 6 }}>
+                Retail Planner export · {sh.weeksPastEdge} week{sh.weeksPastEdge === 1 ? "" : "s"} past the NIQ edge · {sh.itemsTied} of {sh.items} items tied to a NIQ item
+              </span>
+            </div>
+            <div className="shipgrid">
+              <div className="shipkpi">
+                <span className="k-label">Year to date</span>
+                <b>{fmtU(sh.ytd.units)}</b>
+                <span className="k-sub"><b style={tone(dy)}>{show(dy)}</b><span style={{ color: "var(--ink-3)" }}> vs {ly} {fmtU(sh.ytd.lyUnits)}</span></span>
+              </div>
+              <div className="shipkpi lead">
+                <span className="k-label">Since the NIQ edge ({a.edge} → {sh.edge})</span>
+                <b>{fmtU(sh.sinceEdge.units)}</b>
+                <span className="k-sub"><b style={tone(ds)}>{show(ds)}</b><span style={{ color: "var(--ink-3)" }}> vs {ly} {fmtU(sh.sinceEdge.lyUnits)} · the weeks consumption hasn&apos;t landed for</span></span>
+              </div>
+              <table className="revtable shiptable">
+                <thead><tr><th>Month</th>{months.map((x) => <th key={x.m} style={{ textAlign: "right" }}>{x.m}</th>)}</tr></thead>
+                <tbody>
+                  <tr><td><b>FY{year}</b></td>{months.map((x) => <td key={x.m} className="num">{x.u ? fmtU(x.u) : "—"}</td>)}</tr>
+                  <tr><td>{ly}</td>{months.map((x) => <td key={x.m} className="num">{x.ly ? fmtU(x.ly) : "—"}</td>)}</tr>
+                  <tr><td className="dim">vs {ly}</td>{months.map((x) => { const v = d(x.u, x.ly); return <td key={x.m} className="num" style={{ fontWeight: 700, ...tone(v) }}>{x.u ? show(v) : "—"}</td>; })}</tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="note" style={{ margin: 0, padding: "8px 16px 12px", fontSize: 11.5 }}>
+              ◇ Shipments are what Heartland sent the retailer (sell-in); the cards above are what shoppers bought (NIQ consumption).
+              They run weeks ahead of NIQ, so the &ldquo;since the edge&rdquo; read is the earliest signal on the months still estimated — it does not move the estimate itself.
+            </div>
+          </div>
+        );
+      })()}
+
       <div className="card" style={{ marginBottom: 16 }}>
-        <div className="c-head">
+        <div className="c-head" style={{ flexWrap: "wrap", gap: 10 }}>
           <h3>By month — FY{year} against the plan and {ly}</h3>
           <span className="sub" style={{ marginLeft: 6 }}>
             solid bars are measured · light bars are the estimate · {gapU >= 0 ? `${fmtU(gapU)} ahead of plan` : `${fmtU(-gapU)} short of plan`} for the year

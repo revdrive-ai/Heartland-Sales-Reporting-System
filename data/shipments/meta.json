@@ -1,0 +1,191 @@
+{
+ "source_file": "Retail_Planner_-_Publix_Jewel.xlsx",
+ "accounts": [
+  {
+   "account_code": "PUBLIX",
+   "account_name": "Publix",
+   "year": 2026,
+   "weeks": 53,
+   "first_week": "2026-01-03",
+   "last_week": "2027-01-02",
+   "edge": "2026-09-19",
+   "items": 55,
+   "items_with_upc": 36,
+   "rows": 5830
+  },
+  {
+   "account_code": "ALB-JEWEL",
+   "account_name": "Albertsons Jewel-Osco",
+   "year": 2026,
+   "weeks": 53,
+   "first_week": "2026-01-03",
+   "last_week": "2027-01-02",
+   "edge": "2026-09-12",
+   "items": 37,
+   "items_with_upc": 15,
+   "rows": 3922
+  }
+ ],
+ "unmatched_items": [
+  {
+   "item_code": "F1101210",
+   "item_name": "PUB SUC 12/200 PKT"
+  },
+  {
+   "item_code": "F1101220",
+   "item_name": "PUB SUC 8/9.7 PCH"
+  },
+  {
+   "item_code": "F1112145",
+   "item_name": "SAF SI SUC 12ct/200 PKT R5"
+  },
+  {
+   "item_code": "F1112150",
+   "item_name": "SAF SI ASP 6/250 PKT"
+  },
+  {
+   "item_code": "F1112226",
+   "item_name": "SAF SI SUC 8/9.7 PCH R6"
+  },
+  {
+   "item_code": "F2101200",
+   "item_name": "PUB SAC 6/250 PKT"
+  },
+  {
+   "item_code": "F7102400",
+   "item_name": "PUB STV 12/80 PKT"
+  },
+  {
+   "item_code": "F7102410",
+   "item_name": "PUB STV 12/9.8 JAR"
+  },
+  {
+   "item_code": "F7102420",
+   "item_name": "PUB ORG STV 12/40 PKT"
+  },
+  {
+   "item_code": "F7112030",
+   "item_name": "SAF SI STV 12/9.8 JAR"
+  },
+  {
+   "item_code": "F7112182",
+   "item_name": "SAF SI STV 12/80 PKT R2"
+  },
+  {
+   "item_code": "F7112220",
+   "item_name": "SAF SI STV 8/9.7 PCH"
+  },
+  {
+   "item_code": "FD1121D0",
+   "item_name": "SAF OO ORG STV 12/80 PKT"
+  },
+  {
+   "item_code": "FGMA000700",
+   "item_name": "Equal ASP 12/250 PKT"
+  },
+  {
+   "item_code": "FGMA000800",
+   "item_name": "Equal ASP 12/230 PKT"
+  },
+  {
+   "item_code": "FGMA20015446",
+   "item_name": "Equal ASP 12/230ct PKT"
+  },
+  {
+   "item_code": "FGMA20025672",
+   "item_name": "Swerve Confection Erythritol 6/12oz PCH"
+  },
+  {
+   "item_code": "FGMA20025673",
+   "item_name": "Swerve Brown Erythritol 6/12oz PCH"
+  },
+  {
+   "item_code": "FGMA20029739",
+   "item_name": "Whole Earth STV 12/80 PKT"
+  },
+  {
+   "item_code": "FGP0104000",
+   "item_name": "SAF SI 1:1 Vanilla CBR 6/32oz"
+  },
+  {
+   "item_code": "FGP0104100",
+   "item_name": "SAF SI 1:1 Black CBR 6/32oz"
+  },
+  {
+   "item_code": "FGP0105300",
+   "item_name": "PUB LWE SwtTea-B LWE 12/48mL US"
+  },
+  {
+   "item_code": "FGP0105400",
+   "item_name": "PUB LWE BryPMG-B 12/48mL US"
+  },
+  {
+   "item_code": "FGP0105500",
+   "item_name": "PUB LWE Blk-Chr-E 12/48mL US"
+  },
+  {
+   "item_code": "FGP0105600",
+   "item_name": "PUB LWE OrgTng-B 12/48mL US"
+  },
+  {
+   "item_code": "FGP0105700",
+   "item_name": "PUB LWE StrWtr-B 12/48mL US"
+  },
+  {
+   "item_code": "FGP0105800",
+   "item_name": "PUB LWE FrtPnc-B 12/48mL US"
+  },
+  {
+   "item_code": "FGP0105900",
+   "item_name": "PUB LWE StrLmn 12/48mL US"
+  },
+  {
+   "item_code": "FLA12013",
+   "item_name": "SAF SI LWE Crml-COF 1x6XTDP R3"
+  },
+  {
+   "item_code": "FLB12013",
+   "item_name": "SAF SI LWE FrnVan-C 1x6XTDP R3"
+  },
+  {
+   "item_code": "FLC12013",
+   "item_name": "SAF SI LWE Hzlnut-C 1x6XTDP R3"
+  },
+  {
+   "item_code": "FR912012",
+   "item_name": "SAF SI LQD STV 1x6T R2"
+  },
+  {
+   "item_code": "FW33110",
+   "item_name": "SAF SI LWE PinapleMngo 12Blk"
+  },
+  {
+   "item_code": "FW33130",
+   "item_name": "SAF SI LWE RspbryBlck Tea 12Blk"
+  },
+  {
+   "item_code": "FWA08100",
+   "item_name": "SAF SI LWE OrgTng 12BLK"
+  },
+  {
+   "item_code": "FWA08150",
+   "item_name": "SAF SI LWE Lmnade 12BLK"
+  },
+  {
+   "item_code": "FWA12014",
+   "item_name": "SAF SI LWE BryPMG 12Blk R4"
+  },
+  {
+   "item_code": "FWB12014",
+   "item_name": "SAF SI LWE StrWtrB 12Blk R4"
+  },
+  {
+   "item_code": "FWB3A713",
+   "item_name": "PUB LWE StrWtr-B 10Blk R3"
+  },
+  {
+   "item_code": "FWH12013",
+   "item_name": "SAF SI LWE RasLmnB 12Blk R3"
+  }
+ ]
+}

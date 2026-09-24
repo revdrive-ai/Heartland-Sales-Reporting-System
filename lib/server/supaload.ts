@@ -55,6 +55,15 @@ function rowsCrosswalkTelusCustomers(): Row[] {
   return out;
 }
 
+function rowsShipmentsWeekly(): Row[] {
+  const dir = path.join(ROOT, "data", "shipments");
+  const out: Row[] = [];
+  for (const f of readdirSync(dir).filter((f) => f.endsWith(".json.gz")).sort()) {
+    for (const r of readJson<Row[]>(path.join("data", "shipments", f))) out.push(r);
+  }
+  return out;
+}
+
 /** table → row producer + on_conflict natural key. Order matters: FK parents first. */
 export const TABLES: { table: string; onConflict: string; rows: () => Row[] }[] = [
   { table: "markets", onConflict: "code", rows: () => readJson<Row[]>("lib/fixtures/markets.json") },
@@ -76,6 +85,7 @@ export const TABLES: { table: string; onConflict: string; rows: () => Row[] }[] 
     rows: () => readJson<Row[]>("lib/fixtures/crosswalk.json").map((r) => drop(r, ["telus_customer_ids", "telus_customer_names"])),
   },
   { table: "crosswalk_telus_customers", onConflict: "crosswalk_id,telus_customer_id", rows: rowsCrosswalkTelusCustomers },
+  { table: "shipments_weekly", onConflict: "account_code,item_code,week_ending,kind", rows: rowsShipmentsWeekly },
 ];
 
 const BATCH = 2000; // rows per PostgREST POST
