@@ -94,7 +94,7 @@ function plainBody(a: Account, year: number, sub: Sub, owed: Owed, note: string,
   );
   if (owed.length) L.push("Still to do:", ...owed.map((o) => `  - ${o.text}`), "");
   L.push(`1. Review distribution — ${s.dist}`);
-  for (const o of a.distribution.out) L.push(`    No volume: ${o.name} (${o.brand})`);
+  for (const o of a.distribution.out) L.push(`    No volume${o.from ? ` from ${o.from}` : ""}: ${o.name} (${o.brand})`);
   L.push(`2. Add new items — ${s.items}`);
   for (const n of a.newItems.additions) L.push(`    ${n.name} (${n.brand}) · on shelf ${n.shelfDate}`);
   L.push(`3. Base Business Review — ${s.base}`);
@@ -144,7 +144,7 @@ function htmlBody(a: Account, year: number, sub: Sub, owed: Owed, note: string) 
   }
   if (owed.length) out.push(`<p style="background:#fff8e6;padding:8px 10px;border:1px solid #e08a00;border-radius:6px"><b>Still to do</b><br>${owed.map((o) => esc(o.text)).join("<br>")}</p>`);
   out.push(h(1, "Review distribution", s.dist));
-  if (a.distribution.out.length) out.push(`<ul>${a.distribution.out.map((o) => `<li>No volume: ${esc(o.name)} · ${esc(o.brand)}</li>`).join("")}</ul>`);
+  if (a.distribution.out.length) out.push(`<ul>${a.distribution.out.map((o) => `<li>No volume${o.from ? ` from ${o.from}` : ""}: ${esc(o.name)} · ${esc(o.brand)}</li>`).join("")}</ul>`);
   out.push(h(2, "Add new items", s.items));
   if (a.newItems.additions.length) out.push(`<ul>${a.newItems.additions.map((n) => `<li>${esc(n.name)} · ${esc(n.brand)} · on shelf ${n.shelfDate}</li>`).join("")}</ul>`);
   out.push(h(3, "Base Business Review", s.base));

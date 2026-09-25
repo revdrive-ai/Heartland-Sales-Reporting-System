@@ -4,7 +4,7 @@ import { getScope } from "@/lib/server/scope";
 import { getModeStatus } from "@/lib/server/modeStatus";
 import { getState } from "@/lib/server/appstate";
 import { computePlanBase } from "@/lib/server/planSnapshot";
-import { readDistVerification } from "@/lib/distver";
+import { outFromOf, readDistVerification } from "@/lib/distver";
 import { readBaseReview } from "@/lib/basereview";
 import { planSig, readPlanBuilt } from "@/lib/planbuilt";
 import { CROSSWALK } from "@/lib/scope";
@@ -76,7 +76,10 @@ export default async function Page() {
       distribution: {
         verifiedAt: dv.verified_at,
         kept,
-        out: out.map((u) => ({ upc: u, name: nameOf.get(u) ?? u, brand: brandOf.get(u) ?? "" })),
+        out: out.map((u) => {
+          const from = outFromOf(dv, u, year);
+          return { upc: u, name: nameOf.get(u) ?? u, brand: brandOf.get(u) ?? "", from: from && from > `${year}-01-01` ? from : null };
+        }),
       },
       newItems: {
         answered: !!dv.no_additions || dv.additions.length > 0,

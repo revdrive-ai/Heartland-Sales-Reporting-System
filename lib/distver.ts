@@ -33,6 +33,10 @@ export type DistAddition = {
 
 export type DistVerification = {
   decisions: Record<string, "in" | "out">; // upc → keep in plan / no volume
+  /** for an item set to No volume: the first day of the plan year it carries
+      none. Absent = the whole year (the year's first day). Volume up to that
+      day is carried as usual, so a mid-year delist keeps its first months. */
+  out_from?: Record<string, string>;
   additions: DistAddition[];
   /** When someone answered the new-items question by saying there are none.
       The question counts as answered if this is set OR additions exist — a
@@ -76,8 +80,18 @@ export function readDistVerification(raw: unknown): DistVerification {
   if (!doc) return { ...DV_EMPTY };
   return {
     decisions: doc.decisions ?? {},
+    ...(doc.out_from && typeof doc.out_from === "object" ? { out_from: doc.out_from } : {}),
     additions: (doc.additions ?? []).map((a) => readAddition(a as StoredAddition)),
     no_additions: doc.no_additions ?? null,
     verified_at: doc.verified_at ?? null,
   };
+}
+
+/** The first day an item carries no volume in the plan year — null when it
+    is in plan. A date before the year's first day reads as the whole year. */
+export function outFromOf(dv: DistVerification, upc: string, year: number): string | null {
+  if (dv.decisions[upc] !== "out") return null;
+  const start = `${year}-01-01`;
+  const d = dv.out_from?.[upc];
+  return d && d > start ? d : start;
 }

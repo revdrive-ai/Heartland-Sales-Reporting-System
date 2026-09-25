@@ -2,7 +2,7 @@ import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets,
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
-import { readDistVerification } from "@/lib/distver";
+import { outFromOf, readDistVerification } from "@/lib/distver";
 import { itemRatio, projectItemWeek, trendOf, TREND_WEEKS, type Trend } from "@/lib/server/projection";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
@@ -322,8 +322,14 @@ export default async function Page({
        spike. It is recorded on the addition and belongs to the shipment
        forecast, which lays it on by month once the plan is built. */
     const dv = readDistVerification(await getState(`distver:${mkt}:${+win}`).catch(() => undefined));
+    /* An item set to No volume leaves the plan from its effective date: for
+       the whole year (the default) it is dropped outright; from a later date
+       it is carried until then and zero after. */
+    const yearStart = `${+win}-01-01`;
     const outSet = new Set(Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => u));
-    const planScoped = scoped.filter((r) => !outSet.has(r.upc));
+    const lateOut = new Map<string, string>();
+    for (const u of outSet) { const f = outFromOf(dv, u, +win); if (f && f > yearStart) lateOut.set(u, f); }
+    const planScoped = scoped.filter((r) => !outSet.has(r.upc) || lateOut.has(r.upc));
 
     const weekBaseM = new Map<string, number>(); // weekly base in the chosen metric
     for (const r of planScoped) {
@@ -364,13 +370,17 @@ export default async function Page({
         if (w >= a.first_week) extra += planValOf(a.proxy_upc, w) * (a.proxy_pct / 100);
       }
       additions.push(Math.round(extra));
+      // items delisted from a date inside the year come out of the weeks from then on
+      const gone = (u: string) => { const f = lateOut.get(u); return !!f && w >= f; };
       if (src <= latestWeek) {
-        actualized.push(Math.round(weekBaseM.get(src) ?? 0));
+        let v = weekBaseM.get(src) ?? 0;
+        for (const [u] of lateOut) if (gone(u)) v -= upcWeek.get(u)?.get(src) ?? 0;
+        actualized.push(Math.round(Math.max(0, v)));
         projected.push(null);
         nAct++;
       } else {
         actualized.push(null);
-        projected.push(Math.round(carried.reduce((s, u) => s + itemProj(u, w), 0)));
+        projected.push(Math.round(carried.reduce((s, u) => s + (gone(u) ? 0 : itemProj(u, w)), 0)));
       }
     }
 

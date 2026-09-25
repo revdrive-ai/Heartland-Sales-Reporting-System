@@ -418,8 +418,18 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
     setDvDoc(doc);
     setDvOpen(true);
   };
+  /* No volume asks WHEN: the default is the whole year; a date inside the
+     year carries the item until then. Back to In plan clears the date. */
   const dvDecide = (upc: string, d: "in" | "out") =>
-    setDvDoc((s) => (s ? { ...s, decisions: { ...s.decisions, [upc]: d } } : s));
+    setDvDoc((s) => {
+      if (!s) return s;
+      const out_from = { ...(s.out_from ?? {}) };
+      if (d === "in") delete out_from[upc];
+      else if (!out_from[upc]) out_from[upc] = `${data.distVer!.year}-01-01`;
+      return { ...s, decisions: { ...s.decisions, [upc]: d }, out_from };
+    });
+  const dvOutFrom = (upc: string, date: string) =>
+    setDvDoc((s) => (s ? { ...s, out_from: { ...(s.out_from ?? {}), [upc]: date } } : s));
 
   // the add-item flow is standalone (its own header pill): it loads the shared
   // doc itself and persists on every change, no outer Save step
@@ -2435,7 +2445,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                 <div className="ms">
                   Every Heartland branded item this customer sold <b>in the latest 52 weeks</b>, with
                   distribution health, <b>ranked by distribution</b> and then by most recent sale.
-                  <b> In plan</b> carries its base into {data.distVer.year}; <b>No volume</b> takes it out.
+                  <b> In plan</b> carries its base into {data.distVer.year}; <b>No volume</b> takes it out — for the whole year, or from the date you give.
                   Items quiet for 8+ weeks are pre-set to No volume — override anything. Shared with
                   everyone once saved.
                 </div>
@@ -2475,6 +2485,17 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
                             title={`Carry this item's base into ${data.distVer!.year}`} onClick={() => dvDecide(it.upc, "in")}>In plan</span>
                           <span className={"minichip no" + (d === "out" ? " on" : "")} style={{ cursor: "pointer" }}
                             title={`Take this item out of the ${data.distVer!.year} base`} onClick={() => dvDecide(it.upc, "out")}>No volume</span>
+                          {d === "out" && (() => {
+                            const yr = data.distVer!.year;
+                            const from = dvDoc.out_from?.[it.upc] ?? `${yr}-01-01`;
+                            const whole = from <= `${yr}-01-01`;
+                            return (
+                              <div className="dv-from" title="When the change takes effect — the item carries its base until this day and none after">
+                                <span>{whole ? "all year — or from" : "from"}</span>
+                                <input type="date" value={from} min={`${yr}-01-01`} max={`${yr}-12-31`} onChange={(e) => { if (e.target.value) dvOutFrom(it.upc, e.target.value); }} />
+                              </div>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );

@@ -1,7 +1,7 @@
 import { getWeeklyFacts, listItems, listWeekEndings } from "@/lib/repo";
 import { getState, setState } from "@/lib/server/appstate";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
-import { readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
+import { outFromOf, readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
 import type { PlanAdjustment } from "@/lib/repo/client";
 import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
@@ -133,7 +133,11 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
      item they name, so an item-level lever is exact rather than weighted.
      Each brand total is the sum of its items. */
   const dvRaw = (await getState(`distver:${mkt}:${year}`).catch(() => undefined)) as DistVerification | undefined;
-  const out = new Set(Object.entries(dvRaw?.decisions ?? {}).filter(([, d]) => d === "out").map(([u]) => u));
+  const dvDoc = readDistVerification(dvRaw);
+  // No-volume items: the whole year, or from a date inside it (lib/distver.outFromOf)
+  const outFrom = new Map<string, string>();
+  for (const u of Object.keys(dvDoc.decisions)) { const f = outFromOf(dvDoc, u, year); if (f) outFrom.set(u, f); }
+  const out = new Set([...outFrom].filter(([, f]) => f <= `${year}-01-01`).map(([u]) => u));
   const additions: DistAddition[] = readDistVerification(dvRaw).additions;
   const adjs = ((await getState(`adj:${mkt}:${year}`).catch(() => undefined)) as PlanAdjustment[] | undefined) ?? [];
   const itemName = new Map(items.map((i) => [i.upc, i.name]));
@@ -225,7 +229,8 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
 
     for (const [upc, im] of mI) {
       if (out.has(upc)) continue; // no volume in the plan year
-      addItem(upc, rawOf(im, upc));
+      const from = outFrom.get(upc);  // a mid-year delist: carried until then, nothing after
+      addItem(upc, rawOf(im, upc).map((v, i) => (from && weeks[i] >= from ? 0 : v)));
     }
     for (const a of adds) {
       const pim = mI.get(a.proxy_upc);

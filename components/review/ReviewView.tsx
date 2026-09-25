@@ -33,7 +33,7 @@ export type ReviewData = {
     distribution: {
       verifiedAt: string | null;
       kept: number;
-      out: { upc: string; name: string; brand: string }[];
+      out: { upc: string; name: string; brand: string; from: string | null }[];
     };
     newItems: {
       answered: boolean;
@@ -338,7 +338,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           {a.distribution.out.length > 0 && (
             <ul className="revlist">
               {a.distribution.out.map((o) => (
-                <li key={o.upc}><span className="minichip on no">No volume</span> {o.name} <span className="dim">· {o.brand}</span></li>
+                <li key={o.upc}><span className="minichip on no">{o.from ? `No volume from ${o.from}` : "No volume"}</span> {o.name} <span className="dim">· {o.brand}</span></li>
               ))}
             </ul>
           )}
