@@ -33,7 +33,10 @@
   The workbook ships cases; rows keep `cases` and convert to `units` by the item's case
   pack (price list first, then the pack in the description), null when unknown. Only
   weeks with shipments are stored. Publix is a shipments-only account with no NIQ
-  market. `lib/weeks.ts` is the week calendar (53-week years, year-ago by −364 days).
+  market. `lib/weeks.ts` is the week calendar and the only place year-ago arithmetic lives:
+  `yearAgoWeek` (−364 days) for dates, `comparableYearAgo` (null for a 53rd week) for
+  comparisons, `priorYearWeek` (a 53rd week borrows last year's final week) for carried
+  shape, `saturdaysOfYear` for the week axis. Next 53-week years: 2028, 2033, 2039.
 - **Global scope**: the topbar's five cascading selectors (lib/scope.ts + components/ScopeBar)
   persist in the `hh-scope` cookie; server pages call `getScope()` (lib/server/scope.ts) and
   intersect their reads with `marketCodes` / `telusCustomerIds`. New views must do the same.

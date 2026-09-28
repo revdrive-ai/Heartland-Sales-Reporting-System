@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/projection";
+import { DAY, priorYearWeek, saturdaysOfYear, utcOf } from "@/lib/weeks";
 
 /* Base-units export — the Base Business Review selection as a brand-by-item table,
    weekly or monthly columns, CSV or Excel. Works for every timeframe the Lab
@@ -15,18 +16,6 @@ import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/pr
 import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 const ALL_BRANDS = "ALL"; // the selection's all-brands roll-up
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
-const DAY = 86400000;
-
-const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
-
-function saturdaysOfYear(year: number): string[] {
-  const out: string[] = [];
-  let t = Date.UTC(year, 0, 1);
-  while (new Date(t).getUTCDay() !== 6) t += DAY;
-  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) out.push(new Date(t).toISOString().slice(0, 10));
-  return out;
-}
 
 const csvEsc = (v: string | number) => {
   const s = String(v);
@@ -171,7 +160,7 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
   // value per item per week (measured, carried, or projected) + projection flag
   const valueAt = (u: string, w: string): { v: number; proj: boolean } => {
     if (!planningYear) return { v: base.get(u)?.get(w) ?? 0, proj: false };
-    const src = yearAgoWeek(w);
+    const src = priorYearWeek(w);
     if (src <= latestWeek) return { v: base.get(u)?.get(src) ?? 0, proj: false };
     return {
       v: projectItemWeek({
@@ -195,7 +184,7 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
     }
     for (const [k, ws] of byMonth) periods.push({ label: k, weeks: ws });
   }
-  const periodProj = periods.map((p) => planningYear && p.weeks.some((w) => yearAgoWeek(w) > latestWeek));
+  const periodProj = periods.map((p) => planningYear && p.weeks.some((w) => priorYearWeek(w) > latestWeek));
 
   // planner adjustments (plan years only): factor per item per week — an
   // item-level adjustment applies exactly to its item row, "ALL" to every row

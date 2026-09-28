@@ -1,4 +1,5 @@
 import { listItems, listMarkets, listWeekEndings } from "@/lib/repo";
+import { saturdaysOfYear } from "@/lib/weeks";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
@@ -14,16 +15,7 @@ import ForecastView, { type ForecastData } from "@/components/forecast/ForecastV
    months are locked (fully measured), which are landing, and what the rest
    of the year is expected to do. */
 
-const DAY = 86400000;
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function saturdaysOfYear(year: number): string[] {
-  const out: string[] = [];
-  let t = Date.UTC(year, 0, 1);
-  while (new Date(t).getUTCDay() !== 6) t += DAY;
-  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) out.push(new Date(t).toISOString().slice(0, 10));
-  return out;
-}
 
 export default async function Page({
   searchParams,

@@ -1,3 +1,4 @@
+import { comparableYearAgo, priorYearWeek } from "@/lib/weeks";
 /* The rest-of-year projection: last year's shape at this year's run-rate.
 
    A source year that has not finished landing has to be projected to its
@@ -36,11 +37,7 @@
    mode and the LE — projects through here, so they agree to the unit. */
 
 export const TREND_WEEKS = 13;
-const DAY = 86400000;
-
-export const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-/** The aligned week `days` back (364 keeps Saturdays aligned; 728 is two years). */
-export const alignedWeek = (w: string, days = 364) => new Date(utcOf(w) - days * DAY).toISOString().slice(0, 10);
+export { utcOf } from "@/lib/weeks";
 
 export type Trend = { ratio: number; cur: number; prior: number };
 
@@ -52,7 +49,8 @@ export function trendOf(weekly: Map<string, number> | undefined, measuredWeeks: 
   let cur = 0, prior = 0;
   for (const w of recent) {
     cur += weekly?.get(w) ?? 0;
-    prior += weekly?.get(alignedWeek(w)) ?? 0;
+    const ya = comparableYearAgo(w);
+    if (ya) prior += weekly?.get(ya) ?? 0;
   }
   return { ratio: prior > 0 ? cur / prior : 1, cur, prior };
 }
@@ -90,7 +88,7 @@ export function projectItemWeek(o: {
      start of that year — a whole year of shape, not a ramp. */
   const shapeYearStart = `${+o.w.slice(0, 4) - back}-01-07`;
   if (o.firstWeek !== undefined && o.firstWeek <= shapeYearStart) {
-    return Math.max(0, (o.im.get(alignedWeek(o.w, 364 * back)) ?? 0) * o.ratio);
+    return Math.max(0, (o.im.get(priorYearWeek(o.w, back)) ?? 0) * o.ratio);
   }
   /* No shape of its own: this year's run-rate — the latest TREND_WEEKS weeks,
      de-seasonalised against the index of those same months — put through

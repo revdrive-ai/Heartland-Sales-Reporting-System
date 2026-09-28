@@ -4,6 +4,7 @@ import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
 import { outFromOf, readDistVerification } from "@/lib/distver";
 import { itemRatio, projectItemWeek, trendOf, TREND_WEEKS, type Trend } from "@/lib/server/projection";
+import { comparableYearAgo, priorYearWeek, saturdaysOfYear, utcOf, yearAgoWeek } from "@/lib/weeks";
 import { detectInsights } from "@/lib/server/insights";
 import ScopeEmpty from "@/components/ScopeEmpty";
 import BaseView, { type BaseData, type WeekPoint } from "@/components/base/BaseView";
@@ -36,16 +37,6 @@ function monthIndex(sum: number[], n: number[]): number[] {
   return avg.map((v, i) => (mean > 0 && n[i] > 0 ? Math.round((v / mean) * 100) / 100 : 0));
 }
 
-/** Every NIQ week-ending (Saturday) of a calendar year. */
-function saturdaysOfYear(year: number): string[] {
-  const out: string[] = [];
-  let t = Date.UTC(year, 0, 1);
-  while (new Date(t).getUTCDay() !== 6) t += DAY;
-  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) {
-    out.push(new Date(t).toISOString().slice(0, 10));
-  }
-  return out;
-}
 
 export default async function Page({
   searchParams,
@@ -182,15 +173,13 @@ export default async function Page({
     weekActual.set(r.week_ending, (weekActual.get(r.week_ending) ?? 0) + aVal(r));
     weekBaseFull.set(r.week_ending, (weekBaseFull.get(r.week_ending) ?? 0) + bVal(r));
   }
-  const yearAgoWeek = (w: string) =>
-    new Date(Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10)) - 364 * DAY).toISOString().slice(0, 10);
-
   // aggregate the selection per week (trend chart)
   const byWeek = new Map<string, WeekPoint>();
   for (const w of weeks) {
-    const ly = weekActual.get(yearAgoWeek(w));
-    const bly = weekBaseFull.get(yearAgoWeek(w));
-    const b2y = weekBaseFull.get(yearAgoWeek(yearAgoWeek(w))); // 728 days back — two aligned years
+    const ya = comparableYearAgo(w), ya2 = ya ? comparableYearAgo(ya) : null; // null for a 53rd week — no partner
+    const ly = ya ? weekActual.get(ya) : undefined;
+    const bly = ya ? weekBaseFull.get(ya) : undefined;
+    const b2y = ya2 ? weekBaseFull.get(ya2) : undefined; // two aligned years back
     const unmeasured = planningYear || (forecastFrom !== null && w > latestWeek);
     byWeek.set(w, {
       week: w,
@@ -340,7 +329,7 @@ export default async function Page({
     const planValOf = (upc: string, w: string) => {
       const m = upcWeek.get(upc);
       if (!m) return 0;
-      const src = yearAgoWeek(w);
+      const src = priorYearWeek(w);
       return src <= latestWeek ? (m.get(src) ?? 0) : itemProj(upc, w);
     };
     // the items the projection is for: the carried live items, or the one item
@@ -364,7 +353,7 @@ export default async function Page({
     const additions: (number | null)[] = [];
     let nAct = 0;
     for (const w of weeks) {
-      const src = yearAgoWeek(w);
+      const src = priorYearWeek(w);
       let extra = 0;
       for (const a of adds) {
         if (w >= a.first_week) extra += planValOf(a.proxy_upc, w) * (a.proxy_pct / 100);
@@ -520,7 +509,6 @@ export default async function Page({
      earlier — what this window "should" do based on last year — falling back
      to the selection's all-history promoted-week lift (weeks where NIQ saw
      ≥ 10 %ACV promo support) when there is no year-ago data. */
-  const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
   // weekBaseFull (full-history base, chosen metric) is built above with weekActual
   const promoWeeks = new Set<string>();
   for (const r of scoped) if ((r.acv_any_promo ?? 0) >= 10) promoWeeks.add(r.week_ending);
@@ -694,8 +682,8 @@ export default async function Page({
     let curA = 0, lyA = 0, curB = 0, lyB = 0, curPW = 0, lyPW = 0, matched = 0;
     for (const w of weeks) {
       if (w > latestWeek) continue; // forecast weeks have no actuals to compare
-      const ya = yearAgoWeek(w);
-      if (!weekActual.has(ya) && !weekBaseFull.has(ya)) continue;
+      const ya = comparableYearAgo(w);
+      if (!ya || (!weekActual.has(ya) && !weekBaseFull.has(ya))) continue;
       matched++;
       curA += weekActual.get(w) ?? 0; lyA += weekActual.get(ya) ?? 0;
       curB += weekBaseFull.get(w) ?? 0; lyB += weekBaseFull.get(ya) ?? 0;

@@ -1,6 +1,7 @@
 import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, listWeekEndings, priceAsOf } from "@/lib/repo";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
+import { priorYearWeek, saturdaysOfYear } from "@/lib/weeks";
 import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
@@ -153,12 +154,7 @@ export default async function Page() {
     const adjByMkt: Record<string, PlanAdjustment[]> = {};
     let adjCount = 0;
     // the plan year's Saturdays — the axis every weekly series below is on
-    const planWeeks: string[] = [];
-    {
-      let t = Date.UTC(year, 0, 1);
-      while (new Date(t).getUTCDay() !== 6) t += DAY;
-      for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) planWeeks.push(new Date(t).toISOString().slice(0, 10));
-    }
+    const planWeeks = saturdaysOfYear(year);
     const divBrandWkly: Record<string, Record<string, number[]>> = {};
     const divItemWkly: Record<string, Record<string, number[]>> = {};
     for (const m of markets) {
@@ -284,7 +280,7 @@ export default async function Page() {
           const rawSeries = (im: Map<string, number>, upc: string) => {
             const a52 = m52.reduce((a, w) => a + (im.get(w) ?? 0), 0) / Math.max(m52.length, 1);
             return planWeeks.map((w) => {
-              const src = new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
+              const src = priorYearWeek(w);
               if (latest && src <= latest) return im.get(src) ?? 0;
               return live.has(upc)
                 ? projectItemWeek({ im, w, firstWeek: firstOf.get(upc), ratio: itemRatio(im, mWeeks, brandTrend), a52, engine: eng, measuredWeeks: mWeeks })

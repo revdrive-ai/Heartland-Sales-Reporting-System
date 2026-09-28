@@ -1,4 +1,5 @@
 import { getPriceList, getWeeklyFacts, listItems, listMarkets, listWeekEndings, priceAsOf } from "@/lib/repo";
+import { comparableYearAgo, priorYearWeek, saturdaysOfYear } from "@/lib/weeks";
 import { fyWeeklySeries } from "@/lib/server/fyForecast";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
@@ -14,21 +15,8 @@ import type { NielsenWeeklyRow } from "@/lib/types/db";
    movers. Controls travel in the URL. */
 
 const WINDOWS = [13, 26, 52] as const;
-const DAY = 86400000;
 
 type Agg = { dollars: number; units: number };
-
-const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
-
-/** Every NIQ week-ending (Saturday) of a calendar year. */
-function saturdaysOfYear(year: number): string[] {
-  const out: string[] = [];
-  let t = Date.UTC(year, 0, 1);
-  while (new Date(t).getUTCDay() !== 6) t += DAY;
-  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) out.push(new Date(t).toISOString().slice(0, 10));
-  return out;
-}
 
 export default async function Page({
   searchParams,
@@ -227,7 +215,7 @@ export default async function Page({
   if (mkt === "ALL") {
     // per-division base, latest 8 weeks vs the same weeks a year earlier
     const recent8 = new Set(allWeeks.slice(-8));
-    const ya8 = new Set([...recent8].map(yearAgoWeek));
+    const ya8 = new Set([...recent8].map(comparableYearAgo).filter((w): w is string => w !== null));
     const div = new Map<string, { c: number; p: number }>();
     for (const r of ownScoped) {
       const side = recent8.has(r.week_ending) ? "c" : ya8.has(r.week_ending) ? "p" : null;
@@ -468,7 +456,7 @@ async function renderPlanYear({
       const inBrandScope = brand === "ALL" || b === brand;
       let brandPlan$ = 0, divPlan$ = 0;
       planWeeks.forEach((w, i) => {
-        const src = yearAgoWeek(w);
+        const src = priorYearWeek(w);
         const m = +w.slice(5, 7) - 1;
         const carried = src <= latestWeek;
         const p$ = carried ? (wB$.get(src) ?? 0) : avg52$ * engine[m];

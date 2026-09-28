@@ -28,6 +28,17 @@ export function comparableYearAgo(w: string): string | null {
   return ya.slice(0, 4) < w.slice(0, 4) ? ya : null;
 }
 
+/** The prior-year week that stands in for w when last year's SHAPE is
+    carried forward: the same weekday 364 days back, or, for a 53rd week,
+    the prior year's final week (371 days back) — a week has to come from
+    somewhere, and the year's last week is the nearest like-for-like.
+    `years` steps back that many years the same way. */
+export function priorYearWeek(w: string, years = 1): string {
+  let out = w;
+  for (let i = 0; i < years; i++) out = comparableYearAgo(out) ?? iso(utcOf(out) - 371 * DAY);
+  return out;
+}
+
 /** Every week-ending Saturday of a calendar year, in order. */
 export function saturdaysOfYear(year: number): string[] {
   const out: string[] = [];

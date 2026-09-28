@@ -4,6 +4,7 @@ import { getState } from "@/lib/server/appstate";
 import type { NielsenWeeklyRow } from "@/lib/types/db";
 import type { PlanAdjustment } from "@/lib/repo/client";
 import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/projection";
+import { DAY, priorYearWeek, utcOf, yearAgoWeek } from "@/lib/weeks";
 import { readLeOverlay, type LeOverlay } from "@/lib/leovl";
 
 /* The FY forecast construction, shared by the Sales Dashboard's FY mode and
@@ -19,9 +20,6 @@ import { readLeOverlay, type LeOverlay } from "@/lib/leovl";
    add no lift; overlapping windows take the strongest read. The brand's
    series is the sum of its items', by construction. */
 
-const DAY = 86400000;
-const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
 
 // LE adjustments (adj:<mkt>:<year>) apply to the FORECAST weeks; a short
 // cache keeps the dashboard's 13-division × 3-brand sweep to one read each
@@ -97,7 +95,7 @@ function buildSeries(
     live ? projectItemWeek({ im, w, firstWeek, ratio, a52, engine: ctx.engine, measuredWeeks: allWeeks, shapeYearsBack: 1 }) : 0;
 
   return fyWeeks.map((w) => {
-    const src = yearAgoWeek(w);
+    const src = priorYearWeek(w);
     const measured = w <= latestWeek;
     let ty$: number, tyU: number;
     if (measured) {

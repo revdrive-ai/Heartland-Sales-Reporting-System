@@ -5,6 +5,7 @@ import { outFromOf, readDistVerification, type DistAddition, type DistVerificati
 import type { PlanAdjustment } from "@/lib/repo/client";
 import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
+import { DAY, priorYearWeek, saturdaysOfYear, utcOf } from "@/lib/weeks";
 import { fy, leRollup } from "@/lib/server/leRollup";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
@@ -21,18 +22,6 @@ import { fy, leRollup } from "@/lib/server/leRollup";
    monthly Latest Estimates. Each version freezes the monthly numbers, the
    adjustment list, and the distver rollup, so change between any two
    versions is always reconstructable. */
-
-const DAY = 86400000;
-const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
-
-function saturdaysOfYear(year: number): string[] {
-  const out: string[] = [];
-  let t = Date.UTC(year, 0, 1);
-  while (new Date(t).getUTCDay() !== 6) t += DAY;
-  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) out.push(new Date(t).toISOString().slice(0, 10));
-  return out;
-}
 
 export type PlanBaseNow = {
   year: number;
@@ -200,7 +189,7 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
     const rawOf = (im: Map<string, number>, upc: string) => {
       const a52 = avg(im);
       return weeks.map((w) => {
-        const src = yearAgoWeek(w);
+        const src = priorYearWeek(w);
         if (src <= latest) return Math.max(0, im.get(src) ?? 0);
         return live.has(upc)
           ? projectItemWeek({ im, w, firstWeek: firstOf.get(upc), ratio: itemRatio(im, allWeeks, brandTrend), a52, engine: eng, measuredWeeks: allWeeks })

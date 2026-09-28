@@ -1,5 +1,6 @@
 import type { NielsenWeeklyRow } from "@/lib/types/db";
 import type { PriceRow } from "@/lib/repo";
+import { DAY, comparableYearAgo, utcOf } from "@/lib/weeks";
 
 /* Key-insight detection — measured shifts in a selection of NIQ weekly rows
    that should move a plan: per-item distribution and base-price changes
@@ -8,9 +9,6 @@ import type { PriceRow } from "@/lib/repo";
    residual base-volume breaks. Shared by the Base Business Review and the Sales
    Dashboard; ranked by how much weekly base volume each shift moves. */
 
-const DAY = 86400000;
-const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
 
 export type Insight = {
   kind: "distribution" | "price" | "volume" | "promo" | "delisted" | "listprice";
@@ -37,7 +35,7 @@ export function detectInsights(opts: {
 
   const recent8 = new Set(allWeeks.slice(-8));
   const recent6 = new Set(allWeeks.slice(-6));
-  const ya8 = new Set([...recent8].map(yearAgoWeek));
+  const ya8 = new Set([...recent8].map(comparableYearAgo).filter((w): w is string => w !== null));
   const short = (u: string) => {
     const n = itemName(u);
     return n.length > 42 ? n.slice(0, 41) + "…" : n;
@@ -63,8 +61,8 @@ export function detectInsights(opts: {
   // per-item weekly base for the trend popups: last 26 weeks and their
   // year-ago counterparts, from the same scoped rows
   const trendWeeks = allWeeks.slice(-26);
-  const trendYA = trendWeeks.map(yearAgoWeek);
-  const wantWeeks = new Set([...trendWeeks, ...trendYA]);
+  const trendYA = trendWeeks.map(comparableYearAgo);
+  const wantWeeks = new Set([...trendWeeks, ...trendYA.filter((w): w is string => w !== null)]);
   const itemWk = new Map<string, Map<string, number>>(); // upc -> week -> base units
   for (const r of rows) {
     if (!wantWeeks.has(r.week_ending)) continue;
@@ -76,7 +74,7 @@ export function detectInsights(opts: {
     const m = itemWk.get(u);
     if (!m) return undefined;
     const curT = trendWeeks.map((w) => (m.has(w) ? Math.round(m.get(w)!) : null));
-    const priorT = trendYA.map((w) => (m.has(w) ? Math.round(m.get(w)!) : null));
+    const priorT = trendYA.map((w) => (w && m.has(w) ? Math.round(m.get(w)!) : null));
     return curT.some((v) => v !== null) || priorT.some((v) => v !== null)
       ? { weeks: trendWeeks, cur: curT, prior: priorT }
       : undefined;
@@ -133,7 +131,7 @@ export function detectInsights(opts: {
   // promo support swing on the whole selection (last 13 wks vs YA)
   const last13 = allWeeks.slice(-13);
   const pwNow = last13.filter((w) => (weekAcv.get(w) ?? 0) >= 10).length;
-  const pwYA = last13.map(yearAgoWeek).filter((w) => (weekAcv.get(w) ?? 0) >= 10).length;
+  const pwYA = last13.map(comparableYearAgo).filter((w) => w !== null && (weekAcv.get(w) ?? 0) >= 10).length;
   if (Math.abs(pwNow - pwYA) >= 4) {
     insights.push({
       kind: "promo", severity: pwNow < pwYA ? "bad" : "good", impact: brandWk * 0.5,
