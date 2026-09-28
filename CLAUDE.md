@@ -27,8 +27,11 @@
 - **Shipments (sell-in)** come from the Retail Planner export in `data/raw/` (Publix and
   Jewel, weekly by item, Actual + Last Year) via `scripts/ingest_shipments.py` into
   `data/shipments/<ACCOUNT>.json.gz` + `meta.json` (unmatched item codes listed there);
-  table `shipments_weekly` (migration 00014). Weeks are converted to NIQ week-ending
-  Saturdays. Publix is a shipments-only account with no NIQ market.
+  table `shipments_weekly` (migration 00014). One row per account × item × real week
+  (NIQ week-ending Saturday); the workbook's Last Year row is stored on its own week
+  (−364 days), so a 2026 export fills 2025 and 2026 and last year is read by date.
+  Only weeks with shipments are stored. Publix is a shipments-only account with no NIQ
+  market.
 - **Global scope**: the topbar's five cascading selectors (lib/scope.ts + components/ScopeBar)
   persist in the `hh-scope` cookie; server pages call `getScope()` (lib/server/scope.ts) and
   intersect their reads with `marketCodes` / `telusCustomerIds`. New views must do the same.

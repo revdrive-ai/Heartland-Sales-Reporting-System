@@ -132,7 +132,7 @@ TABLES = [
     ("price_list", rows_price_list, "fg,effective_from"),
     ("customer_crosswalk", rows_customer_crosswalk, "id"),
     ("crosswalk_telus_customers", rows_crosswalk_telus_customers, "crosswalk_id,telus_customer_id"),
-    ("shipments_weekly", rows_shipments_weekly, "account_code,item_code,week_ending,kind"),
+    ("shipments_weekly", rows_shipments_weekly, "account_code,item_code,week_ending"),
 ]
 
 

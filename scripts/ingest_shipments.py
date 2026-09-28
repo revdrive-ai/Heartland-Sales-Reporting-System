@@ -12,8 +12,18 @@ What this does with it:
 
   · weeks become NIQ-style week-ENDING Saturdays (Sunday + 6; the Jan 1 stub
     → the first Saturday), so shipments line up with the consumption facts
-  · Actual and Last Year rows become kind = "actual" | "last_year" against
-    the same 2026 week (last year is already aligned in the workbook)
+  · every row is ONE account × item × real week: the Actual row lands on
+    the workbook year's week, the Last Year row on that week minus 364 days
+    (the same NIQ week a year earlier — the offset the app uses for every
+    year-ago read). So a 2026 workbook yields 2025 and 2026 shipments, and
+    the app reads "last year" by date, not from a flag.
+  · the workbook's 53rd column (week ending in the next January) is the
+    one place the two rows meet: its Last Year figure lands on the week the
+    Actual row already covers as the opening stub. The Actual row is the
+    authority for every week the workbook year covers, so that figure is
+    dropped and the drop counted in meta.json (overlap_dropped)
+  · only weeks with shipments are written (a sparse table); an item that
+    shipped nothing all year still shows in meta.json's item counts
   · item codes are resolved to a NIQ UPC where the item crosswalk (Telus item
     number or SP Code) or the price list (FG#) knows them AND the UPC is in
     the NIQ pull; the rest carry upc = null and are listed in meta.json so the
@@ -23,7 +33,9 @@ What this does with it:
 
 Output: data/shipments/<ACCOUNT>.json.gz (rows) and data/shipments/meta.json
   row: { account_code, account_name, item_code, item_name, upc, brand,
-         week_ending, kind, units, source_file }
+         week_ending, units, source_row, source_file }
+  source_row says which workbook row the figure came from ("actual" or
+  "last_year") — provenance only; the week_ending is the real week.
 
 Usage: python3 scripts/ingest_shipments.py
 """
@@ -138,9 +150,12 @@ def main() -> None:
         year = weeks_raw[0].year
         weeks = [week_ending(c.date(), year) for c in weeks_raw]
 
-        out = []
-        item = None
+        actual_weeks = set(weeks)                 # the weeks the Actual row is the authority for
+        rows_by_key = {}                          # (item_code, week_ending) → row
+        items = {}                                # item_code → (name, upc)
         edge = None
+        overlap_dropped = 0
+        item = None
         for r in rows[1:]:
             label = str(r[off + 1] or "").strip()
             if r[off]:
@@ -151,30 +166,41 @@ def main() -> None:
                 item = (item_code, item_name.strip())
             if item is None or label not in ("Actual", "Last Year"):
                 continue
-            kind = "actual" if label == "Actual" else "last_year"
+            source_row = "actual" if label == "Actual" else "last_year"
             upc = upc_for(item[0])
             if upc is None:
                 unmatched[item[0]] = item[1]
+            items[item[0]] = (item[1], upc)
             for w, v in zip(weeks, r[off + 3:off + 3 + len(weeks)]):
                 units = float(v or 0)
-                if kind == "actual" and units > 0 and (edge is None or w > edge):
-                    edge = w
-                out.append({
+                if units == 0:
+                    continue
+                wk = w if source_row == "actual" else (date.fromisoformat(w) - timedelta(days=364)).isoformat()
+                if source_row == "last_year" and wk in actual_weeks:
+                    overlap_dropped += 1
+                    continue
+                key = (item[0], wk)
+                if source_row == "actual" and (edge is None or wk > edge):
+                    edge = wk
+                rows_by_key[key] = {
                     "account_code": code, "account_name": name,
                     "item_code": item[0], "item_name": item[1], "upc": upc, "brand": brand_of(item[1]),
-                    "week_ending": w, "kind": kind, "units": units, "source_file": SRC.name,
-                })
+                    "week_ending": wk, "units": units, "source_row": source_row, "source_file": SRC.name,
+                }
 
+        out = [rows_by_key[k] for k in sorted(rows_by_key, key=lambda k: (k[1], k[0]))]
         with gzip.open(OUT / f"{code}.json.gz", "wt", encoding="utf-8") as f:
             json.dump(out, f, separators=(",", ":"))
-        n_items = len({r["item_code"] for r in out})
-        mapped = len({r["item_code"] for r in out if r["upc"]})
+        years = sorted({r["week_ending"][:4] for r in out})
+        mapped = sum(1 for _, u in items.values() if u)
         meta["accounts"].append({
-            "account_code": code, "account_name": name, "year": year,
-            "weeks": len(weeks), "first_week": weeks[0], "last_week": weeks[-1],
-            "edge": edge, "items": n_items, "items_with_upc": mapped, "rows": len(out),
+            "account_code": code, "account_name": name, "workbook_year": year,
+            "years": [int(y) for y in years], "first_week": out[0]["week_ending"], "last_week": out[-1]["week_ending"],
+            "edge": edge, "items": len(items), "items_with_upc": mapped, "rows": len(out),
+            "overlap_dropped": overlap_dropped,
         })
-        print(f"{code}: {n_items} items ({mapped} tied to a NIQ UPC), {len(weeks)} weeks, actuals through {edge}, {len(out)} rows")
+        print(f"{code}: {len(items)} items ({mapped} tied to a NIQ UPC), weeks {out[0]['week_ending']} → {out[-1]['week_ending']}, "
+              f"actuals through {edge}, {len(out)} rows with shipments, {overlap_dropped} week-53 overlap rows dropped")
 
     meta["unmatched_items"] = [{"item_code": k, "item_name": v} for k, v in sorted(unmatched.items())]
     (OUT / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")

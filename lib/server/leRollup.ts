@@ -188,27 +188,41 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
   const monthWeeks = fyWeeks.filter((w) => +w.slice(5, 7) - 1 === edgeMonth);
   const edgeComplete = monthWeeks.length > 0 && monthWeeks.every((w) => w <= latest);
 
-  // shipments — the Retail Planner export, where this account has one
-  const ship = (await getShipments(mkt)).filter((r) => r.week_ending.startsWith(String(year)));
+  // shipments — the Retail Planner export, where this account has one. Rows
+  // are real weeks, so last year is the same week a year earlier.
+  const shipAll = await getShipments(mkt);
+  const ship = shipAll.filter((r) => r.week_ending.startsWith(String(year)));
   let shipments: LeRollup["shipments"] = null;
   if (ship.length) {
-    const edgeS = ship.filter((r) => r.kind === "actual" && r.units > 0).map((r) => r.week_ending).sort().at(-1) ?? latest;
+    const edgeS = ship.filter((r) => r.units > 0).map((r) => r.week_ending).sort().at(-1) ?? latest;
+    const lyWeeks = new Set(saturdaysOfYear(year).map(yearAgoWeek));
     const bm = { units: zero(), lyUnits: zero() };
     const ytd = { units: 0, lyUnits: 0 }, since = { units: 0, lyUnits: 0 };
     for (const r of ship) {
       const m = +r.week_ending.slice(5, 7) - 1;
-      if (r.kind === "actual") bm.units[m] += r.units; else bm.lyUnits[m] += r.units;
+      bm.units[m] += r.units;
       if (r.week_ending <= edgeS) {
-        if (r.kind === "actual") ytd.units += r.units; else ytd.lyUnits += r.units;
-        if (r.week_ending > latest) { if (r.kind === "actual") since.units += r.units; else since.lyUnits += r.units; }
+        ytd.units += r.units;
+        if (r.week_ending > latest) since.units += r.units;
       }
     }
-    const codes = new Set(ship.map((r) => r.item_code));
+    // last year's rows, read on the week they line up with this year
+    const edgeLy = yearAgoWeek(edgeS), latestLy = yearAgoWeek(latest);
+    for (const r of shipAll) {
+      if (!lyWeeks.has(r.week_ending)) continue;
+      const thisYear = new Date(utcOf(r.week_ending) + 364 * DAY).toISOString().slice(0, 10);
+      bm.lyUnits[+thisYear.slice(5, 7) - 1] += r.units;
+      if (r.week_ending <= edgeLy) {
+        ytd.lyUnits += r.units;
+        if (r.week_ending > latestLy) since.lyUnits += r.units;
+      }
+    }
+    const codes = new Set(shipAll.map((r) => r.item_code));
     shipments = {
       edge: edgeS,
-      weeksPastEdge: new Set(ship.filter((r) => r.week_ending > latest && r.week_ending <= edgeS).map((r) => r.week_ending)).size,
+      weeksPastEdge: edgeS > latest ? Math.round((utcOf(edgeS) - utcOf(latest)) / (7 * DAY)) : 0,
       ytd, sinceEdge: since, byMonth: bm,
-      items: codes.size, itemsTied: new Set(ship.filter((r) => r.upc).map((r) => r.item_code)).size,
+      items: codes.size, itemsTied: new Set(shipAll.filter((r) => r.upc).map((r) => r.item_code)).size,
     };
   }
 

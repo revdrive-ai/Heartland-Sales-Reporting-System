@@ -4,26 +4,34 @@
   {
    "account_code": "PUBLIX",
    "account_name": "Publix",
-   "year": 2026,
-   "weeks": 53,
-   "first_week": "2026-01-03",
-   "last_week": "2027-01-02",
+   "workbook_year": 2026,
+   "years": [
+    2025,
+    2026
+   ],
+   "first_week": "2025-01-04",
+   "last_week": "2026-09-19",
    "edge": "2026-09-19",
    "items": 55,
    "items_with_upc": 42,
-   "rows": 5830
+   "rows": 1902,
+   "overlap_dropped": 0
   },
   {
    "account_code": "ALB-JEWEL",
    "account_name": "Albertsons Jewel-Osco",
-   "year": 2026,
-   "weeks": 53,
-   "first_week": "2026-01-03",
-   "last_week": "2027-01-02",
+   "workbook_year": 2026,
+   "years": [
+    2025,
+    2026
+   ],
+   "first_week": "2025-02-08",
+   "last_week": "2026-09-12",
    "edge": "2026-09-12",
    "items": 37,
    "items_with_upc": 17,
-   "rows": 3922
+   "rows": 461,
+   "overlap_dropped": 24
   }
  ],
  "unmatched_items": [

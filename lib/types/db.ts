@@ -29,9 +29,11 @@ export type Item = {
 /** One NIQ retail week for one item in one market — the fact-table row.
     From the ALBSCO data pull; measures NIQ leaves blank arrive as null. */
 /** Weekly shipments (sell-in) per account × item — the Retail Planner
-    export (scripts/ingest_shipments.py). week_ending is the NIQ Saturday;
-    last_year rows are the workbook's aligned prior-year figure on the same
-    week. Mirrors supabase/migrations/00014_shipments_weekly.sql. */
+    export (scripts/ingest_shipments.py). One row per real week: week_ending
+    is the NIQ Saturday the units shipped in, and the workbook's last-year
+    row is stored on its own week (a year earlier), so "last year" is read by
+    date. Only weeks with shipments are on file. Mirrors
+    supabase/migrations/00014_shipments_weekly.sql. */
 export type ShipmentWeeklyRow = {
   account_code: string;   // market code where one exists (ALB-JEWEL), else the account's own (PUBLIX)
   account_name: string;
@@ -40,8 +42,8 @@ export type ShipmentWeeklyRow = {
   upc: string | null;     // NIQ upc when the crosswalk ties it, else null
   brand: string;
   week_ending: string;    // ISO Saturday
-  kind: "actual" | "last_year";
   units: number;
+  source_row: "actual" | "last_year";  // which workbook row it came from — provenance only
   source_file: string;
 };
 
