@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Chart } from "react-chartjs-2";
 import { cssToken, gridOptions, readoutTooltip, useThemeTick } from "@/components/charts/themed";
 import { parseWorkPath, processPath } from "@/lib/process";
+import WeekNote from "@/components/WeekNote";
 
 /* Where the year stands — see app/stand/page.tsx.
 
@@ -170,7 +171,7 @@ export default function StandView({ data }: { data: StandData }) {
       </div>
 
       <div className="revfin-head">
-        <b>Full year FY{year}</b>
+        <b>Full year FY{year}<WeekNote year={year} vs={a.priorYear} /></b>
         <span>actuals to date + estimate to go · {remaining} month{remaining === 1 ? "" : "s"} still to come · margin is after trade</span>
       </div>
       <div className="kpis stand">

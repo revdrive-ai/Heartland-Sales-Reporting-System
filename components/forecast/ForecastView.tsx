@@ -11,6 +11,7 @@ import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/char
    as the Sales Dashboard FY mode, at monthly review altitude. */
 
 import type { LeCompare } from "@/lib/server/leCompare";
+import WeekNote from "@/components/WeekNote";
 
 export type ForecastData = {
   markets: { code: string; name: string }[];
@@ -145,7 +146,7 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
 
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">FY{data.fyYear} dollars — full year (fcst)</span></div>
+          <div className="k-top"><span className="k-label">FY{data.fyYear} dollars — full year (fcst)<WeekNote year={data.fyYear} vs={data.priorYear} /></span></div>
           <div className="k-val">{fmtMoney(data.totals.fy)}</div>
           {yoy !== null && (
             <span className={"k-sub " + (yoy >= 0 ? "up" : "down")}>
@@ -460,7 +461,7 @@ export default function ForecastView({ data, mode, planYear }: { data: ForecastD
 
       {data.brand === "ALL" && data.brandRows.length > 1 && (
         <div className="card">
-          <b>Full-year FY{data.fyYear} by brand vs {data.priorYear}</b>
+          <b>Full-year FY{data.fyYear} by brand vs {data.priorYear}<WeekNote year={data.fyYear} vs={data.priorYear} /></b>
           <div className="chartbox" style={{ marginTop: 12, height: 46 + data.brandRows.length * 44 }}>
             <Bar
               key={"bf" + tick + data.mkt}

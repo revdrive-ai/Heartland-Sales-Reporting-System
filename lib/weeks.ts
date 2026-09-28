@@ -50,3 +50,14 @@ export function saturdaysOfYear(year: number): string[] {
 
 export const weeksInYear = (year: number) => saturdaysOfYear(year).length;
 export const is53WeekYear = (year: number) => weeksInYear(year) === 53;
+
+/** The call-out a full-year total needs when its year and the year it is
+    read against do not hold the same number of weeks; null when they do.
+    `text` is the chip, `title` the sentence behind it. */
+export function weekCountNote(year: number, vs: number): { text: string; title: string } | null {
+  const a = weeksInYear(year), b = weeksInYear(vs);
+  if (a === b) return null;
+  return a > b
+    ? { text: "53-week year", title: `FY${year} has 53 weeks — one more than FY${vs}. The full-year total carries the extra week; year-on-year reads leave it out.` }
+    : { text: `vs a 53-week FY${vs}`, title: `FY${vs} had 53 weeks — one more than FY${year}. Its full-year total carries the extra week; year-on-year reads leave it out.` };
+}

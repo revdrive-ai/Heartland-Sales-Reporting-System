@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { viewUrlWithin } from "@/lib/process";
 import { Bar, Line } from "react-chartjs-2";
 import { cssToken, fmtMoney, gridOptions, useThemeTick } from "@/components/charts/themed";
+import WeekNote from "@/components/WeekNote";
 
 /* Sales Dashboard, draft 1 on the real NIQ pull. Headline = Heartland brands in
    measured Albertsons retail; the competitive set appears as share and as a
@@ -199,7 +200,11 @@ export default function ReportingView({ data }: { data: ReportingData }) {
 
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">{data.plan ? "Plan base dollars — full year" : data.fy ? `FY${data.fy.year} dollars — full year (fcst)` : gross ? "Gross dollars (list)" : "Retail dollars"}</span></div>
+          <div className="k-top"><span className="k-label">
+            {data.plan ? "Plan base dollars — full year" : data.fy ? `FY${data.fy.year} dollars — full year (fcst)` : gross ? "Gross dollars (list)" : "Retail dollars"}
+            {data.plan && <WeekNote year={data.plan.year} vs={data.plan.priorYear} />}
+            {data.fy && <WeekNote year={data.fy.year} vs={data.fy.priorYear} />}
+          </span></div>
           <div className="k-val">{fmtMoney(data.kpis.dollars)}</div>
           <YoY v={data.kpis.dollarsYoY} suffix={data.plan ? "% vs latest 52 wks sold" : data.fy ? `% vs ${data.fy.priorYear}` : "% YoY"} />
         </div>

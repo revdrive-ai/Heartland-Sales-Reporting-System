@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { parseWorkPath, processPath } from "@/lib/process";
+import WeekNote from "@/components/WeekNote";
 
 /* Review & lock — the estimate's last step, for ONE account.
 
@@ -99,7 +100,7 @@ export default function LockReadback({ a }: { a: LockReadbackData }) {
         <table className="revtable">
           <thead>
             <tr>
-              <th>Full year FY{a.year}</th>
+              <th>Full year FY{a.year}<WeekNote year={a.year} vs={a.priorYear} /></th>
               <th style={{ textAlign: "right" }}>Estimate</th>
               <th style={{ textAlign: "right" }}>Plan</th>
               <th style={{ textAlign: "right" }}>vs plan</th>

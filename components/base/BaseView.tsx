@@ -17,6 +17,7 @@ import {
 import { writeModeCookie, type ModeKind } from "@/lib/mode";
 import { STATUS_STYLE } from "@/components/planner/lines";
 import type { PromoOverlay } from "@/lib/repo";
+import WeekNote from "@/components/WeekNote";
 
 /* Base Business Review: the division's weekly trend (actual vs NIQ base) with the
    Telus promotion windows overlaid, and — as in the reference mockup — the
@@ -1278,7 +1279,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
             </div>
           </div>
           <div className="kpi">
-            <div className="k-top"><span className="k-label">Plan {data.win} — full year</span></div>
+            <div className="k-top"><span className="k-label">Plan {data.win} — full year<WeekNote year={+data.win} vs={data.plan.sourceYear} /></span></div>
             <div className="k-val">{fmtVal(hasPlanDelta ? adjTotal : data.plan.totActualized + data.plan.totProjected)}</div>
             <DeltaSub from={data.plan.totActualized + data.plan.totProjected} to={hasPlanDelta ? adjTotal : data.plan.totActualized + data.plan.totProjected} label={`vs ${data.plan.sourceYear} base`} fmt={fmtVal} />
             <div className="k-sub flat">

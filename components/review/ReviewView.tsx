@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { parseWorkPath, processPath } from "@/lib/process";
 import ShareEmail from "./ShareEmail";
 import type { PlanTotals } from "@/lib/planbuilt";
+import WeekNote from "@/components/WeekNote";
 
 /* The plan's read-back, and the one place it is submitted from.
 
@@ -224,7 +225,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
         return (
           <>
             <div className="revfin-head">
-              <b>Plan financials</b>
+              <b>Plan financials{t && <WeekNote year={data.year} vs={t.priorYear} />}</b>
               <span>
                 {t && a.planBuiltAt
                   ? <>as Build the plan had them when it was submitted, {a.planBuiltAt.slice(0, 10)} · gross sales at list price</>
@@ -286,7 +287,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
 
       <div className="kpis">
         <div className="kpi">
-          <div className="k-top"><span className="k-label">Full-year plan base</span></div>
+          <div className="k-top"><span className="k-label">Full-year plan base<WeekNote year={data.year} vs={data.year - 1} /></span></div>
           <div className="k-val">{a.base ? fmtK(a.base.adjusted) : "—"}</div>
           <div className="k-sub" style={{ color: "var(--ink-3)" }}>
             {a.base && a.base.adjusted !== a.base.total ? `unadjusted ${fmtK(a.base.total)} · ` : ""}units · all Heartland brands

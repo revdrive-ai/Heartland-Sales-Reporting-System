@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { LeCycle } from "@/lib/leSchedule";
 import type { LeCronRun } from "@/lib/server/leCron";
 import LockReadback, { type LockReadbackData } from "./LockReadback";
+import WeekNote from "@/components/WeekNote";
 
 /* Latest Estimate (LE) view — see app/le/page.tsx. */
 
@@ -149,7 +150,7 @@ export default function LeView({ data, readback = null }: { data: LeData; readba
           </div>
         </div>
         <div className="kpi">
-          <div className="k-top"><span className="k-label">Portfolio full year — latest versions</span></div>
+          <div className="k-top"><span className="k-label">Portfolio full year — latest versions<WeekNote year={data.year} vs={data.year - 1} /></span></div>
           <div className="k-val">{fmtU(latestTotal)} <span style={{ fontSize: 14, color: "var(--ink-3)" }}>units</span></div>
           <div className="k-sub flat">{fmtD(latestTotal - prevTotal)} vs previous versions</div>
         </div>

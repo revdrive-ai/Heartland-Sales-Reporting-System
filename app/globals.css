@@ -1021,3 +1021,6 @@ button[disabled]{opacity:.45;cursor:not-allowed}
   .evcard .evscroll{overflow-x:auto}
   .evcard .evscroll thead th{position:static}
 }
+
+/* 53-week call-out beside a full-year total */
+.wk53{display:inline-flex;text-transform:none;letter-spacing:0;align-items:center;margin-left:8px;padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:800;line-height:1.5;border:1px solid var(--warn);color:var(--warn);background:var(--surface-2);vertical-align:middle;cursor:help;white-space:nowrap}
