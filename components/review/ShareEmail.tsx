@@ -19,7 +19,8 @@ import type { ReviewData } from "./ReviewView";
        Print → Save as PDF, for the full letter-size sheet. */
 
 type Account = NonNullable<ReviewData["account"]>;
-type Sub = { seq: number; takenAt: string } | null;
+/** The version chosen as the plan: its name (or system label), and when it was chosen. */
+type Sub = { seq: number; takenAt: string; name: string | null; label: string; at: string } | null;
 type Owed = { text: string }[];
 
 const fmtK = (n: number) => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000)}K` : Math.round(n).toLocaleString());
@@ -52,8 +53,17 @@ function finLines(a: Account): [string, string, string][] | null {
   ];
 }
 
+const subTitle = (sub: NonNullable<Sub>) => (sub.name ? `"${sub.name}"` : sub.label);
+
 function statusLine(sub: Sub) {
-  return sub ? `Submitted ${sub.takenAt.slice(0, 10)} as v${sub.seq}` : "Not yet submitted";
+  return sub ? `Submitted ${sub.at.slice(0, 10)} · ${subTitle(sub)} (v${sub.seq})` : "Not yet submitted";
+}
+
+/** Every version on file, named, with the plan marked — so the reader knows
+    which candidates exist and which one this is. */
+function versionsLine(a: Account, sub: Sub): string | null {
+  if (!a.versions.length) return null;
+  return a.versions.map((v) => `${v.name ?? v.label} (v${v.seq}${sub && v.seq === sub.seq ? ", the plan" : ""})`).join("; ");
 }
 
 function stepLines(a: Account, year: number) {
@@ -78,7 +88,10 @@ function plainBody(a: Account, year: number, sub: Sub, owed: Owed, note: string,
   const s = stepLines(a, year);
   const L: string[] = [];
   if (note.trim()) L.push(note.trim(), "");
-  L.push(`PLAN ${year} — ${a.name}`, `${statusLine(sub)} · NIQ through ${a.dataEdge}`, "");
+  L.push(`PLAN ${year} — ${a.name}`, `${statusLine(sub)} · NIQ through ${a.dataEdge}`);
+  const vl = versionsLine(a, sub);
+  if (vl) L.push(`Versions: ${vl}`);
+  L.push("");
   const fin = finLines(a);
   if (fin) {
     L.push(...fin.map(([k, v, d]) => `${k}: ${v} (${d})`));
@@ -130,6 +143,8 @@ function htmlBody(a: Account, year: number, sub: Sub, owed: Owed, note: string) 
   if (note.trim()) out.push(`<p>${esc(note.trim()).replace(/\n/g, "<br>")}</p>`);
   out.push(`<h2 style="margin:0 0 2px;font-size:17px">Plan ${year} — ${esc(a.name)}</h2>`,
     `<div style="color:#555;font-size:12px">${esc(statusLine(sub))} · NIQ through ${esc(a.dataEdge)}</div>`);
+  const vl = versionsLine(a, sub);
+  if (vl) out.push(`<div style="color:#555;font-size:12px">Versions: ${esc(vl)}</div>`);
   out.push(`<table style="border-collapse:collapse;margin:10px 0"><tr>${[
     ["Full-year plan base", a.base ? `${fmtK(a.base.adjusted)} units` : "—"],
     ["Distribution", a.distribution.verifiedAt ? "Verified" : "Unverified"],
@@ -172,7 +187,7 @@ export default function ShareEmail({ a, year, sub, owed }: { a: Account; year: n
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
-  const subj = subject || `Plan ${year} · ${a.name} — ${sub ? "submitted plan" : "plan for review"}`;
+  const subj = subject || `Plan ${year} · ${a.name} — ${sub ? `${sub.name ?? sub.label} · submitted plan` : "plan for review"}`;
   const bad = [...badAddrs(to), ...badAddrs(cc)];
 
   /* The longest body that keeps the whole mailto: link under the cap —

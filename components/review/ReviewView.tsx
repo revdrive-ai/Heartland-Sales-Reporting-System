@@ -209,7 +209,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <button className="btn noprint" onClick={() => window.print()} title="Print this read-back on letter paper (8.5 × 11)">
             <span aria-hidden="true">🖨</span> Print
           </button>
-          <ShareEmail a={a} year={data.year} sub={sub} owed={owed} />
+          <ShareEmail a={a} year={data.year} sub={sub ? { seq: sub.seq, takenAt: sub.takenAt, name: sub.name, label: sub.label, at: subAt ?? sub.takenAt } : null} owed={owed} />
           <span className="pill">NIQ through {a.dataEdge}</span>
           {sub
             ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {(subAt ?? sub.takenAt).slice(0, 10)}{a.locked ? " · locked" : " · reopened"}</span>
