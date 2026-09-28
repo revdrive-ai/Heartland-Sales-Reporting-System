@@ -1,5 +1,5 @@
 import { getStates } from "@/lib/server/appstate";
-import { planLockedFrom, readPlanReopen } from "@/lib/planlock";
+import { planLockedFrom, readPlanChoice, readPlanReopen } from "@/lib/planlock";
 import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 
 /* Is this customer's plan year locked? See lib/planlock. Read by the state
@@ -26,6 +26,6 @@ export function planDocKey(key: string): { mkt: string; year: number } | null {
 
 export async function planLocked(mkt: string, year: number): Promise<boolean> {
   const docs = await getStates([`plansnap:${mkt}:${year}`, `planreopen:${mkt}:${year}`]);
-  const versions = ((docs.get(`plansnap:${mkt}:${year}`) as { versions?: PlanSnapshotVersion[] } | undefined)?.versions ?? []);
-  return planLockedFrom(versions, readPlanReopen(docs.get(`planreopen:${mkt}:${year}`))).locked;
+  const doc = docs.get(`plansnap:${mkt}:${year}`) as { versions?: PlanSnapshotVersion[]; chosen?: unknown } | undefined;
+  return planLockedFrom(doc?.versions ?? [], readPlanReopen(docs.get(`planreopen:${mkt}:${year}`)), readPlanChoice(doc?.chosen)).locked;
 }

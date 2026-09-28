@@ -8,7 +8,7 @@ import { readLeCycle, leAnswerFor, type LeAnswer } from "@/lib/lecycle";
 import { readBaseReview } from "@/lib/basereview";
 import { readPlanBuilt } from "@/lib/planbuilt";
 import { overlayCount, readLeOverlay } from "@/lib/leovl";
-import { planLockedFrom, readPlanReopen } from "@/lib/planlock";
+import { planLockedFrom, readPlanChoice, readPlanReopen } from "@/lib/planlock";
 
 /* Where the work stands for the mode year, across the customers IN SCOPE —
    the rollup behind the step rail, the strip under the top bar and the
@@ -32,6 +32,8 @@ export type CustomerStatus = {
   /** plan years: submitted and not reopened since — read-only (lib/planlock) */
   planLocked: boolean;
   submittedAt: string | null;
+  /** plan years: the version chosen as the plan, when one has been */
+  chosenId: string | null;
   adjustments: number;
   distver: {
     out: number;
@@ -110,11 +112,13 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
   const now = new Date();
   const due = dueCycle(now), open = openCycle(now);
   const customers: CustomerStatus[] = markets.map((m) => {
-    const versions = ((docs.get(`plansnap:${m.code}:${year}`) as { versions?: PlanSnapshotVersion[] } | undefined)?.versions ?? []);
+    const snapDoc = docs.get(`plansnap:${m.code}:${year}`) as { versions?: PlanSnapshotVersion[]; chosen?: unknown } | undefined;
+    const versions = snapDoc?.versions ?? [];
+    const chosen = readPlanChoice(snapDoc?.chosen);
     const latest = versions[versions.length - 1] ?? null;
     const adjs = (docs.get(`adj:${m.code}:${year}`) as PlanAdjustment[] | undefined) ?? [];
     const dv = docs.get(`distver:${m.code}:${year}`) as DistVerification | undefined;
-    const lock = planLockedFrom(versions, readPlanReopen(docs.get(`planreopen:${m.code}:${year}`)));
+    const lock = planLockedFrom(versions, readPlanReopen(docs.get(`planreopen:${m.code}:${year}`)), chosen);
     return {
       code: m.code,
       name: m.name,
@@ -124,9 +128,10 @@ export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise
       lockedForOpen: versions.some((v) => (v.cycle ?? v.taken_at.slice(0, 7)) === open.key),
       lockedCycle: versions.length ? (versions[versions.length - 1].cycle ?? versions[versions.length - 1].taken_at.slice(0, 7)) : null,
       signedOff: versions.some((v) => v.kind === "por"),
-      submitted: versions.some((v) => v.submitted_from === "review"),
+      submitted: lock.submittedAt !== null,
       planLocked: lock.locked,
       submittedAt: lock.submittedAt,
+      chosenId: chosen?.id ?? null,
       adjustments: adjs.length,
       distver: {
         out: Object.values(dv?.decisions ?? {}).filter((d) => d === "out").length,

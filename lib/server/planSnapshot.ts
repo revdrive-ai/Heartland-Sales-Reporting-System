@@ -7,6 +7,10 @@ import { cycleFromKey, dueCycle } from "@/lib/leSchedule";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
 import { DAY, priorYearWeek, saturdaysOfYear, utcOf } from "@/lib/weeks";
 import { fy, leRollup } from "@/lib/server/leRollup";
+import { readPlanBuilt, planSig } from "@/lib/planbuilt";
+import { readPlanChoice, type PlanChoice } from "@/lib/planlock";
+import { CROSSWALK } from "@/lib/scope";
+import type { PlanEvent } from "@/lib/repo/client";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
 
@@ -21,7 +25,13 @@ import { fy, leRollup } from "@/lib/server/leRollup";
    version 1 is the Plan of Record (the sign-off), later versions are the
    monthly Latest Estimates. Each version freezes the monthly numbers, the
    adjustment list, and the distver rollup, so change between any two
-   versions is always reconstructable. */
+   versions is always reconstructable.
+
+   A forward plan year can hold several candidate versions — each named, each
+   freezing the plan's events and money as well as its base — and the one
+   CHOSEN as the plan is what is submitted for approval. The choice sits on
+   the document beside the versions (`chosen`), so choosing an earlier
+   version never rewrites a later one. */
 
 export type PlanBaseNow = {
   year: number;
@@ -62,7 +72,29 @@ export type PlanSnapshotVersion = Omit<PlanBaseNow, "computed_at"> & {
   money?: { gross: number; trade: number };
   /** LE versions: promotions the estimate had cancelled, changed or added */
   promoChanges?: number;
+  /** A name given to the version — "Aggressive Q4", "Board case" — so
+      candidates can be told apart when they are compared. The label stays
+      the system's own ("Plan of Record", "Plan v3"). */
+  name?: string;
+  /** Plan years: the promotion plan as it stood — the account's events and,
+      when Build the plan had been submitted for these events, the money it
+      showed — so candidate plans compare on trade and gross, not units only. */
+  plan?: PlanFrozen;
+  /** Plan years: the No-volume items and the new items, by name, so two
+      versions can say WHICH decisions differ, not only how many. */
+  distDetail?: { out: string[]; added: string[] };
 };
+
+export type PlanFrozen = {
+  events: number;
+  spend: number;                 // trade committed by the events
+  rows: { id: string; title: string; brand: string; perf: string; start: string; end: string; spend: number; lift: number | null }[];
+  /** Build the plan's money when its totals match these events; null when it
+      was not submitted for them (the figures need the whole planner) */
+  totals: { gross: number; grossPrior: number; grossTarget: number; spend: number; spendPrior: number; fund: number; priorYear: number } | null;
+};
+
+export type PlanSnapshotDoc = { versions: PlanSnapshotVersion[]; chosen: PlanChoice | null };
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {
   const items = await listItems();
@@ -248,21 +280,66 @@ export async function computePlanBase(mkt: string, year: number): Promise<PlanBa
 
 const snapKey = (mkt: string, year: number) => `plansnap:${mkt}:${year}`;
 
-export async function getSnapshots(mkt: string, year: number): Promise<PlanSnapshotVersion[]> {
-  const doc = (await getState(snapKey(mkt, year)).catch(() => undefined)) as { versions?: PlanSnapshotVersion[] } | undefined;
-  return doc?.versions ?? [];
+export async function getSnapshotDoc(mkt: string, year: number): Promise<PlanSnapshotDoc> {
+  const doc = (await getState(snapKey(mkt, year)).catch(() => undefined)) as { versions?: PlanSnapshotVersion[]; chosen?: unknown } | undefined;
+  return { versions: doc?.versions ?? [], chosen: readPlanChoice(doc?.chosen) };
 }
 
+export async function getSnapshots(mkt: string, year: number): Promise<PlanSnapshotVersion[]> {
+  return (await getSnapshotDoc(mkt, year)).versions;
+}
+
+/** The account's promotion plan for a year as it stands: its events, their
+    trade, and Build the plan's money when that was submitted for exactly
+    these events. */
+async function freezePlan(mkt: string, year: number): Promise<{ plan: PlanFrozen; distDetail: { out: string[]; added: string[] } }> {
+  const ids = new Set<string>();
+  for (const r of CROSSWALK) if (r.market_code === mkt) for (const id of r.telus_customer_ids) ids.add(id);
+  const [evRaw, pbRaw, dvRaw, items] = await Promise.all([
+    getState(`events:${year}`).catch(() => undefined),
+    getState(`planbuilt:${mkt}:${year}`).catch(() => undefined),
+    getState(`distver:${mkt}:${year}`).catch(() => undefined),
+    listItems(),
+  ]);
+  const events = ((Array.isArray(evRaw) ? evRaw : []) as PlanEvent[])
+    .filter((e) => !!e.customer_id && ids.has(e.customer_id))
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const built = readPlanBuilt(pbRaw);
+  const t = built.totals && built.totals.sig === planSig(events) ? built.totals : null;
+  const dv = readDistVerification(dvRaw);
+  const nameOf = new Map(items.map((i) => [i.upc, i.name]));
+  return {
+    plan: {
+      events: events.length,
+      spend: Math.round(events.reduce((s, e) => s + (e.spend || 0), 0)),
+      rows: events.map((e) => ({ id: e.id, title: e.title, brand: e.brand, perf: e.perf, start: e.start, end: e.end, spend: Math.round(e.spend || 0), lift: e.lift_pct })),
+      totals: t ? { gross: t.gross, grossPrior: t.grossPrior, grossTarget: t.grossTarget, spend: t.spend, spendPrior: t.spendPrior, fund: t.fund, priorYear: t.priorYear } : null,
+    },
+    distDetail: {
+      out: Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => nameOf.get(u) ?? u).sort(),
+      added: dv.additions.map((a) => a.name).sort(),
+    },
+  };
+}
+
+export type TakeSnapshotOptions = {
+  note?: string;
+  name?: string;
+  cycleKey?: string;
+  from?: "review";
+  /** plan years: make the new version the plan — the submission for approval */
+  choose?: boolean;
+};
+
 /** Freeze the current plan base as the next version: v1 = Plan of Record
-    (the base sign-off), later versions = Latest Estimates. */
-export async function takeSnapshot(
-  mkt: string,
-  year: number,
-  note: string,
-  cycleKey?: string,
-  from?: "review",
-): Promise<PlanSnapshotVersion> {
-  const [versions, now, allWeeks] = await Promise.all([getSnapshots(mkt, year), computePlanBase(mkt, year), listWeekEndings(mkt)]);
+    (the base sign-off), later versions = Latest Estimates on an in-flight
+    year, or further candidate plans on a forward one. */
+export async function takeSnapshot(mkt: string, year: number, opts: TakeSnapshotOptions = {}): Promise<PlanSnapshotVersion> {
+  const note = (opts.note ?? "").slice(0, 500);
+  const name = (opts.name ?? "").trim().slice(0, 80);
+  const { cycleKey, from } = opts;
+  const [doc, now, allWeeks] = await Promise.all([getSnapshotDoc(mkt, year), computePlanBase(mkt, year), listWeekEndings(mkt)]);
+  const versions = doc.versions;
   const seq = versions.length + 1;
   const when = new Date();
   // a forward plan year's first version is the base sign-off (Plan of Record);
@@ -273,6 +350,9 @@ export async function takeSnapshot(
      the full year, with the promotion changes in — so the next cycle can be
      read against it in dollars. A forward year's sign-off is units only. */
   const roll = inFlight ? await leRollup(mkt, year) : null;
+  /* A forward year's version freezes the promotion plan and its money too —
+     that is what candidate plans are compared on. */
+  const frozen = inFlight ? null : await freezePlan(mkt, year);
   /* An LE belongs to a scheduled cycle: the one asked for, else the cycle
      whose lock has most recently passed. A forward year's sign-off is not on
      that schedule, so it carries no cycle. */
@@ -281,9 +361,10 @@ export async function takeSnapshot(
     id: when.getTime().toString(36) + Math.random().toString(36).slice(2, 6),
     seq,
     kind: seq === 1 && !inFlight ? "por" : "le",
-    label: cyc ? cyc.label : seq === 1 ? "Plan of Record" : `LE ${when.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" })}`,
+    label: cyc ? cyc.label : seq === 1 ? "Plan of Record" : `Plan v${seq}`,
     taken_at: when.toISOString(),
     note,
+    ...(name ? { name } : {}),
     ...(cyc ? {
       cycle: cyc.key,
       scheduled_lock: cyc.lockAt,
@@ -299,7 +380,35 @@ export async function takeSnapshot(
     distver: now.distver,
     ...(from ? { submitted_from: from } : {}),
     ...(roll ? { money: { gross: Math.round(fy(roll.totals).gross), trade: Math.round(roll.trade.estTotal) }, promoChanges: roll.promoChanges } : {}),
+    ...(frozen ? { plan: frozen.plan, distDetail: frozen.distDetail } : {}),
   };
-  await setState(snapKey(mkt, year), { versions: [...versions, version] });
+  const chosen: PlanChoice | null = opts.choose ? { id: version.id, at: version.taken_at, note } : doc.chosen;
+  await setState(snapKey(mkt, year), { versions: [...versions, version], chosen });
   return version;
+}
+
+/** Make an existing version the plan — the submission for approval. The
+    choice is a small record beside the versions; nothing frozen changes. */
+export async function chooseVersion(mkt: string, year: number, id: string, note = ""): Promise<PlanChoice> {
+  const doc = await getSnapshotDoc(mkt, year);
+  if (!doc.versions.some((v) => v.id === id)) throw new Error("no such version");
+  const chosen: PlanChoice = { id, at: new Date().toISOString(), note: note.slice(0, 500) };
+  await setState(snapKey(mkt, year), { versions: doc.versions, chosen });
+  return chosen;
+}
+
+/** Name (or rename) a version. The name is the one thing about a version
+    that may change after it is taken — it is how people refer to it, not
+    what it holds. */
+export async function renameVersion(mkt: string, year: number, id: string, name: string): Promise<PlanSnapshotVersion> {
+  const doc = await getSnapshotDoc(mkt, year);
+  const i = doc.versions.findIndex((v) => v.id === id);
+  if (i < 0) throw new Error("no such version");
+  const clean = name.trim().slice(0, 80);
+  const next = { ...doc.versions[i] };
+  if (clean) next.name = clean; else delete next.name;
+  const versions = doc.versions.slice();
+  versions[i] = next;
+  await setState(snapKey(mkt, year), { versions, chosen: doc.chosen });
+  return next;
 }

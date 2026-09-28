@@ -1024,3 +1024,32 @@ button[disabled]{opacity:.45;cursor:not-allowed}
 
 /* 53-week call-out beside a full-year total */
 .wk53{display:inline-flex;text-transform:none;letter-spacing:0;align-items:center;margin-left:8px;padding:1px 7px;border-radius:20px;font-size:10.5px;font-weight:800;line-height:1.5;border:1px solid var(--warn);color:var(--warn);background:var(--surface-2);vertical-align:middle;cursor:help;white-space:nowrap}
+
+/* Review & submit — plan versions and their comparison */
+.pvcard>header{flex-wrap:wrap}
+.pv-save{display:flex;gap:8px;align-items:center;flex:0 0 auto}
+.pv-save input{font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);width:220px}
+.pv-wrap{overflow-x:auto}
+.pvtable th,.pvtable td{vertical-align:top}
+.pvtable td .dim{font-size:11.5px}
+.pvtable tr.pv-chosen td{background:var(--accent-soft)}
+.pv-pen{border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:12px;margin-left:6px;padding:0 2px}
+.pv-pen:hover{color:var(--accent)}
+.pv-rename{font:inherit;font-size:13px;font-weight:700;padding:4px 8px;border:1px solid var(--accent);border-radius:7px;background:var(--surface);width:220px}
+.pv-cmp{border-top:1px solid var(--line);padding:12px 0 6px}
+.pv-cmphead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 16px 8px;font-size:13px}
+.pv-cmphead>b{font-size:13px}
+.pv-now{margin-left:auto;font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.pvcmp th{vertical-align:top}
+.pvcmp td:first-child{color:var(--ink-2)}
+.pv-delta{font-size:11.5px;font-weight:700}
+.pv-drift{margin-top:4px}
+.pv-pick{margin-top:6px;font-size:11px;padding:4px 8px}
+.pv-diff{padding:10px 16px 4px;border-top:1px dashed var(--line);font-size:13px}
+.pv-diff>b{display:block;margin-bottom:6px}
+.pv-diffgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:8px 18px}
+.pv-diffgrid ul{list-style:none;margin:0;padding:0}
+.pv-diffgrid li{padding:3px 0;line-height:1.45}
+.pv-diffgrid li .minichip{margin-right:4px;font-size:10px;padding:2px 6px;cursor:default}
+.pv-h{display:block;font-size:11px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+@media print{.revprint .pvtable th:first-child,.revprint .pvtable td:first-child{display:none}}

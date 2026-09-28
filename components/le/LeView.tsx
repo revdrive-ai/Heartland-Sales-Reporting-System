@@ -10,7 +10,7 @@ import WeekNote from "@/components/WeekNote";
 /* Latest Estimate (LE) view — see app/le/page.tsx. */
 
 export type VersionLite = {
-  id: string; seq: number; kind: "por" | "le"; label: string; taken_at: string; note: string;
+  id: string; seq: number; kind: "por" | "le"; label: string; name: string | null; taken_at: string; note: string;
   cycle?: string; scheduled_lock?: string; locked_late?: boolean;
   total: number; adjustments: number; distver: { out: number; added: number; verifiedAt: string | null };
 };
@@ -221,7 +221,7 @@ export default function LeView({ data, readback = null }: { data: LeData; readba
                     <td style={td}>
                       {latest ? (<>
                         <span className="pill" style={latest.kind === "por" ? { borderColor: "var(--good)", color: "var(--good)" } : undefined}>
-                          v{latest.seq} · {latest.label}
+                          v{latest.seq} · {latest.name ?? latest.label}
                         </span>{" "}
                         <span style={{ fontSize: 12, color: "var(--ink-3)" }}
                           title={latest.scheduled_lock

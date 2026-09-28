@@ -7,9 +7,12 @@ import { computePlanBase } from "@/lib/server/planSnapshot";
 import { outFromOf, readDistVerification } from "@/lib/distver";
 import { readBaseReview } from "@/lib/basereview";
 import { planSig, readPlanBuilt } from "@/lib/planbuilt";
+import { readPlanChoice } from "@/lib/planlock";
 import { CROSSWALK } from "@/lib/scope";
 import type { PlanAdjustment, PlanEvent } from "@/lib/repo/client";
 import ReviewView, { type ReviewData } from "@/components/review/ReviewView";
+import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
+import type { ReviewVersion, VersionFacts } from "@/components/review/PlanVersions";
 
 /* Review & submit — the plan's last step. One account × one plan year, read
    back in the order it was built: the distribution answers, the new items,
@@ -43,13 +46,14 @@ export default async function Page() {
     return <ReviewView data={{ year, customers: status.customers.length, scopeLabel: scope.label, account: null }} />;
   }
 
-  const [dvRaw, adjRaw, evRaw, live, brRaw, pbRaw] = await Promise.all([
+  const [dvRaw, adjRaw, evRaw, live, brRaw, pbRaw, snapRaw] = await Promise.all([
     getState(`distver:${one.code}:${year}`).catch(() => undefined),
     getState(`adj:${one.code}:${year}`).catch(() => undefined),
     getState(`events:${year}`).catch(() => undefined),
     computePlanBase(one.code, year).catch(() => null),
     getState(`basereview:${one.code}:${year}`).catch(() => undefined),
     getState(`planbuilt:${one.code}:${year}`).catch(() => undefined),
+    getState(`plansnap:${one.code}:${year}`).catch(() => undefined),
   ]);
   const baseReview = readBaseReview(brRaw);
   const planBuilt = readPlanBuilt(pbRaw);
@@ -64,6 +68,46 @@ export default async function Page() {
 
   const out = Object.entries(dv.decisions).filter(([, d]) => d === "out").map(([u]) => u);
   const kept = Object.entries(dv.decisions).filter(([, d]) => d === "in").length;
+
+  /* Versions and the live plan in one shape, so they compare like for like. */
+  const sum = (a: number[]) => a.reduce((s, x) => s + x, 0);
+  const adjLite = (list: PlanAdjustment[]): VersionFacts["adjustments"] =>
+    list.map((x) => ({ id: x.id, kind: x.kind, brand: x.brand, item: x.upc === "ALL" ? null : (nameOf.get(x.upc) ?? x.upc), pct: x.pct, from: x.from, to: x.to }));
+  const factsOf = (v: PlanSnapshotVersion): VersionFacts => ({
+    total: v.totals.adjusted,
+    base: v.totals.base,
+    byBrand: Object.entries(v.byBrand).map(([brand, b]) => ({ brand, adjusted: sum(b.adjusted) })).filter((b) => b.adjusted > 0),
+    items: Object.fromEntries(Object.entries(v.byItem ?? {}).map(([u, r]) => [u, { name: r.name, brand: r.brand, units: sum(r.adjusted) }])),
+    adjustments: adjLite(v.adjustments),
+    dist: v.distDetail ?? null,
+    distCounts: { out: v.distver.out, added: v.distver.added },
+    plan: v.plan ?? null,
+  });
+  const chosenId = one.chosenId;
+  const versions: ReviewVersion[] = one.versions.map((v) => ({
+    ...factsOf(v),
+    id: v.id, seq: v.seq, kind: v.kind, label: v.label, name: v.name ?? null,
+    takenAt: v.taken_at, note: v.note, fromReview: v.submitted_from === "review",
+  }));
+  const chosenRaw = one.versions.find((v) => v.id === chosenId);
+  const eventsSpend = events.reduce((s, e) => s + (e.spend || 0), 0);
+  const now: VersionFacts = {
+    total: live?.totals.adjusted ?? 0,
+    base: live?.totals.base ?? 0,
+    byBrand: Object.entries(live?.byBrand ?? {}).map(([brand, b]) => ({ brand, adjusted: sum(b.adjusted) })).filter((b) => b.adjusted > 0),
+    items: Object.fromEntries(Object.entries(live?.byItem ?? {}).map(([u, r]) => [u, { name: r.name, brand: r.brand, units: sum(r.adjusted) }])),
+    adjustments: adjLite(adjs),
+    dist: { out: out.map((u) => nameOf.get(u) ?? u).sort(), added: dv.additions.map((a) => a.name).sort() },
+    distCounts: { out: out.length, added: dv.additions.length },
+    plan: {
+      events: events.length,
+      spend: Math.round(eventsSpend),
+      rows: events.map((e) => ({ id: e.id, title: e.title, brand: e.brand, perf: e.perf, start: e.start, end: e.end, spend: Math.round(e.spend || 0), lift: e.lift_pct })),
+      totals: planBuilt.totals && planBuilt.totals.sig === planSig(events)
+        ? { gross: planBuilt.totals.gross, grossPrior: planBuilt.totals.grossPrior, grossTarget: planBuilt.totals.grossTarget, spend: planBuilt.totals.spend, spendPrior: planBuilt.totals.spendPrior, fund: planBuilt.totals.fund, priorYear: planBuilt.totals.priorYear }
+        : null,
+    },
+  };
 
   const data: ReviewData = {
     year,
@@ -125,10 +169,9 @@ export default async function Page() {
           spend: e.spend || 0, lift: e.lift_pct, origin: e.origin,
         })),
       },
-      versions: one.versions.map((v) => ({
-        seq: v.seq, kind: v.kind, label: v.label, takenAt: v.taken_at, note: v.note, total: v.totals.adjusted,
-        fromReview: v.submitted_from === "review",
-      })),
+      versions,
+      chosen: chosenId && chosenRaw ? (readPlanChoice((snapRaw as { chosen?: unknown } | undefined)?.chosen) ?? { id: chosenId, at: chosenRaw.taken_at, note: "" }) : null,
+      now,
       signedOff: one.signedOff,
       submitted: one.submitted,
       locked: one.planLocked,

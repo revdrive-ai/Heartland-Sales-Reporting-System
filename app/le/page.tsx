@@ -31,7 +31,7 @@ export default async function Page() {
   const lives = await Promise.all(status.customers.map((c) => computePlanBase(c.code, status.year).catch(() => null)));
 
   const lite = (v: PlanSnapshotVersion): VersionLite => ({
-    id: v.id, seq: v.seq, kind: v.kind, label: v.label, taken_at: v.taken_at, note: v.note,
+    id: v.id, seq: v.seq, kind: v.kind, label: v.label, name: v.name ?? null, taken_at: v.taken_at, note: v.note,
     cycle: v.cycle, scheduled_lock: v.scheduled_lock, locked_late: v.locked_late,
     total: v.totals.adjusted, adjustments: v.adjustments.length, distver: v.distver,
   });

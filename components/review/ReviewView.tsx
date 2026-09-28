@@ -8,6 +8,7 @@ import { parseWorkPath, processPath } from "@/lib/process";
 import ShareEmail from "./ShareEmail";
 import type { PlanTotals } from "@/lib/planbuilt";
 import WeekNote from "@/components/WeekNote";
+import PlanVersions, { versionTitle, type PlanChoiceLite, type ReviewVersion, type VersionFacts } from "./PlanVersions";
 
 /* The plan's read-back, and the one place it is submitted from.
 
@@ -19,9 +20,10 @@ import WeekNote from "@/components/WeekNote";
    distribution answers and the new-items answer. Everything else is shown so
    it can be checked, not gated on.
 
-   Submitting takes the Plan of Record — the same append-only version the
-   sign-off card used to take from inside the planner. A second submit is a
-   revision, kept alongside the first, never over it. */
+   Submitting freezes the plan as a version AND makes it the plan — the
+   submission for approval. A plan year can hold several candidate versions,
+   named, compared side by side in the Plan versions card, and any one of
+   them can be made the plan instead. Versions are never overwritten. */
 
 export type ReviewData = {
   year: number;
@@ -63,7 +65,11 @@ export type ReviewData = {
       rows: { id: string; title: string; brand: string; perf: string; start: string; end: string;
               spend: number; lift: number | null; origin: string }[];
     };
-    versions: { seq: number; kind: "por" | "le"; label: string; takenAt: string; note: string; total: number; fromReview: boolean }[];
+    versions: ReviewVersion[];
+    /** the version chosen as the plan — the submission for approval */
+    chosen: PlanChoiceLite | null;
+    /** the plan as it stands now, in the shape the versions are compared in */
+    now: VersionFacts;
     signedOff: boolean;
     /** a version was taken from THIS page — the only thing that reads as submitted */
     submitted: boolean;
@@ -101,6 +107,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
   const stepHref = (key: string) => (loc ? processPath(loc.proc.kind, key, loc.year) : null);
 
   const [note, setNote] = useState("");
+  const [vname, setVname] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -141,11 +148,12 @@ export default function ReviewView({ data }: { data: ReviewData }) {
   if (!a.baseReviewedAt) owed.push({ step: "base", text: "The Base Business Review has not been submitted" });
   if (!a.planBuiltAt) owed.push({ step: "planner", text: "Build the plan has not been submitted" });
   const ready = owed.length === 0;
-  /* "Submitted" is a submission from this page. A version taken elsewhere
-     (the sign-off card, the LE screen) is listed with the others, but it is
-     not the plan being submitted, so it does not close the step. */
-  const sub = a.versions.find((v) => v.fromReview) ?? null;
-  const elsewhere = a.versions.filter((v) => !v.fromReview);
+  /* "Submitted" is the version chosen as the plan. Before choosing existed a
+     version taken from this page was the submission, and one from then still
+     reads that way. A version saved elsewhere is a candidate, not the plan. */
+  const sub = (a.chosen ? a.versions.find((v) => v.id === a.chosen!.id) : null) ?? a.versions.find((v) => v.fromReview) ?? null;
+  const subAt = a.chosen?.at ?? sub?.takenAt ?? null;
+  const candidates = a.versions.filter((v) => v.id !== sub?.id);
 
   const submit = async () => {
     if (!ready || busy) return;
@@ -153,10 +161,10 @@ export default function ReviewView({ data }: { data: ReviewData }) {
     try {
       const r = await fetch(`/api/plansnap/${a.code}/${data.year}`, {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ note: note.trim(), from: "review" }),
+        body: JSON.stringify({ note: note.trim(), name: vname.trim(), from: "review", choose: true }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      setNote("");
+      setNote(""); setVname("");
       router.refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "could not submit");
@@ -184,7 +192,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <span>{a.name} · NIQ through {a.dataEdge}</span>
         </div>
         <div>
-          <b>{sub ? `Submitted ${sub.takenAt.slice(0, 10)} · v${sub.seq}` : "Not yet submitted"}</b>
+          <b>{sub && subAt ? `Submitted ${subAt.slice(0, 10)} · ${versionTitle(sub)}` : "Not yet submitted"}</b>
           <span>{printedAt ? `Printed ${printedAt}` : ""}</span>
         </div>
       </div>
@@ -193,8 +201,8 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <h1>Review &amp; submit — Plan {data.year}</h1>
           <p>
             Everything entered for <b>{a.name}</b> in the four steps before this, read back in the order it was
-            built. Check it, then submit it as the Plan of Record — the frozen v1 the in-year estimates are measured
-            against.
+            built. Check it, save candidate versions and compare them, then submit the one that becomes the plan — the
+            frozen version the in-year estimates are measured against.
           </p>
         </div>
         <div className="actions">
@@ -204,7 +212,7 @@ export default function ReviewView({ data }: { data: ReviewData }) {
           <ShareEmail a={a} year={data.year} sub={sub} owed={owed} />
           <span className="pill">NIQ through {a.dataEdge}</span>
           {sub
-            ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {sub.takenAt.slice(0, 10)}{a.locked ? " · locked" : " · reopened"}</span>
+            ? <span className="pill" style={{ borderColor: "var(--good)", color: "var(--good)" }}>✓ Submitted · {(subAt ?? sub.takenAt).slice(0, 10)}{a.locked ? " · locked" : " · reopened"}</span>
             : <span className="pill" style={{ borderColor: "var(--warn)", color: "var(--warn)" }}>not yet submitted</span>}
         </div>
       </div>
@@ -462,39 +470,28 @@ export default function ReviewView({ data }: { data: ReviewData }) {
         </section>
       </div>
 
-      {/* 5 · submit */}
+      {/* 5 · the versions: candidates, comparison, and the choice */}
+      <PlanVersions code={a.code} year={data.year} versions={a.versions} chosen={a.chosen} now={a.now} locked={a.locked} busy={busy} />
+
+      {/* 6 · submit */}
       <section className={"card revsubmit" + (ready ? " ready" : "")}>
         <div>
           <b>{sub ? `Plan ${data.year} submitted for ${a.name}` : `Submit Plan ${data.year} for ${a.name}`}</b>
           <span>
             {sub
-              ? <>Submitted {sub.takenAt.slice(0, 16).replace("T", " ")} UTC as v{sub.seq} · {fmtK(sub.total)} units{sub.note ? <> · &ldquo;{sub.note}&rdquo;</> : null}.
+              ? <><b>{versionTitle(sub)}</b> is the plan — chosen {(subAt ?? sub.takenAt).slice(0, 16).replace("T", " ")} UTC · {fmtK(sub.total)} units{sub.note ? <> · &ldquo;{sub.note}&rdquo;</> : null}.
                  {a.locked
-                   ? " The plan is locked: its steps are read-only until it is reopened from the bar above, and the next submission locks it again."
-                   : " It has been reopened — submit again to record the revision alongside it and lock it; versions are never overwritten."}</>
+                   ? " The plan is locked: its steps are read-only until it is reopened from the bar above. Reopen it to revise the plan or to choose another version."
+                   : " It has been reopened — submit again to freeze the revision as a new version and make it the plan, or make another version the plan above; versions are never overwritten."}</>
               : ready
-                ? <>Freezes the plan base above as a version{elsewhere.length ? "" : " — v1, the Plan of Record"}. The monthly Latest Estimates are then read against it.</>
+                ? <>Freezes the plan as it stands — base, levers, distribution answers and the promotion plan with its money — as a named version and makes it the plan{candidates.length ? ", alongside the candidates above" : " — v1, the Plan of Record"}. The monthly Latest Estimates are then read against it.</>
                 : <>Finish the step{owed.length === 1 ? "" : "s"} listed above first. The button opens once the distribution is verified, the new-items question is answered, and the base review and the plan build are submitted.</>}
           </span>
-          {elsewhere.length > 0 && !sub && (
+          {candidates.length > 0 && !sub && (
             <span className="dim" style={{ marginTop: 4 }}>
-              ◇ {elsewhere.length === 1 ? "A version was" : `${elsewhere.length} versions were`} taken for this account outside this step
-              (the sign-off card or the LE screen). {elsewhere.length === 1 ? "It is" : "They are"} listed below and kept, but the plan has not been
-              submitted from here.
+              ◇ {candidates.length === 1 ? "One candidate version is" : `${candidates.length} candidate versions are`} saved above. Submitting freezes the plan as it stands now as a new one;
+              to submit a saved candidate instead, use <b>Make this the plan</b> beside it.
             </span>
-          )}
-          {a.versions.length > 0 && (
-            <ul className="revlist" style={{ marginTop: 8 }}>
-              {a.versions.map((v) => (
-                <li key={v.seq}>
-                  <b>v{v.seq}</b> {v.label} · {v.takenAt.slice(0, 10)} · {fmtK(v.total)} units
-                  {v.fromReview
-                    ? <span className="minichip on yes" style={{ marginLeft: 6 }}>submitted here</span>
-                    : <span className="dim"> · taken from the {v.kind === "por" ? "sign-off card" : "LE screen"}</span>}
-                  {v.note ? <span className="dim"> · {v.note}</span> : null}
-                </li>
-              ))}
-            </ul>
           )}
         </div>
         {/* print only: somewhere to sign the paper copy */}
@@ -503,10 +500,18 @@ export default function ReviewView({ data }: { data: ReviewData }) {
         </div>
         <div className="revact noprint">
           <input
+            placeholder="Version name (optional) — e.g. Board case"
+            value={vname}
+            onChange={(e) => setVname(e.target.value)}
+            disabled={!ready || busy || a.locked}
+            maxLength={80}
+            style={{ flex: "1 1 160px" }}
+          />
+          <input
             placeholder={sub ? "Revision note (optional)" : "Submission note (optional) — travels with the version"}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            disabled={!ready || busy}
+            disabled={!ready || busy || a.locked}
           />
           <button
             className={"btn" + (ready ? " primary" : "")}

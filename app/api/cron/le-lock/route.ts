@@ -72,7 +72,7 @@ export async function GET(req: Request) {
         run.skipped.push(m.code);
         continue;
       }
-      await takeSnapshot(m.code, year, `scheduled lock — ${cycle.label}`, cycle.key);
+      await takeSnapshot(m.code, year, { note: `scheduled lock — ${cycle.label}`, cycleKey: cycle.key });
       run.locked.push(m.code);
     } catch (e) {
       run.failed.push({ code: m.code, error: e instanceof Error ? e.message.slice(0, 160) : "unknown" });

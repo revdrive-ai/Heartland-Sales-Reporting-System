@@ -18,13 +18,35 @@ export function readPlanReopen(raw: unknown): PlanReopen | null {
   return typeof r.at === "string" && r.at ? { at: r.at, note: String(r.note ?? "") } : null;
 }
 
-/** Locked when a Review & submit submission stands and no reopen is newer. */
+/** The version chosen as the plan — the submission for approval. Kept on
+    the plansnap document beside the versions, which are never edited. */
+export type PlanChoice = { id: string; at: string; note: string };
+
+export function readPlanChoice(raw: unknown): PlanChoice | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Partial<PlanChoice>;
+  return typeof r.id === "string" && r.id && typeof r.at === "string" && r.at ? { id: r.id, at: r.at, note: String(r.note ?? "") } : null;
+}
+
+/** Submitted when a version has been chosen as the plan; before choosing
+    existed, a version taken from Review & submit was the submission, and a
+    document from then still reads that way. */
+export function planSubmittedAt(
+  versions: { taken_at: string; submitted_from?: string }[],
+  chosen: PlanChoice | null
+): string | null {
+  if (chosen) return chosen.at;
+  const subs = versions.filter((v) => v.submitted_from === "review").map((v) => v.taken_at).sort();
+  return subs[subs.length - 1] ?? null;
+}
+
+/** Locked when a submission stands and no reopen is newer. */
 export function planLockedFrom(
   versions: { taken_at: string; submitted_from?: string }[],
-  reopen: PlanReopen | null
+  reopen: PlanReopen | null,
+  chosen: PlanChoice | null = null
 ): { locked: boolean; submittedAt: string | null } {
-  const subs = versions.filter((v) => v.submitted_from === "review").map((v) => v.taken_at).sort();
-  const last = subs[subs.length - 1] ?? null;
+  const last = planSubmittedAt(versions, chosen);
   if (!last) return { locked: false, submittedAt: null };
   return { locked: !reopen || reopen.at < last, submittedAt: last };
 }
