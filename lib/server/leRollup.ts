@@ -1,4 +1,5 @@
 import { getPriceList, getPromoOverlays, getShipments, listItems, listWeekEndings, priceAsOf, type PriceRow } from "@/lib/repo";
+import { DAY, comparableYearAgo, saturdaysOfYear, utcOf, yearAgoWeek, yearAheadWeek } from "@/lib/weeks";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 import { getState } from "@/lib/server/appstate";
@@ -28,19 +29,8 @@ import { overlayCount, readLeOverlay } from "@/lib/leovl";
 
 export const PLAN_GROWTH = 0.015;
 
-const DAY = 86400000;
-const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-const yearAgoWeek = (w: string) => new Date(utcOf(w) - 364 * DAY).toISOString().slice(0, 10);
 const zero = () => Array(12).fill(0) as number[];
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
-
-function saturdaysOfYear(year: number): string[] {
-  const out: string[] = [];
-  let t = Date.UTC(year, 0, 1);
-  while (new Date(t).getUTCDay() !== 6) t += DAY;
-  for (; new Date(t).getUTCFullYear() === year; t += 7 * DAY) out.push(new Date(t).toISOString().slice(0, 10));
-  return out;
-}
 
 /** Spread a promotion's dollars evenly over its days, clipped to the year. */
 export function spreadByMonth(into: number[], amount: number, startISO: string, endISO: string, year: number) {
@@ -88,6 +78,7 @@ export type LeRollup = {
     sinceEdge: { units: number; lyUnits: number }; // the weeks after the NIQ edge
     byMonth: { units: Monthly; lyUnits: Monthly };
     items: number; itemsTied: number;            // items on file, and those tied to a NIQ item
+    itemsUnconverted: number;                    // items shipped in cases with no case pack — not in the unit figures
   };
 };
 
@@ -189,16 +180,20 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
   const edgeComplete = monthWeeks.length > 0 && monthWeeks.every((w) => w <= latest);
 
   // shipments — the Retail Planner export, where this account has one. Rows
-  // are real weeks, so last year is the same week a year earlier.
+  // are real weeks in cases, converted to units by each item's case pack;
+  // a row with no pack (units null) stays out of the unit totals and is
+  // counted. Last year is the same week a year earlier; a 53rd week has no
+  // year-ago partner and is left out of the comparison.
   const shipAll = await getShipments(mkt);
   const ship = shipAll.filter((r) => r.week_ending.startsWith(String(year)));
   let shipments: LeRollup["shipments"] = null;
   if (ship.length) {
-    const edgeS = ship.filter((r) => r.units > 0).map((r) => r.week_ending).sort().at(-1) ?? latest;
-    const lyWeeks = new Set(saturdaysOfYear(year).map(yearAgoWeek));
+    const edgeS = ship.filter((r) => r.cases > 0).map((r) => r.week_ending).sort().at(-1) ?? latest;
+    const lyWeeks = new Set(saturdaysOfYear(year).map(comparableYearAgo).filter((w): w is string => w !== null));
     const bm = { units: zero(), lyUnits: zero() };
     const ytd = { units: 0, lyUnits: 0 }, since = { units: 0, lyUnits: 0 };
     for (const r of ship) {
+      if (r.units === null) continue;
       const m = +r.week_ending.slice(5, 7) - 1;
       bm.units[m] += r.units;
       if (r.week_ending <= edgeS) {
@@ -209,9 +204,8 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
     // last year's rows, read on the week they line up with this year
     const edgeLy = yearAgoWeek(edgeS), latestLy = yearAgoWeek(latest);
     for (const r of shipAll) {
-      if (!lyWeeks.has(r.week_ending)) continue;
-      const thisYear = new Date(utcOf(r.week_ending) + 364 * DAY).toISOString().slice(0, 10);
-      bm.lyUnits[+thisYear.slice(5, 7) - 1] += r.units;
+      if (r.units === null || !lyWeeks.has(r.week_ending)) continue;
+      bm.lyUnits[+yearAheadWeek(r.week_ending).slice(5, 7) - 1] += r.units;
       if (r.week_ending <= edgeLy) {
         ytd.lyUnits += r.units;
         if (r.week_ending > latestLy) since.lyUnits += r.units;
@@ -222,7 +216,9 @@ export async function leRollup(mkt: string, year: number): Promise<LeRollup> {
       edge: edgeS,
       weeksPastEdge: edgeS > latest ? Math.round((utcOf(edgeS) - utcOf(latest)) / (7 * DAY)) : 0,
       ytd, sinceEdge: since, byMonth: bm,
-      items: codes.size, itemsTied: new Set(shipAll.filter((r) => r.upc).map((r) => r.item_code)).size,
+      items: codes.size,
+      itemsTied: new Set(shipAll.filter((r) => r.upc).map((r) => r.item_code)).size,
+      itemsUnconverted: new Set(shipAll.filter((r) => r.units === null).map((r) => r.item_code)).size,
     };
   }
 

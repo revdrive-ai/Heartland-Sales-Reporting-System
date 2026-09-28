@@ -24,16 +24,26 @@ What this does with it:
     dropped and the drop counted in meta.json (overlap_dropped)
   · only weeks with shipments are written (a sparse table); an item that
     shipped nothing all year still shows in meta.json's item counts
+  · the workbook's figures are CASES. Each row keeps the cases as shipped
+    and converts them to units with an explicit pack: the price list's
+    units_per_case for the item code (FG#) first, then the price list row of
+    the tied UPC when that is unambiguous, then the pack in the description
+    ("6/400 PKT" → 6, "1x6" → 6, "12Blk" → 12 — which can count inner bottles
+    rather than sellable units, so it is marked). pack_source says which;
+    an item with no pack keeps units = null and is counted in meta.json
   · item codes are resolved to a NIQ UPC where the item crosswalk (Telus item
-    number or SP Code) or the price list (FG#) knows them AND the UPC is in
-    the NIQ pull; the rest carry upc = null and are listed in meta.json so the
-    crosswalk can be extended
+    number or SP Code) or the price list (FG#) names exactly one UPC AND the
+    UPC is in the NIQ pull AND its brand agrees with the description (the
+    raw crosswalk repeats one SP code down whole runs of SlimFast rows, so a
+    code named against several UPCs is ambiguous, not tied); the rest carry
+    upc = null and are listed in meta.json so the crosswalk can be extended
   · the sheet name maps to an account code: Jewel is the Albertsons division
     already on file, Publix is a new shipments-only account
 
 Output: data/shipments/<ACCOUNT>.json.gz (rows) and data/shipments/meta.json
   row: { account_code, account_name, item_code, item_name, upc, brand,
-         week_ending, units, source_row, source_file }
+         week_ending, cases, units_per_case, units, pack_source, source_row,
+         source_file }
   source_row says which workbook row the figure came from ("actual" or
   "last_year") — provenance only; the week_ending is the real week.
 
@@ -85,21 +95,54 @@ def week_ending(d: date, year: int) -> str:
     return (d + timedelta(days=6)).isoformat()
 
 
+PACK_WORDS = [
+    re.compile(r"\b(\d{1,3})(?:ct)?\s*/\s*\d", re.I),  # "6/400 PKT", "12/9.8 JAR", "12ct/200 PKT"
+    re.compile(r"\b1x(\d{1,3})", re.I),               # "1x6XTDP", "1x6T"
+    re.compile(r"\b(\d{1,2})\s*Blk\b", re.I),          # "12Blk", "10BLK"
+]
+
+
+def pack_from_description(name: str):
+    """The pack the description spells, or None. "3-4pk/11oz" is a 3 × 4-pack
+    case, which the first pattern would read as 4 — skip anything with a
+    hyphenated multiplier and leave it to the price list."""
+    if re.search(r"\b\d+-\d+pk\b", name, re.I):
+        return None
+    for rx in PACK_WORDS:
+        m = rx.search(name)
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def load_maps():
-    """item code → NIQ upc, via the Telus item number (crosswalk) or FG# (price list)."""
+    """item code → the NIQ upcs named for it, in two grades: the Telus item
+    crosswalk and the price list carry one row per code (strong); the raw
+    crosswalk workbook's SP Code / Item Number columns repeat one code down
+    whole runs of rows (weak — usable only when they name exactly one upc).
+    Also the brand of each NIQ item and the price list's units per case by
+    FG# and by upc."""
     items = json.loads((FIXTURES / "items.json").read_text())
     core_to_upc = {re.sub(r"\D", "", i["upc"]).lstrip("0"): i["upc"] for i in items}
-    by_code = {}
+    brand_of_upc = {i["upc"]: i["brand"] for i in items}
+    strong, weak = {}, {}
+
+    def name(into, code, upc):
+        if code and upc:
+            into.setdefault(str(code).strip(), set()).add(upc)
+
     xw = json.loads((FIXTURES / "item-crosswalk.json").read_text())
     for t in xw["telus_items"]:
-        upc = core_to_upc.get(t["upc_core"])
-        if upc:
-            by_code.setdefault(t["item_number"], upc)
+        name(strong, t["item_number"], core_to_upc.get(t["upc_core"]))
     pl = json.loads((FIXTURES / "price-list.json").read_text())
+    pack_by_fg, pack_by_upc = {}, {}
     for r in pl["rows"]:
         upc = core_to_upc.get(r["upc_core"])
-        if upc:
-            by_code.setdefault(r["fg"], upc)
+        name(strong, r["fg"], upc)
+        if r["units_per_case"]:
+            pack_by_fg.setdefault(r["fg"], r["units_per_case"])
+            if upc:
+                pack_by_upc.setdefault(upc, set()).add(r["units_per_case"])
     # the raw crosswalk workbook also carries the SP Code the Publix sheet
     # uses (the fixture keeps only the Telus item number)
     raw = ROOT / "data/raw/Crosswalk_items_V1.xlsx"
@@ -111,32 +154,62 @@ def load_maps():
                 continue
             d = re.sub(r"\D", "", str(upc_raw))
             upc = core_to_upc.get((d[:-1] if len(d) > 1 else d).lstrip("0")) or core_to_upc.get(d.lstrip("0"))
-            if not upc:
-                continue
-            for k in (sp, item_no):
-                if k:
-                    by_code.setdefault(str(k).strip(), upc)
+            name(weak, sp, upc)
+            name(weak, item_no, upc)
+    cands = {k: (strong.get(k, set()), weak.get(k, set())) for k in set(strong) | set(weak)}
     # a code with no row of its own ties by its digits when they name exactly
     # one known code — Telus/the planner write "FGMA20015446" where the
     # crosswalk has "20015446"
     by_digits = {}
-    for k in list(by_code):
+    for k in cands:
         by_digits.setdefault(re.sub(r"\D", "", k), set()).add(k)
-    return by_code, by_digits
+    return cands, by_digits, brand_of_upc, pack_by_fg, pack_by_upc
+
+
+# the brand a NIQ item carries, in the words the workbook uses
+NIQ_BRAND = {"SPLENDA": "SPLENDA", "SLIMFAST": "SLIMFAST", "JAVA HOUSE": "JAVA HOUSE", "EQUAL": "EQUAL", "KETO:SWEET": "KETO:SWEET"}
 
 
 def main() -> None:
     wb = openpyxl.load_workbook(SRC, read_only=True, data_only=True)
-    code_to_upc, by_digits = load_maps()
+    cands, by_digits, brand_of_upc, pack_by_fg, pack_by_upc = load_maps()
+    ambiguous = {}
 
-    def upc_for(code: str):
-        if code in code_to_upc:
-            return code_to_upc[code]
-        hits = by_digits.get(re.sub(r"\D", "", code), set())
-        return code_to_upc[next(iter(hits))] if len(hits) == 1 else None
+    def upc_for(code: str, desc: str):
+        pair = cands.get(code)
+        if pair is None:
+            hits = by_digits.get(re.sub(r"\D", "", code), set())
+            pair = cands[next(iter(hits))] if len(hits) == 1 else (set(), set())
+        # a UPC whose brand disagrees with the description is a bad tie
+        same_brand = lambda upcs: {u for u in upcs if NIQ_BRAND.get(brand_of_upc.get(u, ""), "") == brand_of(desc)}
+        for upcs in (same_brand(pair[0]), same_brand(pair[1])):
+            if len(upcs) == 1:
+                return next(iter(upcs))
+            if len(upcs) > 1:
+                ambiguous[code] = sorted(upcs)
+                return None
+        return None
+
+    def pack_for(code: str, upc, desc: str):
+        """(units per case, where it came from)"""
+        for k in (code, re.sub(r"\D", "", code)):
+            if k in pack_by_fg:
+                return pack_by_fg[k], "price_list"
+        said = pack_from_description(desc)
+        if upc and upc in pack_by_upc:
+            packs = pack_by_upc[upc]
+            if len(packs) == 1:
+                return next(iter(packs)), "price_list"
+            if said in packs:
+                return said, "price_list"
+        if said:
+            return said, "description"
+        return None, None
+
     OUT.mkdir(parents=True, exist_ok=True)
-    meta = {"source_file": SRC.name, "accounts": []}
+    meta = {"source_file": SRC.name, "measure": "cases, converted to units by units_per_case", "accounts": []}
     unmatched = {}
+    unpacked = {}
 
     for ws in wb.worksheets:
         if ws.title not in ACCOUNTS:
@@ -167,13 +240,14 @@ def main() -> None:
             if item is None or label not in ("Actual", "Last Year"):
                 continue
             source_row = "actual" if label == "Actual" else "last_year"
-            upc = upc_for(item[0])
+            upc = upc_for(item[0], item[1])
             if upc is None:
                 unmatched[item[0]] = item[1]
-            items[item[0]] = (item[1], upc)
+            pack, pack_source = pack_for(item[0], upc, item[1])
+            items[item[0]] = (item[1], upc, pack)
             for w, v in zip(weeks, r[off + 3:off + 3 + len(weeks)]):
-                units = float(v or 0)
-                if units == 0:
+                cases = float(v or 0)
+                if cases == 0:
                     continue
                 wk = w if source_row == "actual" else (date.fromisoformat(w) - timedelta(days=364)).isoformat()
                 if source_row == "last_year" and wk in actual_weeks:
@@ -185,26 +259,35 @@ def main() -> None:
                 rows_by_key[key] = {
                     "account_code": code, "account_name": name,
                     "item_code": item[0], "item_name": item[1], "upc": upc, "brand": brand_of(item[1]),
-                    "week_ending": wk, "units": units, "source_row": source_row, "source_file": SRC.name,
+                    "week_ending": wk, "cases": cases,
+                    "units_per_case": pack, "units": cases * pack if pack else None, "pack_source": pack_source,
+                    "source_row": source_row, "source_file": SRC.name,
                 }
 
         out = [rows_by_key[k] for k in sorted(rows_by_key, key=lambda k: (k[1], k[0]))]
         with gzip.open(OUT / f"{code}.json.gz", "wt", encoding="utf-8") as f:
             json.dump(out, f, separators=(",", ":"))
         years = sorted({r["week_ending"][:4] for r in out})
-        mapped = sum(1 for _, u in items.values() if u)
+        mapped = sum(1 for _, u, _p in items.values() if u)
+        no_pack = sorted((c, n) for c, (n, _u, pk) in items.items() if not pk)
         meta["accounts"].append({
             "account_code": code, "account_name": name, "workbook_year": year,
             "years": [int(y) for y in years], "first_week": out[0]["week_ending"], "last_week": out[-1]["week_ending"],
-            "edge": edge, "items": len(items), "items_with_upc": mapped, "rows": len(out),
+            "edge": edge, "items": len(items), "items_with_upc": mapped, "items_without_pack": len(no_pack), "rows": len(out),
             "overlap_dropped": overlap_dropped,
         })
-        print(f"{code}: {len(items)} items ({mapped} tied to a NIQ UPC), weeks {out[0]['week_ending']} → {out[-1]['week_ending']}, "
-              f"actuals through {edge}, {len(out)} rows with shipments, {overlap_dropped} week-53 overlap rows dropped")
+        for c, n in no_pack:
+            unpacked[c] = n
+        print(f"{code}: {len(items)} items ({mapped} tied to a NIQ UPC, {len(no_pack)} without a case pack), "
+              f"weeks {out[0]['week_ending']} → {out[-1]['week_ending']}, actuals through {edge}, "
+              f"{len(out)} rows with shipments, {overlap_dropped} week-53 overlap rows dropped")
 
     meta["unmatched_items"] = [{"item_code": k, "item_name": v} for k, v in sorted(unmatched.items())]
+    meta["ambiguous_items"] = [{"item_code": k, "upcs": v} for k, v in sorted(ambiguous.items())]
+    meta["items_without_pack"] = [{"item_code": k, "item_name": v} for k, v in sorted(unpacked.items())]
     (OUT / "meta.json").write_text(json.dumps(meta, indent=1) + "\n")
-    print(f"{len(unmatched)} item codes not in the item crosswalk or price list — listed in meta.json")
+    print(f"{len(unmatched)} item codes not tied to a NIQ item ({len(ambiguous)} of them named against several UPCs), "
+          f"{len(unpacked)} with no case pack — listed in meta.json")
 
 
 if __name__ == "__main__":

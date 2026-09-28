@@ -45,7 +45,7 @@ export type StandData = {
       edge: string; weeksPastEdge: number;
       ytd: { units: number; lyUnits: number }; sinceEdge: { units: number; lyUnits: number };
       byMonth: { units: number[]; lyUnits: number[] };
-      items: number; itemsTied: number;
+      items: number; itemsTied: number; itemsUnconverted: number;
     };
   };
 };
@@ -226,7 +226,8 @@ export default function StandView({ data }: { data: StandData }) {
             <div className="c-head" style={{ flexWrap: "wrap", gap: 10 }}>
               <h3>Shipments — sell-in through {sh.edge}</h3>
               <span className="sub" style={{ marginLeft: 6 }}>
-                Retail Planner export · {sh.weeksPastEdge} week{sh.weeksPastEdge === 1 ? "" : "s"} past the NIQ edge · {sh.itemsTied} of {sh.items} items tied to a NIQ item
+                Retail Planner export, cases converted to units · {sh.weeksPastEdge} week{sh.weeksPastEdge === 1 ? "" : "s"} past the NIQ edge · {sh.itemsTied} of {sh.items} items tied to a NIQ item
+                {sh.itemsUnconverted > 0 && <> · {sh.itemsUnconverted} with no case pack, not in these units</>}
               </span>
             </div>
             <div className="shipgrid">

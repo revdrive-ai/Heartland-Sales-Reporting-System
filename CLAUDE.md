@@ -30,8 +30,10 @@
   table `shipments_weekly` (migration 00014). One row per account × item × real week
   (NIQ week-ending Saturday); the workbook's Last Year row is stored on its own week
   (−364 days), so a 2026 export fills 2025 and 2026 and last year is read by date.
-  Only weeks with shipments are stored. Publix is a shipments-only account with no NIQ
-  market.
+  The workbook ships cases; rows keep `cases` and convert to `units` by the item's case
+  pack (price list first, then the pack in the description), null when unknown. Only
+  weeks with shipments are stored. Publix is a shipments-only account with no NIQ
+  market. `lib/weeks.ts` is the week calendar (53-week years, year-ago by −364 days).
 - **Global scope**: the topbar's five cascading selectors (lib/scope.ts + components/ScopeBar)
   persist in the `hh-scope` cookie; server pages call `getScope()` (lib/server/scope.ts) and
   intersect their reads with `marketCodes` / `telusCustomerIds`. New views must do the same.

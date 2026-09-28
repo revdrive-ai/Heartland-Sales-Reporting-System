@@ -311,8 +311,10 @@ export async function listWeekEndings(market_code: string): Promise<string[]> {
 
 export type ShipmentsMeta = {
   source_file: string;
-  accounts: { account_code: string; account_name: string; workbook_year: number; years: number[]; first_week: string; last_week: string; edge: string | null; items: number; items_with_upc: number; rows: number; overlap_dropped: number }[];
+  accounts: { account_code: string; account_name: string; workbook_year: number; years: number[]; first_week: string; last_week: string; edge: string | null; items: number; items_with_upc: number; items_without_pack: number; rows: number; overlap_dropped: number }[];
   unmatched_items: { item_code: string; item_name: string }[];
+  ambiguous_items: { item_code: string; upcs: string[] }[];
+  items_without_pack: { item_code: string; item_name: string }[];
 };
 
 const shipCache = new Map<string, ShipmentWeeklyRow[]>();

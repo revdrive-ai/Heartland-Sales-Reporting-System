@@ -32,8 +32,9 @@ export type Item = {
     export (scripts/ingest_shipments.py). One row per real week: week_ending
     is the NIQ Saturday the units shipped in, and the workbook's last-year
     row is stored on its own week (a year earlier), so "last year" is read by
-    date. Only weeks with shipments are on file. Mirrors
-    supabase/migrations/00014_shipments_weekly.sql. */
+    date. The workbook ships CASES; units is cases × the item's case pack,
+    null when no pack is known. Only weeks with shipments are on file.
+    Mirrors supabase/migrations/00014_shipments_weekly.sql. */
 export type ShipmentWeeklyRow = {
   account_code: string;   // market code where one exists (ALB-JEWEL), else the account's own (PUBLIX)
   account_name: string;
@@ -42,7 +43,10 @@ export type ShipmentWeeklyRow = {
   upc: string | null;     // NIQ upc when the crosswalk ties it, else null
   brand: string;
   week_ending: string;    // ISO Saturday
-  units: number;
+  cases: number;          // as shipped
+  units_per_case: number | null;
+  units: number | null;   // cases × units_per_case; null when the pack is unknown
+  pack_source: "price_list" | "description" | null;  // where the pack came from
   source_row: "actual" | "last_year";  // which workbook row it came from — provenance only
   source_file: string;
 };
