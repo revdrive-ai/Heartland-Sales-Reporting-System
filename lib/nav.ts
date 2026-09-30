@@ -42,7 +42,7 @@ export const NAV: NavGroup[] = [
   {
     heading: "Leadership",
     items: [
-      { view: "leader", label: "Sales Leader View", icon: "award", title: "Sales Leader View" },
+      { view: "leadership", label: "Leadership team report", icon: "award", title: "Leadership team report — sales by customer, brand and item for the President and owner; build, print, export" },
     ],
   },
   {

@@ -24,6 +24,13 @@
   157 weeks, 100 items) lives in `data/raw/` and is transformed by
   `scripts/ingest_albsco.py` (python3 + pandas) into `data/nielsen/` and
   `lib/fixtures/{markets,items}.json`. Never hand-edit the outputs; re-run the script.
+- **Leadership team report** (`/leadership`, nav group Leadership): sales for the President
+  by customer, brand and item — one selection in the URL (period, cust, brand, item, m, sort),
+  one page at a time or every page as a printable presentation (`page=all`), and the same
+  pages as one Excel workbook (`/api/leadership/export`). Pages are defined in
+  `lib/leadership/report.ts`; the numbers come through ONE seam, `lib/server/salesFacts.ts`,
+  which today reads NIQ retail dollars/units for own items and will read the internal sales
+  table loaded from Fabric — nothing above the seam changes when it does.
 - **Shipments (sell-in)** come from the Retail Planner export in `data/raw/` (Publix and
   Jewel, weekly by item, Actual + Last Year) via `scripts/ingest_shipments.py` into
   `data/shipments/<ACCOUNT>.json.gz` + `meta.json` (unmatched item codes listed there);
