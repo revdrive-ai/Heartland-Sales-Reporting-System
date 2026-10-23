@@ -10,7 +10,8 @@
 -- After running this, enable it in the dashboard:
 --   Authentication → Hooks → Before User Created →
 --   Postgres → public.hook_restrict_signup_by_email_domain
--- It does not take effect until that is done.
+-- It does not take effect until that is done. The seeded row is
+-- configuration, not data: with the table empty nobody can sign up.
 
 create table if not exists public.signup_email_domains (
   domain     text primary key,
@@ -37,9 +38,9 @@ security definer
 set search_path = public
 as $$
 declare
-  addr        text;
+  addr         text;
   email_domain text;
-  allowed     int;
+  allowed      int;
 begin
   addr := lower(trim(event -> 'user' ->> 'email'));
   email_domain := split_part(addr, '@', 2);

@@ -1,9 +1,10 @@
 -- Customer crosswalk — one customer tied together across systems.
--- Mirrors lib/fixtures/crosswalk.json (from data/raw/Nielsen_crosswalk.xlsx via
+-- Mirrors lib/fixtures/crosswalk.json (data/raw/Nielsen_crosswalk.xlsx via
 -- scripts/ingest_crosswalk.py): the internal hierarchy that drives the global
 -- scope selectors (Territory -> Parent Account -> Sales Account, Team Lead,
 -- Account Lead), the NIQ trading-area match, and the name-matched Telus
--- customers. Seed from the fixture at swap-in time.
+-- customers. The loader splits the fixture's telus_customer_ids/_names arrays
+-- into crosswalk_telus_customers rows.
 
 create table if not exists public.customer_crosswalk (
   id             text primary key,          -- slug: customer name (+ market code when split by TA)
@@ -28,15 +29,18 @@ comment on table public.customer_crosswalk is
 -- Telus customers matched to a crosswalk row by normalized name (one row per
 -- crosswalk row x telus customer id).
 create table if not exists public.crosswalk_telus_customers (
-  crosswalk_id      text not null references public.customer_crosswalk (id) on delete cascade,
-  telus_customer_id text not null,           -- promotions.customer_id
+  crosswalk_id        text not null references public.customer_crosswalk (id) on delete cascade,
+  telus_customer_id   text not null,           -- promotions.customer_id
   telus_customer_name text not null,
   primary key (crosswalk_id, telus_customer_id)
 );
 
-alter table public.customer_crosswalk enable row level security;
+comment on table public.crosswalk_telus_customers is
+  'Telus customers (promotions.customer_id) name-matched to a customer_crosswalk row.';
+
+alter table public.customer_crosswalk        enable row level security;
 alter table public.crosswalk_telus_customers enable row level security;
 drop policy if exists "authenticated read" on public.customer_crosswalk;
-create policy "authenticated read" on public.customer_crosswalk for select to authenticated using (true);
+create policy "authenticated read" on public.customer_crosswalk        for select to authenticated using (true);
 drop policy if exists "authenticated read" on public.crosswalk_telus_customers;
 create policy "authenticated read" on public.crosswalk_telus_customers for select to authenticated using (true);
