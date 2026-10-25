@@ -126,8 +126,8 @@ export default function IntegrationsView() {
             </div>
             {!health.writable && (
               <div className="note" style={{ color: "#b3261e" }}>
-                ⚠ {health.reason ?? "Writes are failing."} If this mentions a missing table, run supabase/setup.sql in the
-                Supabase SQL Editor (it is idempotent), then re-check.
+                ⚠ {health.reason ?? "Writes are failing."} If this mentions a missing table, apply the migrations in
+                supabase/migrations/ to the project (supabase db push, or paste supabase/setup.sql), then re-check.
               </div>
             )}
             {health.writable && (
@@ -157,7 +157,7 @@ export default function IntegrationsView() {
 
         {configured === false && (
           <div className="note" style={{ color: "#b3261e" }}>
-            ⚠ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set on this deployment, so loading is disabled here.
+            ⚠ NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set on this deployment, so loading is disabled here.
           </div>
         )}
 

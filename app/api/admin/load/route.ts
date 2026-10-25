@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CHUNK, loadChunk, tableCounts } from "@/lib/server/supaload";
+import { supabaseServiceEnv } from "@/lib/supabase/env";
 
 /* Data loader endpoint behind the Integrations screen.
 
@@ -15,7 +16,7 @@ import { CHUNK, loadChunk, tableCounts } from "@/lib/server/supaload";
 
 export const maxDuration = 60;
 
-const configured = () => Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+const configured = () => supabaseServiceEnv() !== null;
 
 export async function GET() {
   try {

@@ -222,7 +222,7 @@ registrations, and price edits — persists **server-side** through
 `/api/state`, so changes hold until Undo carry / Clear plan removes them and
 everyone using the tool sees the same plan. Existing browser-held work lifts
 to the shared store automatically on first load. Backend: Supabase
-(`app_state`, migration `00010`) when `SUPABASE_URL` +
+(`app_state`, migration `00008`) when `NEXT_PUBLIC_SUPABASE_URL` +
 `SUPABASE_SERVICE_ROLE_KEY` are set; a `data/store/` file store otherwise.
 On the Vercel deployment the Supabase env vars are required for durability —
 until they're set, the tool falls back to per-browser storage there.
@@ -273,18 +273,20 @@ Design plan and the phases still ahead: `docs/design/process-shell.md`.
 
 ## Open items
 
-- **Supabase connection** — the project is **Heartland Sales Reporting POC**
-  (org REVDRIVE.AI INC, ref `bsmeqxypfvtcubytvrpw`,
-  https://bsmeqxypfvtcubytvrpw.supabase.co). The Vercel integration is
-  installed (env vars synced); the schema stands up with one idempotent
-  `supabase/setup.sql` paste in the SQL Editor (safe over any partial state).
+- **Supabase connection** — the project is **Heartland Supabase Test**
+  (org REVDRIVE.AI INC, ref `hapqirzhfmaqkjdwwkwl`,
+  https://hapqirzhfmaqkjdwwkwl.supabase.co); the earlier POC project
+  (`bsmeqxypfvtcubytvrpw`) is schema reference only and the app must never
+  be pointed at it. The public schema is exactly the nine migrations in
+  `supabase/migrations/` (applied, verified); which project the app talks
+  to is three environment variables and nothing in code (`.env.example`).
   The **Integrations screen** shows backend health and carries the one-click
   data loader (`/api/admin/load` + `lib/server/supaload.ts`, the in-app twin
   of `scripts/load_supabase.py`): *Load all* upserts every fixture table
-  (~60K rows) server-side on Vercel, with per-table reload buttons for
-  ongoing CSV/Excel drops. Remaining: run `setup.sql` once (health goes
-  `writable: true`), press *Load all*, then swap the repo reads to Supabase
-  view by view (`supabase/README.md` is the full runbook).
+  (~60K rows) server-side, with per-table reload buttons for ongoing
+  CSV/Excel drops. Remaining: set the env vars on the host, press *Load
+  all*, then swap the repo reads to Supabase view by view
+  (`supabase/README.md` is the full runbook).
 - **Kroger feed — two sources.** Market6 (total-store daily scan, store/DC
   inventory, out-of-stocks) should be the fact table the engine runs on, with
   84.51° Stratum card data as the promo/uplift/shopper overlay. Which measures to request, mapped

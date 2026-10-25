@@ -1,90 +1,117 @@
 # Supabase runbook
 
-**Connected project:** Heartland Sales Reporting POC — org REVDRIVE.AI INC,
-ref `bsmeqxypfvtcubytvrpw` (https://bsmeqxypfvtcubytvrpw.supabase.co). Its
-GitHub integration watches this repo's `main`; in practice it applied only
-part of the schema, so run step 1's `setup.sql` paste as well — it is
-idempotent and simply fills in whatever the integration missed.
-The future auto-feed project will be a second, separate Supabase project.
+**Connected project:** Heartland Supabase Test — org REVDRIVE.AI INC,
+ref `hapqirzhfmaqkjdwwkwl` (https://hapqirzhfmaqkjdwwkwl.supabase.co).
+The earlier POC project (`bsmeqxypfvtcubytvrpw`) is schema reference only:
+never point the app at it, and never copy data out of it — data is reloaded
+from Fabric.
 
-How this app connects to Supabase, how CSV/Excel data gets in, and how the
-future auto-feed project fits. The migrations in `migrations/` are canonical —
-the same schema stands up any number of projects identically, and every schema
-change is a new migration file, never a dashboard edit.
+How this app connects to Supabase, how the schema stands up, how data gets
+in, and how the Fabric loader fits. The migrations in `migrations/` are
+canonical — the same nine files stand up any number of projects identically,
+and every schema change is a new migration file, never a dashboard edit.
 
-## 1 · Stand up the schema (once, ~5 minutes)
+## Architecture rules
 
-1. In the Supabase dashboard open **SQL Editor → New query**.
-2. Paste the whole of [`setup.sql`](./setup.sql) (the generated concatenation
-   of migrations 00001–00011) and **Run**. It is **idempotent**: safe on a
-   fresh project and equally safe where part of the schema already exists —
-   existing tables, indexes, policies, and seed rows are left alone and only
-   what's missing is created. It ends with a PostgREST schema-cache reload so
-   the API sees new tables immediately.
-3. Sanity check: **Table Editor** should list 22 tables (`markets`, `items`,
-   `nielsen_weekly`, `promotions`, `promo_lines`, `price_list`, `app_state`, …),
-   `markets` should hold the 13 seeded divisions, and
-   `market_promo_customers` 25 seeded mapping rows.
+- **Fabric is the single source of truth.** Loaders pull Fabric → Supabase;
+  the app reads Supabase only; every Heartland system is read-only.
+- The app's contract is the `public` schema: exactly what the code touches
+  (see "What the schema is" below). The Fabric loader owns its own landing
+  schemas (`syspro`, `nielsen`, `telus`, `dot`) and their DDL — they are not
+  in this repo.
+- Never sum `PayValue` / `DeductTotal` on `fact_deductions`; rate views roll
+  to `parent_code`; weeks end Saturday to match Nielsen (the check
+  constraints on `nielsen_weekly` and `shipments_weekly` enforce it);
+  promotion header rollups are computed from `promo_lines`, never stored.
 
-RLS is enabled on every table with no anon policies (migration 00011): the
-public/anon key can read nothing. The app talks to Supabase only through the
-service role key from server code, which bypasses RLS.
+## 1 · Stand up the schema (once)
 
-CLI alternative: `supabase link --project-ref <ref>` then `supabase db push`
-applies `migrations/` file by file and tracks them — the better habit once
-schema changes become routine. Afterwards
-`supabase gen types typescript --linked > lib/database.types.ts` generates the
-typed client for the swap-in.
+```bash
+supabase link --project-ref hapqirzhfmaqkjdwwkwl
+supabase db push            # applies migrations/ in order and records them
+```
 
-## 2 · Connect the app (makes shared plan state durable in production)
+Or paste [`setup.sql`](./setup.sql) — the generated concatenation of the
+migrations — into **SQL Editor → New query** and run it. It is idempotent:
+safe on a fresh project and over any partial state.
 
-In the Vercel project (`heartland-sales-reporting-system`) → **Settings →
-Environment Variables**, add for **Production** (and Preview if wanted):
+Sanity check: **Table Editor** lists 13 public tables (`markets`, `items`,
+`nielsen_weekly`, `promotions`, `promo_lines`, `customer_crosswalk`,
+`crosswalk_telus_customers`, `item_crosswalk`, `niq_item_attributes`,
+`price_list`, `shipments_weekly`, `app_state`, `signup_email_domains`), all
+with RLS on, and `signup_email_domains` holds one row (`revdrive.ai`).
+
+Then finish the sign-in setup in [`AUTH.md`](./AUTH.md) — above all
+**enabling the before-user-created hook**, which the SQL creates but does
+not switch on.
+
+### What the schema is
+
+| Table | Written by | Read by |
+| --- | --- | --- |
+| `markets`, `items`, `nielsen_weekly` | loader (NIQ pull fixtures) | repo seam (today from fixtures; swap-in pending) |
+| `promotions`, `promo_lines` | loader (Telus export fixtures) | repo seam |
+| `customer_crosswalk`, `crosswalk_telus_customers` | loader (crosswalk workbook) | repo seam / scope |
+| `item_crosswalk`, `niq_item_attributes` | loader (item crosswalk workbook) | repo seam |
+| `price_list` | loader (price list workbook) | repo seam |
+| `shipments_weekly` | loader (Retail Planner export) | repo seam |
+| `app_state` | the app, service role, via `/api/state` | the app |
+| `signup_email_domains` + `hook_restrict_signup_by_email_domain()` | migration (one config row) | Supabase Auth |
+
+RLS is on everywhere. Signed-in users may **read** the loaded tables and
+nothing else; `app_state` has no policies at all (only the service role, from
+server code, touches it). The anon key can read nothing.
+
+Left behind on purpose from the design phase (never created here): the NIQ
+intake/staging/reject tables, `promo_import_batches`, the alignment tables,
+`market_promo_customers` (the mapping lives in `lib/data/albertsonsPromoMap.ts`)
+and the normalized `plan_*` tables (plan state is documents in `app_state`).
+
+## 2 · Connect the app
+
+Which project the app talks to is **three environment variables and nothing
+in code** — `lib/supabase/env.ts` is the only place they are read. Copy
+`.env.example` to `.env.local` for development; on the host (Vercel today,
+anywhere tomorrow) set them under the project's environment variables.
 
 | Name | Value | Where to find it |
 | --- | --- | --- |
-| `SUPABASE_URL` | `https://<project-ref>.supabase.co` | Supabase → Settings → API → Project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | the **service_role** secret | Supabase → Settings → API → Project API keys |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://hapqirzhfmaqkjdwwkwl.supabase.co` | Supabase → Project Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the **anon / publishable** key | same page |
+| `SUPABASE_SERVICE_ROLE_KEY` | the **service_role** secret | same page — server-side only, never `NEXT_PUBLIC_` |
 
-Use the **service_role** key, not the anon key — and never expose it
-client-side (the app only reads it in `lib/server/appstate.ts`).
+One URL variable serves both sign-in and data, so they can never point at two
+different projects. No key or URL is ever committed.
 
-Redeploy (Deployments → ⋯ → Redeploy). From that moment `/api/state` writes to
-the `app_state` table: plan events, budgets, planner adjustments, plan-year
-registrations and price edits are durable and shared for every user of the
-deployed site. Anyone whose browser holds earlier plan work will have it
-lifted into the shared store automatically on their first page load.
+Redeploy. From then on `/api/state` writes to `app_state`: plan events,
+budgets, planner adjustments, plan-year registrations and price edits are
+durable and shared for every user. **Verify:** `/api/health` reports
+`backend: "supabase", writable: true`; the **Integrations** screen shows the
+same.
 
-**Verify:** open the deployed Promotion Planner in a plan year, add or carry
-an event, then check Supabase Table Editor → `app_state` — a row with key
-`events:2027` should appear. Open the site in a private window: the same plan
-shows.
-
-## 3 · Load the data tables (preparation for the repo swap-in)
+## 3 · Load the data tables
 
 The views still read the repo fixtures today; loading the tables now means the
 seam can swap to Supabase reads view by view with the data already in place.
 
-**In the app (no terminal):** open the deployed site → **Integrations** →
-**Load data to Supabase** → *Load all*. The button runs server-side on Vercel
-where the credentials already live, walks the tables in FK order with visible
-progress, and each table has its own *Load* button for single-table reloads
-after a data drop. (`/api/admin/load`, backed by `lib/server/supaload.ts` —
-keep its table registry in step with `scripts/load_supabase.py`.)
+**In the app (no terminal):** **Integrations → Load data to Supabase → Load
+all**. It runs server-side where the credentials live, walks the tables in FK
+order with visible progress, and each table has its own *Load* button.
+(`/api/admin/load`, backed by `lib/server/supaload.ts` — keep its table
+registry in step with `scripts/load_supabase.py`.)
 
-**Or from a terminal** (same result, useful for a project the app isn't
-pointed at, e.g. standing up the future auto-feed project):
+**Or from a terminal:**
 
 ```bash
-export SUPABASE_URL=https://<project-ref>.supabase.co
+export NEXT_PUBLIC_SUPABASE_URL=https://hapqirzhfmaqkjdwwkwl.supabase.co
 export SUPABASE_SERVICE_ROLE_KEY=...
-python3 scripts/load_supabase.py            # everything (~60K rows, a minute or two)
+python3 scripts/load_supabase.py            # everything (~60K rows)
 python3 scripts/load_supabase.py --dry-run  # row counts only
 ```
 
 Everything upserts on natural keys (`nielsen_weekly` on week × UPC × market,
-`promotions` on promo_id, `price_list` on FG × effective date, …) — re-running
-is always safe and corrected files simply overwrite the same keys.
+`promotions` on promo_id, `price_list` on FG × effective date, …) —
+re-running is always safe and corrected files simply overwrite the same keys.
 
 ## 4 · Ongoing CSV / Excel drops — the two-stage flow
 
@@ -98,35 +125,30 @@ audit trail between them.
 | Telus promo import template (legacy transformed shape) | `scripts/ingest_promos.py` → `data/promos/*.json.gz` | `load_supabase.py --only promotions,promo_lines` |
 | Item crosswalk workbook | `scripts/ingest_item_crosswalk.py` → `lib/fixtures/item-crosswalk.json` | `load_supabase.py --only item_crosswalk,niq_item_attributes` |
 | Price list workbook | `scripts/ingest_price_list.py --effective YYYY-MM-DD` → `lib/fixtures/price-list.json` | `load_supabase.py --only price_list` |
-
-Commit the fixture change and push — the deployed app picks the new data up on
-the Vercel build, and the Supabase tables carry the same rows for the swap-in.
-The `load_supabase.py --only …` step can equally be the matching table's
-*Load* button on the Integrations screen once the deploy lands.
+| Retail Planner shipments export | `scripts/ingest_shipments.py` → `data/shipments/*.json.gz` | `load_supabase.py --only shipments_weekly` |
+| Customer crosswalk workbook | `scripts/ingest_crosswalk.py` → `lib/fixtures/crosswalk.json` | `load_supabase.py --only customer_crosswalk,crosswalk_telus_customers` |
 
 ## 5 · What comes next (in order)
 
-1. **Swap the reads** — change `lib/repo/index.ts` bodies from fs+fixture to
-   typed Supabase queries, one function at a time, verifying each view against
-   the fixture-backed numbers. No view code changes; that is what the seam is
-   for. (`lib/server/appstate.ts` already prefers Supabase whenever the env
-   vars exist.)
-2. **Retire the fixture requirement** — once reads come from Supabase, a data
-   drop no longer needs a commit + deploy; `load_supabase.py` alone updates
-   the live app. Fixtures remain the parse-validation artifact and the local
-   dev dataset.
-3. **The auto-feed project** — stand up the second Supabase project with the
-   same `migrations/` (step 1 verbatim). The schema already carries the feed
-   plumbing: `intake_batches` + `nielsen_weekly_staging` + `intake_rejects`
-   are the landing/quarantine tables for raw files, and `promo_import_batches`
-   the same for Telus. Feeds write to staging, a promotion job validates into
-   `nielsen_weekly` — the automated version of what `load_supabase.py` does by
-   hand today. Pointing the app at it is a two-env-var change.
+1. **Fabric feeds the public tables.** The loader already lands raw Syspro,
+   NIQ, Telus and DOT extracts in their own schemas on this project. The next
+   loader step is the transform from those into the `public` contract above
+   (NIQ weekly → `nielsen_weekly`/`items`/`markets`, Telus → `promotions`/
+   `promo_lines`, Syspro customers/items → the crosswalks and price list,
+   Syspro sales history → `shipments_weekly`), replacing the workbook drops in
+   § 4 one source at a time. The row shapes are fixed by `migrations/`.
+2. **Swap the reads** — change `lib/repo/index.ts` bodies from fs+fixture to
+   typed Supabase queries, one function at a time, verifying each view
+   against the fixture-backed numbers. No view code changes; that is what
+   the seam is for.
+3. **Retire the fixture requirement** — once reads come from Supabase, a data
+   refresh no longer needs a commit + deploy.
 
 ## Rules (unchanged)
 
 - Never change schema in the dashboard. Every change is a new migration file
-  (and regenerate `setup.sql` from the set).
+  (and regenerate `setup.sql` from the set — the header of that file has the
+  one-liner).
 - RLS stays enabled on every table.
 - Only the service role writes until role-based policies land with the
   Approvals / LE phases.

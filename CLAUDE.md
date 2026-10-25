@@ -15,7 +15,7 @@
   `lib/repo/index.ts` is server-only (reads `data/nielsen/*.json.gz` via fs); call it from
   server components and pass props down. `lib/repo/client.ts` holds the shared stores
   (plan events, budgets, adjustments, registrations, price edits) — server-side via
-  `/api/state` (`lib/server/appstate.ts`: Supabase when `SUPABASE_URL` +
+  `/api/state` (`lib/server/appstate.ts`: Supabase when `NEXT_PUBLIC_SUPABASE_URL` +
   `SUPABASE_SERVICE_ROLE_KEY` are set, else `data/store/` on disk), with localStorage
   only as offline fallback + one-time legacy lift. When Supabase exists only repo bodies change. Row
   shapes are snake_case (`lib/types/db.ts`) matching `supabase/migrations/*.sql`, authored

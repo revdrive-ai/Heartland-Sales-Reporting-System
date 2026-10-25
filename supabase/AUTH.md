@@ -37,15 +37,17 @@ The app needs the **public** Supabase values (both are safe in a browser):
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-The Vercel–Supabase integration usually adds these already. Check
-**Vercel → Settings → Environment Variables**; if only `SUPABASE_URL` and
-`SUPABASE_ANON_KEY` exist, add the `NEXT_PUBLIC_` copies and redeploy. The
-service-role key is *not* used for sign-in and must stay server-only.
+Set them in the host's environment variables (see `.env.example` and
+`supabase/README.md` § 2). The same `NEXT_PUBLIC_SUPABASE_URL` is the URL
+the data backend uses, so auth and data can never point at two different
+projects. The service-role key is *not* used for sign-in and must stay
+server-only.
 
 ## 2. Run the SQL
 
-In the Supabase **SQL Editor**, run `supabase/setup.sql` (safe to re-run —
-it's idempotent), or just `supabase/migrations/00013_auth_domain_lock.sql`.
+Apply the migrations (`supabase db push`, or paste `supabase/setup.sql` in
+the SQL Editor — it's idempotent); the relevant file is
+`supabase/migrations/00009_auth_domain_lock.sql`.
 
 That creates `public.signup_email_domains` (seeded with `revdrive.ai`) and
 the `hook_restrict_signup_by_email_domain` function.

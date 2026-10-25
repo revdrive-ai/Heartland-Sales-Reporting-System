@@ -1,12 +1,13 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { serviceHeaders, supabaseServiceEnv } from "@/lib/supabase/env";
 
 /* Server-side shared state — one JSON document per key, behind /api/state.
    Two backends, picked by environment:
 
-   - Supabase (PostgREST on the app_state table, migration 00010) when
-     SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set — durable and shared on
-     any host, including Vercel.
+   - Supabase (PostgREST on the app_state table, migration 00008) when
+     NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set — durable
+     and shared on any host, including Vercel.
    - The local filesystem (data/store/, gitignored) otherwise — durable and
      shared wherever the server keeps a writable disk (dev, self-hosted).
      On a read-only serverless filesystem writes throw; /api/state turns that
@@ -15,22 +16,18 @@ import path from "path";
    The service-role key never leaves the server: this module is imported only
    from route handlers. */
 
-const SB_URL = process.env.SUPABASE_URL?.replace(/\/+$/, "");
-const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const supabase = SB_URL && SB_KEY ? { url: SB_URL, key: SB_KEY } : null;
+const supabase = supabaseServiceEnv();
 
 const FILE_DIR = process.env.APP_STATE_DIR ?? path.join(process.cwd(), "data", "store");
 // keys are validated by the route; this only maps them onto safe filenames
 const fileOf = (key: string) => path.join(FILE_DIR, key.replace(/[^A-Za-z0-9._|:-]/g, "_") + ".json");
-
-const sbHeaders = (k: string) => ({ apikey: k, authorization: `Bearer ${k}` });
 
 /** The document under a key, or undefined when none has been written. */
 export async function getState(key: string): Promise<unknown> {
   if (supabase) {
     const r = await fetch(
       `${supabase.url}/rest/v1/app_state?key=eq.${encodeURIComponent(key)}&select=data`,
-      { headers: sbHeaders(supabase.key), cache: "no-store" }
+      { headers: serviceHeaders(supabase.serviceKey), cache: "no-store" }
     );
     if (!r.ok) throw new Error(`app_state read failed: ${r.status} ${(await r.text()).slice(0, 120)}`);
     const rows = (await r.json()) as { data: unknown }[];
@@ -50,7 +47,7 @@ export async function setState(key: string, data: unknown): Promise<void> {
     const r = await fetch(`${supabase.url}/rest/v1/app_state`, {
       method: "POST",
       headers: {
-        ...sbHeaders(supabase.key),
+        ...serviceHeaders(supabase.serviceKey),
         "content-type": "application/json",
         prefer: "resolution=merge-duplicates",
       },
@@ -76,7 +73,7 @@ export async function getStates(keys: string[]): Promise<Map<string, unknown>> {
     const list = keys.map((k) => `"${k.replace(/"/g, "")}"`).join(",");
     const r = await fetch(
       `${supabase.url}/rest/v1/app_state?key=in.(${encodeURIComponent(list)})&select=key,data`,
-      { headers: sbHeaders(supabase.key), cache: "no-store" }
+      { headers: serviceHeaders(supabase.serviceKey), cache: "no-store" }
     );
     if (!r.ok) throw new Error(`app_state read failed: ${r.status} ${(await r.text()).slice(0, 120)}`);
     for (const row of (await r.json()) as { key: string; data: unknown }[]) out.set(row.key, row.data);

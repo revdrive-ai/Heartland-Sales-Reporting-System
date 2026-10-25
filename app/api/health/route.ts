@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getState, setState } from "@/lib/server/appstate";
+import { supabaseServiceEnv } from "@/lib/supabase/env";
 
 /* Connection health for the shared-state backend. Reports which backend the
    deployment is running on (supabase when the env vars are present, else the
@@ -7,8 +8,7 @@ import { getState, setState } from "@/lib/server/appstate";
    timestamp under the 'health' key and reads it back. No secrets leave. */
 
 export async function GET() {
-  const backend =
-    process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY ? "supabase" : "file";
+  const backend = supabaseServiceEnv() ? "supabase" : "file";
   try {
     const stamp = new Date().toISOString();
     await setState("health", { at: stamp });

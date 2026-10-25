@@ -11,15 +11,15 @@ The workbook flow stays two-stage on purpose:
               workbook simply overwrites the same keys.
 
 Usage:
-  export SUPABASE_URL=https://<ref>.supabase.co
+  export NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co   # same name the app uses
   export SUPABASE_SERVICE_ROLE_KEY=...      # server-side only, never client
   python3 scripts/load_supabase.py                 # load everything
   python3 scripts/load_supabase.py --only nielsen_weekly,price_list
   python3 scripts/load_supabase.py --dry-run       # row counts, no writes
 
-Point the env at a different Supabase project (e.g. the future auto-feed
-project) and the same script loads it — the schema comes from
-supabase/migrations, identical everywhere.
+Point the env at a different Supabase project and the same script loads it —
+the schema comes from supabase/migrations, identical everywhere. Keep this
+TABLES registry in step with lib/server/supaload.ts (the in-app loader).
 """
 
 import argparse
@@ -178,10 +178,10 @@ def main():
         if unknown:
             sys.exit(f"unknown tables: {', '.join(sorted(unknown))} — choose from {', '.join(t for t, _, _ in TABLES)}")
 
-    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    url = os.environ.get("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
     key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not args.dry_run and (not url or not key):
-        sys.exit("set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or use --dry-run)")
+        sys.exit("set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or use --dry-run)")
 
     for table, produce, on_conflict in todo:
         rows = produce()

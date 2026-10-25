@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from "fs";
 import { gunzipSync } from "node:zlib";
 import path from "path";
+import { serviceHeaders, supabaseServiceEnv } from "@/lib/supabase/env";
 
 /* Server-side Supabase data loader — the in-app twin of
    scripts/load_supabase.py, so the deployed site can load its own fixture
@@ -110,19 +111,17 @@ export function tableCounts(): { table: string; rows: number }[] {
 export async function loadChunk(table: string, offset: number): Promise<{ table: string; total: number; loaded: number; done: boolean }> {
   const spec = TABLES.find((t) => t.table === table);
   if (!spec) throw new Error(`unknown table: ${table}`);
-  const url = process.env.SUPABASE_URL?.replace(/\/+$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Supabase env vars are not configured");
+  const env = supabaseServiceEnv();
+  if (!env) throw new Error("Supabase env vars are not configured");
 
   const rows = rowsOf(spec);
   const end = Math.min(offset + CHUNK, rows.length);
   for (let i = offset; i < end; i += BATCH) {
     const batch = rows.slice(i, Math.min(i + BATCH, end));
-    const r = await fetch(`${url}/rest/v1/${spec.table}?on_conflict=${spec.onConflict}`, {
+    const r = await fetch(`${env.url}/rest/v1/${spec.table}?on_conflict=${spec.onConflict}`, {
       method: "POST",
       headers: {
-        apikey: key,
-        authorization: `Bearer ${key}`,
+        ...serviceHeaders(env.serviceKey),
         "content-type": "application/json",
         prefer: "resolution=merge-duplicates,return=minimal",
       },
