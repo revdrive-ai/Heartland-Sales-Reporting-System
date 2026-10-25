@@ -8,7 +8,7 @@
 export const ALLOWED_EMAIL_DOMAIN = "revdrive.ai";
 
 /** The domain part of an address, lowercased; "" when it isn't an address. */
-export function domainOf(email: string): string {
+function domainOf(email: string): string {
   const at = email.lastIndexOf("@");
   return at === -1 ? "" : email.slice(at + 1).trim().toLowerCase();
 }

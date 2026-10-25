@@ -52,10 +52,6 @@ export function parseModeCookie(raw: string | undefined): ModePref | null {
   }
 }
 
-export function modeLabel(m: WorkMode): string {
-  return m.kind === "le" ? `LE — FY${m.leYear}` : m.kind === "plan" ? `Plan — FY${m.planYear}` : "Analyze";
-}
-
 export function serializeModePref(pref: ModePref): string {
   return encodeURIComponent(JSON.stringify(pref));
 }

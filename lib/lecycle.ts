@@ -18,7 +18,7 @@ export type LeAnswer =
 
 export type LeCycleDoc = { answers: Record<string, { answer: LeAnswer; at: string }> };
 
-export const LE_CYCLE_EMPTY: LeCycleDoc = { answers: {} };
+const LE_CYCLE_EMPTY: LeCycleDoc = { answers: {} };
 
 export function readLeCycle(raw: unknown): LeCycleDoc {
   if (!raw || typeof raw !== "object") return LE_CYCLE_EMPTY;

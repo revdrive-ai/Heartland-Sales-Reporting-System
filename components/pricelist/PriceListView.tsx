@@ -242,7 +242,7 @@ export default function PriceListView({ rows }: { rows: PriceRow[] }) {
         )}
         <div className="note" style={{ margin: 0, padding: "10px 16px" }}>
           ◇ The price shown is the one in force today; expand a row for its full dated history, including upcoming
-          changes. Manual changes are saved in this browser until Supabase lands (migration 00009 is authored) —
+          changes. Manual changes are shared through the state store; the loaded price list itself is read-only —
           bulk changes come as a new workbook through <code>scripts/ingest_price_list.py --effective YYYY-MM-DD</code>.
         </div>
       </div>

@@ -10,7 +10,7 @@ import { DAY, comparableYearAgo, utcOf } from "@/lib/weeks";
    Dashboard; ranked by how much weekly base volume each shift moves. */
 
 
-export type Insight = {
+type Insight = {
   kind: "distribution" | "price" | "volume" | "promo" | "delisted" | "listprice";
   severity: "good" | "bad" | "info";
   title: string;

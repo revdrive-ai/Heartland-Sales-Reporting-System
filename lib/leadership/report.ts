@@ -117,12 +117,12 @@ export type LeadershipData = {
   matrix: { brands: string[]; rows: { customer: string; name: string; cells: number[]; total: number }[]; totals: number[]; grand: number };
 };
 
-export const fmtMoney = (v: number) => {
+const fmtMoney = (v: number) => {
   const x = Math.abs(v);
   const t = x >= 1e6 ? `$${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `$${Math.round(x / 1e3).toLocaleString()}K` : `$${Math.round(x).toLocaleString()}`;
   return v < 0 ? `−${t}` : t;
 };
-export const fmtUnits = (v: number) => {
+const fmtUnits = (v: number) => {
   const x = Math.abs(v);
   const t = x >= 1e6 ? `${(x / 1e6).toFixed(2)}M` : x >= 1e3 ? `${Math.round(x / 1e3).toLocaleString()}K` : Math.round(x).toLocaleString();
   return v < 0 ? `−${t}` : t;

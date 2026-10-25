@@ -11,7 +11,7 @@
      brand average — spend still counts against the budget, incremental volume
      is zero, and the lift cell stays editable for anyone modeling a scenario */
 
-export const NON_PERFORMANCE_TYPES = new Set(["EDLP", "Slotting"]);
+const NON_PERFORMANCE_TYPES = new Set(["EDLP", "Slotting"]);
 
 export const isNonPerformance = (perf: string | null | undefined) =>
   perf != null && NON_PERFORMANCE_TYPES.has(perf);

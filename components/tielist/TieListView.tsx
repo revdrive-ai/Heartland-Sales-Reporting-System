@@ -10,7 +10,7 @@ import type { TieRow } from "@/lib/repo";
    the crosswalk everyone plans against — the Promotion Planner's carry-
    forward and the wizard's item scoring both read this map. */
 
-export type TieListData = {
+type TieListData = {
   rows: TieRow[];
   fiscalYear: number;
   scopeLabel?: string;
@@ -206,7 +206,7 @@ export default function TieListView({ data }: { data: TieListData }) {
           ◇ Hover a status badge for what it means. Rows sort by the FY{data.fiscalYear} promo dollars riding on the
           identifier, so the mappings worth fixing first are at the top. The map updates by re-running{" "}
           <code>scripts/ingest_item_crosswalk.py</code> on an extended workbook; editing rows in place arrives with
-          the Supabase swap-in (migration 00008 is authored).
+          the Supabase swap-in.
         </div>
       </div>
     </div>

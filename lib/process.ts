@@ -24,7 +24,7 @@ import type { ModeKind } from "@/lib/mode";
    cycle against the same year. */
 
 /** A modal on the underlying view that a step opens on arrival. */
-export type StepModal = "distribution" | "newitem";
+type StepModal = "distribution" | "newitem";
 
 /* The plan's last step is a read-back. Everything the four steps before it
    wrote — the distribution answers, the new items, the levers, the events —
@@ -33,7 +33,7 @@ export type StepModal = "distribution" | "newitem";
    planner; a plan is submitted once, deliberately, from a page that shows
    what is being submitted, not from a button beside the calendar. */
 
-export type ProcessStep = {
+type ProcessStep = {
   key: string;
   label: string;
   /** The one line of instruction shown in the step footer. */
@@ -60,7 +60,7 @@ export type ProcessStep = {
   perAccount?: true;
 };
 
-export type ProcessDef = {
+type ProcessDef = {
   kind: ModeKind;
   label: string;
   tagline: string;
@@ -197,12 +197,12 @@ export function processFor(kind: string | undefined): ProcessDef | undefined {
   return PROCESSES.find((p) => p.kind === kind);
 }
 
-export function stepIndex(proc: ProcessDef, stepKey: string | undefined): number {
+function stepIndex(proc: ProcessDef, stepKey: string | undefined): number {
   const i = proc.steps.findIndex((s) => s.key === stepKey);
   return i < 0 ? 0 : i;
 }
 
-export function stepAt(proc: ProcessDef, stepKey: string | undefined): ProcessStep {
+function stepAt(proc: ProcessDef, stepKey: string | undefined): ProcessStep {
   return proc.steps[stepIndex(proc, stepKey)];
 }
 
@@ -217,7 +217,7 @@ export function processPath(kind: ModeKind, stepKey?: string, year?: number): st
     : `${WORK_PREFIX}/${kind}/${step}`;
 }
 
-export type WorkLocation = {
+type WorkLocation = {
   proc: ProcessDef;
   step: ProcessStep;
   index: number;
@@ -275,7 +275,7 @@ export function parseProcCookie(raw: string | undefined): ProcResume | null {
   }
 }
 
-export function serializeProcCookie(r: ProcResume): string {
+function serializeProcCookie(r: ProcResume): string {
   return encodeURIComponent(JSON.stringify(r));
 }
 

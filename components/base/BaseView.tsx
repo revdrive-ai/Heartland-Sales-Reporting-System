@@ -347,7 +347,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       setAFrom(planYear ? `${snapYear}-01-01` : (data.forecast?.from ?? `${snapYear}-01-01`));
       setATo(`${snapYear}-12-31`);
     } else setAdjs([]);
-  }, [data.mkt, snapYear, planYear, data.forecast?.from]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [data.mkt, snapYear, planYear, data.forecast?.from]);
   /* "Adjust in Plan →" from a Key insight: pre-fill the adjustment form with
      the insight's item and the matching lever, and bring the card into view.
      From a measured window the chip navigates into the plan year carrying an
@@ -548,7 +548,7 @@ export default function BaseView({ data, autoOpen }: { data: BaseData; autoOpen?
       })
       .catch(() => setSnaps([]));
     // refetch when the inputs that move the plan base change in-session
-  }, [snapYear, data.mkt, adjs.length, data.distVer?.verifiedAt, data.distVer?.excluded, data.distVer?.added]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [snapYear, data.mkt, adjs.length, data.distVer?.verifiedAt, data.distVer?.excluded, data.distVer?.added]);
   const takeSnap = async () => {
     if (!snapYear) return;
     setSnapBusy(true);

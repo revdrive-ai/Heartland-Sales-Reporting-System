@@ -10,7 +10,7 @@
    Neutral module: the browser writes the reopen through lib/repo/client,
    the server reads both in lib/server/planLock. */
 
-export type PlanReopen = { at: string; note: string };
+type PlanReopen = { at: string; note: string };
 
 export function readPlanReopen(raw: unknown): PlanReopen | null {
   if (!raw || typeof raw !== "object") return null;
@@ -31,7 +31,7 @@ export function readPlanChoice(raw: unknown): PlanChoice | null {
 /** Submitted when a version has been chosen as the plan; before choosing
     existed, a version taken from Review & submit was the submission, and a
     document from then still reads that way. */
-export function planSubmittedAt(
+function planSubmittedAt(
   versions: { taken_at: string; submitted_from?: string }[],
   chosen: PlanChoice | null
 ): string | null {

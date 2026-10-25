@@ -81,10 +81,6 @@ export type ModeStatus = {
   };
 };
 
-export function cycleMonth(d = new Date()): string {
-  return d.toLocaleString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-}
-
 export async function getModeStatus(mode: WorkMode, inScope?: string[]): Promise<ModeStatus | null> {
   if (mode.kind === "analyze") return null;
   const year = mode.kind === "le" ? mode.leYear : mode.planYear;

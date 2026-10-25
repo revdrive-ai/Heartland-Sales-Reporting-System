@@ -8,8 +8,8 @@
 - `app/globals.css` is the demo's stylesheet with the alternate mockup themes removed — the
   platform ships one theme (the `:root` palette). Prefer reusing its classes over writing new
   CSS; rebuild-specific additions go in `app/rebuild.css`.
-- Demo data consts port to typed modules in `lib/data/` (see `nielsenPull.ts`,
-  `alignmentKey.ts` for the pattern). localStorage keys keep the demo's names
+- Demo data consts port to typed modules in `lib/data/` (see `albertsonsPromoMap.ts`
+  for the pattern). localStorage keys keep the demo's names
   (`hhAlign`, `hhObj`, `hhWelcomeDone`).
 - **Views never touch data directly** — they import from `lib/repo/` only.
   `lib/repo/index.ts` is server-only (reads `data/nielsen/*.json.gz` via fs); call it from
@@ -34,7 +34,7 @@
 - **Shipments (sell-in)** come from the Retail Planner export in `data/raw/` (Publix and
   Jewel, weekly by item, Actual + Last Year) via `scripts/ingest_shipments.py` into
   `data/shipments/<ACCOUNT>.json.gz` + `meta.json` (unmatched item codes listed there);
-  table `shipments_weekly` (migration 00014). One row per account × item × real week
+  table `shipments_weekly` (migration 00007). One row per account × item × real week
   (NIQ week-ending Saturday); the workbook's Last Year row is stored on its own week
   (−364 days), so a 2026 export fills 2025 and 2026 and last year is read by date.
   The workbook ships cases; rows keep `cases` and convert to `units` by the item's case

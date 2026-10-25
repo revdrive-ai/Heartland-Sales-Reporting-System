@@ -10,15 +10,16 @@ Latest Estimate), a leadership view, and the data side (Integrations, Agent Runs
 Alignment Key, Category Key, Nielsen Pull Spec).
 
 The rebuild is worked **one Albertsons division at a time** along the thirteen ALBSCO division
-trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
+trading areas defined in the Nielsen Pull Spec (`lib/fixtures/markets.json`, from `scripts/ingest_albsco.py`).
 
 ## Status
 
 - ✅ App shell: topbar (global filter chips, Ask Heartland panel), sidebar (all 16 views),
   single platform theme, welcome overlay, toasts —
   ported from the demo (`app/globals.css` is the demo stylesheet with the alternate themes removed).
-- ✅ Data modules: `lib/data/nielsenPull.ts` (13 Albertsons division TAs + the 25-column NIQ
-  contract), `lib/data/alignmentKey.ts` (customer alignment hierarchy + mock stats).
+- ✅ Data modules: `lib/data/` holds the typed consts the views share (division ↔ Telus
+  customer map, non-performance promotion types); the 13 Albertsons division TAs and the
+  25-column NIQ contract live in `scripts/ingest_albsco.py` and the fixtures it writes.
 - ✅ **The data seam**: views read/write only through `lib/repo/` (async functions returning
   snake_case row shapes from `lib/types/db.ts`). Server reads in `lib/repo/index.ts`,
   browser stores in `lib/repo/client.ts`; when Supabase arrives only the repo bodies
@@ -36,7 +37,7 @@ trading areas defined in the Nielsen Pull Spec (`lib/data/nielsenPull.ts`).
 - ✅ **Base Business Review rebuilt** (`/base`): the Nielsen weekly trend (actual vs NIQ base) per
   division × brand with the Telus promotion windows overlaid — event windows shaded on the
   chart, always-on programs listed, NIQ-detected promo weeks dotted, URL-driven controls.
-  Division ↔ Telus-customer mapping in `lib/data/albertsonsPromoMap.ts` (+ migration 00003).
+  Division ↔ Telus-customer mapping in `lib/data/albertsonsPromoMap.ts`.
 - ✅ **Sales Dashboard rebuilt** (`/reporting`, the landing view): Heartland branded retail dollars /
   units / price / share-of-measured-set with true YoY (last 13/26/52 weeks vs the same NIQ
   weeks a year earlier), weekly TY-vs-LY trend, brand and division/category cuts, and

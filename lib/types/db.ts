@@ -34,7 +34,7 @@ export type Item = {
     row is stored on its own week (a year earlier), so "last year" is read by
     date. The workbook ships CASES; units is cases × the item's case pack,
     null when no pack is known. Only weeks with shipments are on file.
-    Mirrors supabase/migrations/00014_shipments_weekly.sql. */
+    Mirrors supabase/migrations/00007_shipments_weekly.sql. */
 export type ShipmentWeeklyRow = {
   account_code: string;   // market code where one exists (ALB-JEWEL), else the account's own (PUBLIX)
   account_name: string;

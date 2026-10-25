@@ -89,7 +89,7 @@ Target, Costco, Albertsons, Sprouts, Publix.
 - Route per view: `app/(platform)/{base,planner,reporting,analysis,deductions,foodservice,objectives,approvals,le,leader,integrations,agents,tielist,alignkey,catkey,nielsenpull}/page.tsx`
   with a shared shell layout (topbar, sidebar, workflow strip component, theme provider).
 - Data layer: `lib/data/*.ts` — port each JS const to a typed module (`catalog.ts`,
-  `alignmentKey.ts`, `nielsenPull.ts`, `objectives.ts`, …). Keep localStorage persistence
+  `objectives.ts`, …). Keep localStorage persistence
   behind a small store hook (`useLocalStore('hhAlign', …)`) so swapping to a real backend later
   is one seam.
 - Division dimension: add `division` (the 13 ALBSCO TAs) as a first-class field on Nielsen

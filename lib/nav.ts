@@ -2,7 +2,7 @@
 // grouped exactly as the demo groups them. `tag` renders the small brand chip
 // (workflow step numbers, AI, V1); `badge` renders the red count pill.
 
-export type NavItem = {
+type NavItem = {
   view: string;      // route segment, matches the demo's data-view key
   label: string;
   icon: string;      // key into ICONS
@@ -11,7 +11,7 @@ export type NavItem = {
   badge?: string;
 };
 
-export type NavGroup = { heading: string; items: NavItem[] };
+type NavGroup = { heading: string; items: NavItem[] };
 
 export const NAV: NavGroup[] = [
   {
@@ -59,13 +59,9 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-export const ALL_VIEWS: NavItem[] = NAV.flatMap((g) => g.items);
+const ALL_VIEWS: NavItem[] = NAV.flatMap((g) => g.items);
 
 export function navItemFor(view: string): NavItem | undefined {
   return ALL_VIEWS.find((i) => i.view === view);
-}
-
-export function groupFor(view: string): string {
-  return NAV.find((g) => g.items.some((i) => i.view === view))?.heading ?? "";
 }
 

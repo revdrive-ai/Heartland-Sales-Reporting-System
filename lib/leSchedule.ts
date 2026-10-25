@@ -22,13 +22,13 @@ export type LeCycle = {
 };
 
 /** The second Friday of a month, as an ISO date (UTC). */
-export function secondFriday(year: number, month0: number): string {
+function secondFriday(year: number, month0: number): string {
   let t = Date.UTC(year, month0, 1);
   while (new Date(t).getUTCDay() !== 5) t += DAY; // 5 = Friday
   return new Date(t + 7 * DAY).toISOString().slice(0, 10);
 }
 
-export function cycleFor(year: number, month0: number): LeCycle {
+function cycleFor(year: number, month0: number): LeCycle {
   const lockDate = secondFriday(year, month0);
   return {
     key: `${year}-${String(month0 + 1).padStart(2, "0")}`,
@@ -43,16 +43,6 @@ export function cycleFor(year: number, month0: number): LeCycle {
 
 export function cycleFromKey(key: string): LeCycle {
   return cycleFor(+key.slice(0, 4), +key.slice(5, 7) - 1);
-}
-
-/** Every cycle of a year whose lock instant has already passed, newest first. */
-export function lockedCycles(year: number, now = new Date()): LeCycle[] {
-  const out: LeCycle[] = [];
-  for (let m = 0; m < 12; m++) {
-    const c = cycleFor(year, m);
-    if (new Date(c.lockAt) <= now) out.push(c);
-  }
-  return out.reverse();
 }
 
 /** The cycle currently open — the next lock that hasn't happened yet. */

@@ -5,7 +5,7 @@
 
    For this demo there is exactly one admin, so the list is a constant. The
    moment there are two, this should become a `public.app_admins` table in
-   the shape of `public.signup_email_domains` (migration 00013), so adding
+   the shape of `public.signup_email_domains` (migration 00009), so adding
    someone is one SQL insert rather than a deploy. Nothing else needs to
    change — every caller already goes through isAdminEmail. */
 

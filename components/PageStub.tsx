@@ -1,12 +1,11 @@
-
-import { groupFor, navItemFor } from "@/lib/nav";
+import { navItemFor } from "@/lib/nav";
 
 /* Placeholder page body for a view that hasn't been rebuilt yet. Carries the
    demo's pagehead furniture (crumb, h1, description) and, on the five
    workflow views, the numbered workflow strip. Replace stub-by-stub as the
    rebuild works through the views. */
 
-export default function PageStub({ view, lead }: { view: string; lead?: string }) {
+export default function PageStub({ view }: { view: string }) {
   const item = navItemFor(view);
   if (!item) return null;
 

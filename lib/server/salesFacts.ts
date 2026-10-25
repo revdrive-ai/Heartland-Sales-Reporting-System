@@ -21,7 +21,7 @@ export type SalesFact = {
   units: number;
 };
 
-export type SalesSource = {
+type SalesSource = {
   name: string;           // "NIQ retail sales"
   note: string;           // what the numbers are, in a sentence
   edge: string;           // latest week on file

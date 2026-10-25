@@ -43,11 +43,6 @@ export function eventBaseProfile(plan: PlanPayload, customer_id: string, brand: 
   return idx.map((i) => mkts.reduce((a, m) => a + (plan.divBrandWkly[m]?.[brand]?.[i] ?? 0), 0));
 }
 
-/** Total base units over an event's window (Σ of the weekly profile). */
-export function eventBaseUnits(plan: PlanPayload, customer_id: string, brand: string, upcs: string[] | undefined, start: string, end: string): number {
-  return (eventBaseProfile(plan, customer_id, brand, upcs, start, end) ?? []).reduce((a, v) => a + v, 0);
-}
-
 /** Weekly base units an event plans against. With a window, the average
     week of the plan-year series over it (so weekly × weeks = the window
     total); without one, the latest-52-week run-rate: the deal's items at the

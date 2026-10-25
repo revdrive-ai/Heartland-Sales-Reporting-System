@@ -14,7 +14,7 @@
 
 export const DAY = 86400000;
 export const utcOf = (w: string) => Date.UTC(+w.slice(0, 4), +w.slice(5, 7) - 1, +w.slice(8, 10));
-export const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
+const iso = (t: number) => new Date(t).toISOString().slice(0, 10);
 
 /** The same weekday 364 days earlier — the year-ago week for every purpose. */
 export const yearAgoWeek = (w: string) => iso(utcOf(w) - 364 * DAY);
@@ -48,9 +48,7 @@ export function saturdaysOfYear(year: number): string[] {
   return out;
 }
 
-export const weeksInYear = (year: number) => saturdaysOfYear(year).length;
-export const is53WeekYear = (year: number) => weeksInYear(year) === 53;
-
+const weeksInYear = (year: number) => saturdaysOfYear(year).length;
 /** The call-out a full-year total needs when its year and the year it is
     read against do not hold the same number of weeks; null when they do.
     `text` is the chip, `title` the sentence behind it. */

@@ -26,7 +26,7 @@ export const SCOPE_FIELDS: { key: keyof Scope; label: string; col: keyof Crosswa
   { key: "accountLead", label: "Acct lead", col: "account_lead" },
 ];
 
-export function rowMatches(r: CrosswalkRow, s: Scope, except?: keyof Scope): boolean {
+function rowMatches(r: CrosswalkRow, s: Scope, except?: keyof Scope): boolean {
   for (const f of SCOPE_FIELDS) {
     if (f.key === except) continue;
     const v = s[f.key];
@@ -66,7 +66,7 @@ export function scopeActive(s: Scope): boolean {
 }
 
 /** Short human label for the current scope, most specific selection first. */
-export function scopeLabel(s: Scope): string {
+function scopeLabel(s: Scope): string {
   return (
     s.sales ?? s.parent ?? s.accountLead ?? s.teamLead ?? s.territory ?? "All customers"
   );

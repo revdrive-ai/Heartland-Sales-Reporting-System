@@ -2,13 +2,9 @@
 
 import { useEffect } from "react";
 
-/* Toast — same element, classes and timing as the demo's showToast. Any
-   component (client or event handler) can call showToast(); the <Toast/>
-   element in the layout listens for the event. */
-
-export function showToast(msg: string) {
-  window.dispatchEvent(new CustomEvent("hh-toast", { detail: msg }));
-}
+/* Toast — same element, classes and timing as the demo's showToast. The
+   <Toast/> element in the layout shows whatever an "hh-toast" CustomEvent
+   carries in its detail. */
 
 declare global {
   interface Window { _tt?: ReturnType<typeof setTimeout> }

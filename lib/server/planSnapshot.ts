@@ -94,7 +94,7 @@ export type PlanFrozen = {
   totals: { gross: number; grossPrior: number; grossTarget: number; spend: number; spendPrior: number; fund: number; priorYear: number } | null;
 };
 
-export type PlanSnapshotDoc = { versions: PlanSnapshotVersion[]; chosen: PlanChoice | null };
+type PlanSnapshotDoc = { versions: PlanSnapshotVersion[]; chosen: PlanChoice | null };
 
 export async function computePlanBase(mkt: string, year: number): Promise<PlanBaseNow> {
   const items = await listItems();
@@ -322,7 +322,7 @@ async function freezePlan(mkt: string, year: number): Promise<{ plan: PlanFrozen
   };
 }
 
-export type TakeSnapshotOptions = {
+type TakeSnapshotOptions = {
   note?: string;
   name?: string;
   cycleKey?: string;

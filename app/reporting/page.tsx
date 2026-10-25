@@ -27,7 +27,7 @@ export default async function Page({
   const markets = gscope.active ? allMarkets.filter((m) => gscope.marketCodes.includes(m.code)) : allMarkets;
   if (gscope.active && markets.length === 0) {
     return (
-      <ScopeEmpty current="reporting" crumb="Trade Workflow · Step 3" title="Sales Dashboard"
+      <ScopeEmpty title="Sales Dashboard"
         label={gscope.label}
         message="No Nielsen trading areas in this scope have data on file — only the 13 ALBSCO divisions are loaded so far." />
     );

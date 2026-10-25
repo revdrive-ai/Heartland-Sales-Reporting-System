@@ -37,7 +37,6 @@ import { comparableYearAgo, priorYearWeek } from "@/lib/weeks";
    mode and the LE — projects through here, so they agree to the unit. */
 
 export const TREND_WEEKS = 13;
-export { utcOf } from "@/lib/weeks";
 
 export type Trend = { ratio: number; cur: number; prior: number };
 
@@ -54,11 +53,6 @@ export function trendOf(weekly: Map<string, number> | undefined, measuredWeeks: 
   }
   return { ratio: prior > 0 ? cur / prior : 1, cur, prior };
 }
-
-/** The brand's trend ratio — the level the projection runs at where an item
-    cannot be read on its own. */
-export const trendRatio = (weekly: Map<string, number>, measuredWeeks: string[], n = TREND_WEEKS) =>
-  trendOf(weekly, measuredWeeks, n).ratio;
 
 /** An item's own ratio when its year-ago volume is at least this share of
     the brand's — enough to read — else the brand's. */

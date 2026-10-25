@@ -9,7 +9,7 @@ import { ALLOWED_EMAIL_DOMAIN, isAllowedEmail } from "@/lib/auth/domain";
    the platform never emails an address outside the company. That is a
    courtesy rather than the lock: the anon key is public, so someone could
    call Supabase directly. The lock is the before-user-created hook in
-   supabase/migrations/00013_auth_domain_lock.sql, which refuses to create
+   supabase/migrations/00009_auth_domain_lock.sql, which refuses to create
    the account, and the middleware, which refuses to serve a session whose
    address is off-domain. */
 

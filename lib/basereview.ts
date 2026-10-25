@@ -23,7 +23,7 @@ export type BaseReview = {
   summary?: BaseReviewSummary;
 };
 
-export const BASE_REVIEW_EMPTY: BaseReview = { verified_at: null };
+const BASE_REVIEW_EMPTY: BaseReview = { verified_at: null };
 
 export function readBaseReview(raw: unknown): BaseReview {
   if (!raw || typeof raw !== "object") return BASE_REVIEW_EMPTY;

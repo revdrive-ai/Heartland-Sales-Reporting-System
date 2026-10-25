@@ -40,7 +40,7 @@ export function planSig(events: { id: string; start: string; end: string; lift_p
   return `${events.length}:${h.toString(36)}`;
 }
 
-export const PLAN_BUILT_EMPTY: PlanBuilt = { built_at: null };
+const PLAN_BUILT_EMPTY: PlanBuilt = { built_at: null };
 
 export function readPlanBuilt(raw: unknown): PlanBuilt {
   if (!raw || typeof raw !== "object") return PLAN_BUILT_EMPTY;

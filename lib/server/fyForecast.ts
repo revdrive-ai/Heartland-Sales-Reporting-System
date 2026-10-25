@@ -52,7 +52,7 @@ export function invalidateForecastCaches() {
   ovlCache.clear();
 }
 
-export type FyWeek = {
+type FyWeek = {
   w: string;
   measured: boolean;  // on file, vs forecast
   ty$: number;        // this year: measured retail dollars, or the forecast

@@ -66,7 +66,7 @@ function rowsShipmentsWeekly(): Row[] {
 }
 
 /** table → row producer + on_conflict natural key. Order matters: FK parents first. */
-export const TABLES: { table: string; onConflict: string; rows: () => Row[] }[] = [
+const TABLES: { table: string; onConflict: string; rows: () => Row[] }[] = [
   { table: "markets", onConflict: "code", rows: () => readJson<Row[]>("lib/fixtures/markets.json") },
   { table: "items", onConflict: "upc", rows: () => readJson<Row[]>("lib/fixtures/items.json") },
   { table: "nielsen_weekly", onConflict: "week_ending,upc,market_code", rows: rowsNielsenWeekly },

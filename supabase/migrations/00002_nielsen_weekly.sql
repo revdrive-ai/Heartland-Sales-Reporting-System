@@ -1,5 +1,5 @@
 -- NIQ weekly facts — one row per item × market × week, the 25-column pull
--- contract (lib/data/nielsenPull.ts). Produced by scripts/ingest_albsco.py
+-- contract. Produced by scripts/ingest_albsco.py (the column map lives there)
 -- into data/nielsen/<MARKET>.json.gz; loaded on the natural key.
 -- Weeks end on Saturday to match Nielsen — the check constraint enforces it.
 -- (The intake/staging/reject tables of the design phase are gone: files are

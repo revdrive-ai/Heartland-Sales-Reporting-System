@@ -27,13 +27,13 @@ import { overlayCount, readLeOverlay } from "@/lib/leovl";
    Margin here is AFTER TRADE — gross sales less trade spend. There is no
    product cost in the data yet. */
 
-export const PLAN_GROWTH = 0.015;
+const PLAN_GROWTH = 0.015;
 
 const zero = () => Array(12).fill(0) as number[];
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 
 /** Spread a promotion's dollars evenly over its days, clipped to the year. */
-export function spreadByMonth(into: number[], amount: number, startISO: string, endISO: string, year: number) {
+function spreadByMonth(into: number[], amount: number, startISO: string, endISO: string, year: number) {
   if (!amount) return;
   const s = Math.max(utcOf(startISO), Date.UTC(year, 0, 1));
   const e = Math.min(utcOf(endISO), Date.UTC(year, 11, 31));
@@ -42,14 +42,14 @@ export function spreadByMonth(into: number[], amount: number, startISO: string, 
   for (let t = s; t <= e; t += DAY) into[new Date(t).getUTCMonth()] += perDay;
 }
 
-export type Monthly = number[]; // 12 calendar months
+type Monthly = number[]; // 12 calendar months
 
-export type BrandRoll = {
+type BrandRoll = {
   actU: Monthly; fcU: Monthly; lyU: Monthly; planU: Monthly;
   act$: Monthly; fc$: Monthly; ly$: Monthly; plan$: Monthly;
 };
 
-export type LeRollup = {
+type LeRollup = {
   year: number;
   priorYear: number;
   edge: string;            // the NIQ data edge (last measured week)

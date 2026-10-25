@@ -203,7 +203,7 @@ every request. The middleware **fails closed**: with Supabase unconfigured,
 every route redirects to `/login` rather than serving.
 
 The control that actually closes the door is the Supabase **before-user-
-created hook** (`supabase/migrations/00013_auth_domain_lock.sql`), which
+created hook** (`supabase/migrations/00009_auth_domain_lock.sql`), which
 refuses to create an account whose domain is not in
 `public.signup_email_domains` — the anon key is public, so the app's own
 checks alone would not be enough. Allowed domains are table rows, so adding

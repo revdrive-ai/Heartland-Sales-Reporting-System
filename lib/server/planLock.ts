@@ -9,7 +9,7 @@ import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
 /** The per-account documents a plan year is built from — the ones the lock
     guards. The events doc is shared by every account in a year, so it is
     guarded in the planner rather than here. */
-export const PLAN_DOC_PREFIXES = ["distver:", "adj:", "basereview:", "planbuilt:"] as const;
+const PLAN_DOC_PREFIXES = ["distver:", "adj:", "basereview:", "planbuilt:"] as const;
 
 /** Parse "distver:ALB-JEWEL:2027" into its account and year, or null. */
 export function planDocKey(key: string): { mkt: string; year: number } | null {

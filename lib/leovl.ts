@@ -44,7 +44,7 @@ export type LeOverlay = {
   added: LeAddedEvent[];
 };
 
-export const LE_OVERLAY_EMPTY: LeOverlay = { cancelled: {}, changes: {}, added: [] };
+const LE_OVERLAY_EMPTY: LeOverlay = { cancelled: {}, changes: {}, added: [] };
 
 export function readLeOverlay(raw: unknown): LeOverlay {
   if (!raw || typeof raw !== "object") return LE_OVERLAY_EMPTY;

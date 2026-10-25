@@ -145,7 +145,7 @@ There is exactly one for this demo, so `lib/auth/admin.ts` holds a constant
 rather than the table this plan first proposed — a migration and a SQL step
 to express a single address is ceremony. The moment there are two it becomes
 a `public.app_admins` table in the shape of `public.signup_email_domains`
-(migration 00013), and no caller changes: everything already goes through
+(migration 00009), and no caller changes: everything already goes through
 `isAdminEmail`.
 
 Non-admins are kept out of the raw view routes by the guard already in

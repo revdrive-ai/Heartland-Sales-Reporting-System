@@ -9,12 +9,11 @@
 // read — nothing entered before the switch is lost. View components are
 // untouched: every function keeps its signature.
 
-import { ALIGN_DEFAULT, type AlignRow } from "@/lib/data/alignmentKey";
 import { readDistVerification, type DistVerification } from "@/lib/distver";
 import { readLeCycle, type LeAnswer, type LeCycleDoc } from "@/lib/lecycle";
 import { readBaseReview, type BaseReview } from "@/lib/basereview";
 import { readPlanBuilt, type PlanBuilt } from "@/lib/planbuilt";
-import { readLeOverlay, type LeOverlay } from "@/lib/leovl";
+import type { LeOverlay } from "@/lib/leovl";
 
 /* ---- shared-document plumbing ---- */
 
@@ -71,29 +70,14 @@ async function saveDoc(key: string, data: unknown): Promise<void> {
   await writeShared(key, data);
 }
 
-/* ---- alignment key ---- */
-
-const ALIGN_KEY = "hhAlign"; // the mockup's original browser key (legacy lift)
-
-export async function getAlignment(): Promise<{ rows: AlignRow[]; version: number }> {
-  const doc = await loadDoc<{ v: number; rows: AlignRow[] }>("align", () =>
-    lsGet<{ v: number; rows: AlignRow[] }>(ALIGN_KEY)
-  );
-  return doc ? { rows: doc.rows, version: doc.v } : { rows: structuredClone(ALIGN_DEFAULT), version: 1 };
-}
-
-export async function saveAlignment(rows: AlignRow[], version: number): Promise<void> {
-  await saveDoc("align", { v: version, rows });
-}
-
 /* ---- plan-year registrations ----
-   Which customers (divisions) have had their plan year opened. Mirrors
-   supabase/migrations/00005_plan_registrations.sql. Shape:
+   Which customers (divisions) have had their plan year opened. One shared
+   document in app_state (key planreg). Shape:
    { "<year>": { "<market_code>": "<ISO registered_at>" } } */
 
 const PLAN_KEY = "hhPlanReg";
 
-export type PlanRegistry = Record<string, Record<string, string>>;
+type PlanRegistry = Record<string, Record<string, string>>;
 
 export async function getPlanRegistry(): Promise<PlanRegistry> {
   return (await loadDoc<PlanRegistry>("planreg", () => lsGet<PlanRegistry>(PLAN_KEY))) ?? {};
@@ -114,8 +98,8 @@ export async function registerPlanYear(market_code: string, year: number): Promi
 /* ---- planner adjustments ----
    Per item x customer x plan year, the levers a planner pulls on the
    projected base. One shared document per customer x year so planners
-   working different scopes never overwrite each other. Mirrors
-   supabase/migrations/00006_plan_adjustments.sql. */
+   working different scopes never overwrite each other (app_state key
+   adj:<market>:<year>). */
 
 const ADJ_KEY = "hhPlanAdj";
 
@@ -167,8 +151,7 @@ export async function deletePlanAdjustment(id: string, market_code: string, plan
 
 /* ---- plan-year promotion events ----
    The forward book the Promotion Planner builds for 2027+ before Telus has
-   it. One shared document per plan year. Mirrors
-   supabase/migrations/00007_plan_events.sql. */
+   it. One shared document per plan year (app_state key events:<year>). */
 
 const EVT_KEY = "hhPlanEvents";
 
@@ -228,40 +211,11 @@ export async function replacePlanEvents(plan_year: number, evts: PlanEvent[]): P
   return writeYearEvents(plan_year, evts);
 }
 
-export async function addPlanEvents(evts: PlanEvent[]): Promise<PlanEvent[]> {
-  const plan_year = evts[0]?.plan_year;
-  if (plan_year === undefined) return [];
-  const all = await readYearEvents(plan_year);
-  all.push(...evts);
-  return writeYearEvents(plan_year, all);
-}
-
-export async function updatePlanEvent(id: string, plan_year: number, patch: Partial<PlanEvent>): Promise<PlanEvent[]> {
-  const all = await readYearEvents(plan_year);
-  const i = all.findIndex((e) => e.id === id);
-  if (i >= 0) all[i] = { ...all[i], ...patch };
-  return writeYearEvents(plan_year, all);
-}
-
-export async function deletePlanEvent(id: string, plan_year: number): Promise<PlanEvent[]> {
-  const all = (await readYearEvents(plan_year)).filter((e) => e.id !== id);
-  return writeYearEvents(plan_year, all);
-}
-
-/** Reset a plan year — all of it, or only the events of one origin
-    (e.g. origin "carry" undoes a carry-forward and keeps manual work). */
-export async function clearPlanEvents(plan_year: number, origin?: PlanEvent["origin"]): Promise<PlanEvent[]> {
-  const all = (await readYearEvents(plan_year)).filter(
-    (e) => origin !== undefined && e.origin !== origin
-  );
-  return writeYearEvents(plan_year, all);
-}
-
 /* ---- price edits ----
    Per-item dated list-price changes entered in the Price List screen,
    overlaid on the workbook-ingested fixture everywhere prices are read
-   client-side. Mirrors rows with source 'manual' in
-   supabase/migrations/00009_price_list.sql. */
+   client-side. One shared document (app_state key priceedits); the loaded
+   price_list table itself is read-only. */
 
 const PRICE_KEY = "hhPriceEdits";
 
@@ -349,11 +303,10 @@ export async function saveDistVerification(market_code: string, plan_year: numbe
    does the forecast on record still stand. Shared like the rest of the
    planner's work, and read back by the step rail. */
 
-export type { LeAnswer, LeCycleDoc } from "@/lib/lecycle";
 
 const leKey = (market_code: string, le_year: number) => `lecycle:${market_code}:${le_year}`;
 
-export async function getLeCycle(market_code: string, le_year: number): Promise<LeCycleDoc> {
+async function getLeCycle(market_code: string, le_year: number): Promise<LeCycleDoc> {
   return readLeCycle(await loadDoc<LeCycleDoc>(leKey(market_code, le_year), () => null));
 }
 
@@ -390,7 +343,6 @@ export async function saveBaseReview(market_code: string, plan_year: number, doc
    Per customer × plan year: when the plan was submitted from the events card
    on Build the plan, and how many events it held then. */
 
-export type { PlanBuilt } from "@/lib/planbuilt";
 
 const pbKey = (market_code: string, plan_year: number) => `planbuilt:${market_code}:${plan_year}`;
 
@@ -406,13 +358,9 @@ export async function savePlanBuilt(market_code: string, plan_year: number, doc:
    Per customer × year: booked promotions cancelled or changed, and
    promotions added, laid over the Telus book. See lib/leovl. */
 
-export type { LeOverlay, LeAddedEvent, LeOverlayChange } from "@/lib/leovl";
+export type { LeOverlay, LeAddedEvent } from "@/lib/leovl";
 
 const ovlKey = (market_code: string, year: number) => `leovl:${market_code}:${year}`;
-
-export async function getLeOverlay(market_code: string, year: number): Promise<LeOverlay> {
-  return readLeOverlay(await loadDoc<LeOverlay>(ovlKey(market_code, year), () => null));
-}
 
 export async function saveLeOverlay(market_code: string, year: number, doc: LeOverlay): Promise<void> {
   await saveDoc(ovlKey(market_code, year), doc);

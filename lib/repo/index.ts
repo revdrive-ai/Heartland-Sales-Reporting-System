@@ -27,10 +27,6 @@ export async function listMarkets(opts?: { activeOnly?: boolean }): Promise<Mark
   return opts?.activeOnly ? MARKETS.filter((m) => m.active) : MARKETS;
 }
 
-export async function getMarket(code: string): Promise<Market | undefined> {
-  return MARKETS.find((m) => m.code === code);
-}
-
 /* -------------------------------------------------------------------- ITEMS */
 
 export async function listItems(opts?: { brand?: string; ownOnly?: boolean }): Promise<Item[]> {
@@ -39,13 +35,9 @@ export async function listItems(opts?: { brand?: string; ownOnly?: boolean }): P
   );
 }
 
-export async function getItem(upc: string): Promise<Item | undefined> {
-  return ITEMS.find((i) => i.upc === upc);
-}
-
 /* ---------------------------------------------------------- ITEM CROSSWALK */
 
-export type NiqItemAttrs = {
+type NiqItemAttrs = {
   upc_core: string; item: string; brand: string;
   category: string; sub_category: string; segment: string;
   hrt_type: string; hrt_form: string; hrt_package: string;
@@ -274,7 +266,7 @@ function loadFacts(market_code: string): NielsenWeeklyRow[] {
   return rows;
 }
 
-export type WeeklyFactsFilter = {
+type WeeklyFactsFilter = {
   market_code: string;
   upc?: string;
   brand?: string;
@@ -309,14 +301,6 @@ export async function listWeekEndings(market_code: string): Promise<string[]> {
    rules as the NIQ facts: server-only reads, Supabase (shipments_weekly)
    later. An account here may have no NIQ market (Publix). */
 
-export type ShipmentsMeta = {
-  source_file: string;
-  accounts: { account_code: string; account_name: string; workbook_year: number; years: number[]; first_week: string; last_week: string; edge: string | null; items: number; items_with_upc: number; items_without_pack: number; rows: number; overlap_dropped: number }[];
-  unmatched_items: { item_code: string; item_name: string }[];
-  ambiguous_items: { item_code: string; upcs: string[] }[];
-  items_without_pack: { item_code: string; item_name: string }[];
-};
-
 const shipCache = new Map<string, ShipmentWeeklyRow[]>();
 
 /** Every shipment row for an account, every year on file; [] when none. */
@@ -332,14 +316,6 @@ export async function getShipments(account_code: string): Promise<ShipmentWeekly
     shipCache.set(account_code, rows);
   }
   return rows;
-}
-
-export async function getShipmentsMeta(): Promise<ShipmentsMeta | null> {
-  try {
-    return JSON.parse(readFileSync(path.join(process.cwd(), "data", "shipments", "meta.json"), "utf-8")) as ShipmentsMeta;
-  } catch {
-    return null;
-  }
 }
 
 /* -------------------------------------------------------------- PROMOTIONS
@@ -365,7 +341,7 @@ function promoLines(): PromoLine[] {
   return (lineCache ??= loadGz<PromoLine[]>("promo-lines.json.gz"));
 }
 
-export type PromotionsFilter = {
+type PromotionsFilter = {
   status?: Promotion["promo_status"];
   customer_id?: string;
   channel?: Promotion["channel"];
@@ -436,8 +412,7 @@ export async function getPromoMeta(): Promise<PromoMeta> {
 
 /* ------------------------------------------------------- PROMO ↔ NIELSEN JOIN
    Overlay the Telus promotion windows onto a division's Nielsen weekly trend.
-   The division ←→ customer mapping lives in lib/data/albertsonsPromoMap.ts
-   (mirrored by supabase/migrations/00003). */
+   The division ←→ customer mapping lives in lib/data/albertsonsPromoMap.ts. */
 
 import { ALBERTSONS_CORPORATE, MARKET_DIST_SPLIT, normBrand, promoAppliesTo, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
 
@@ -469,7 +444,7 @@ function promoBrands(): Map<string, Set<string>> {
   return promoBrandsCache;
 }
 
-export type PromoOverlayFilter = {
+type PromoOverlayFilter = {
   market_code: string;
   /** NIQ brand name (e.g. "SPLENDA"); omit for all brands. */
   brand?: string;

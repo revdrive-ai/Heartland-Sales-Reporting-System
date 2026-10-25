@@ -1,12 +1,6 @@
-
-
 /* Shown when the global customer scope resolves to no data for a view —
    e.g. a parent account whose NIQ trading areas aren't loaded yet. */
-export default function ScopeEmpty({
-  current, crumb, title, label, message,
-}: {
-  current: string; crumb: string; title: string; label: string; message: string;
-}) {
+export default function ScopeEmpty({ title, label, message }: { title: string; label: string; message: string }) {
   return (
     <div className="view active">
       <div className="pagehead">

@@ -1,14 +1,14 @@
 // Nielsen division TA ←→ Telus customer mapping for the Albertsons family.
 // The Telus book carries division-level Albertsons customers whose banners
 // line up with the ALBSCO trading areas; "Safeway, Inc. (SAF100)" is the
-// corporate account whose promotions apply across every division. Mirrored
-// by supabase/migrations/00003 (market_promo_customers) for the swap-in.
+// corporate account whose promotions apply across every division. This
+// module is the only home of the mapping — there is no table behind it.
 
 /** Telus customer_id of the corporate account — applies to all divisions. */
 export const ALBERTSONS_CORPORATE = "000-1000214"; // Safeway, Inc. (SAF100)
 
 /** market_code → division-specific Telus customer_ids. */
-export const MARKET_PROMO_CUSTOMERS: Record<string, string[]> = {
+const MARKET_PROMO_CUSTOMERS: Record<string, string[]> = {
   "ALB-ACME":      ["000-1000252"],                   // Safeway Mid-Atlantic (ACM100) — Acme banner
   "ALB-DENVER":    ["000-1000203"],                   // Safeway Mountain West (covers Denver + Intermountain)
   "ALB-EASTERN":   [],                                // no division customer in the book — corporate only
