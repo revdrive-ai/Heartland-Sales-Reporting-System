@@ -8,9 +8,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
    /api/admin/load so progress is visible and no request runs long. Everything
    upserts on natural keys: re-loading is always safe. */
 
-type Health = { backend: string; writable: boolean; reason?: string };
+type Health = {
+  backend: string; writable: boolean; reason?: string;
+  /** where the data tables are read from, with counts through the repo layer */
+  data?: { source: string; markets?: number; items?: number; promotions?: number; weeks?: number; data_edge?: string | null; error?: string };
+};
 type TableInfo = { table: string; rows: number };
-type Progress = { loaded: number; total: number; state: "idle" | "loading" | "done" | "error"; error?: string };
+type Progress = { loaded: number; total: number; state: "idle" | "loading" | "done" | "error"; error?: string; removed?: number };
 
 const fmtN = (n: number) => n.toLocaleString("en-US");
 
@@ -65,13 +69,13 @@ export default function IntegrationsView() {
         setProg((p) => ({ ...p, [table]: { loaded: offset, total, state: "error", error: "network error — click Load to resume" } }));
         return false;
       }
-      const data = (await res.json()) as { loaded?: number; total?: number; done?: boolean; error?: string };
+      const data = (await res.json()) as { loaded?: number; total?: number; done?: boolean; error?: string; removed?: number };
       if (!res.ok || data.error) {
         setProg((p) => ({ ...p, [table]: { loaded: offset, total, state: "error", error: data.error ?? `HTTP ${res.status}` } }));
         return false;
       }
       offset = data.loaded ?? offset;
-      setProg((p) => ({ ...p, [table]: { loaded: offset, total: data.total ?? total, state: data.done ? "done" : "loading" } }));
+      setProg((p) => ({ ...p, [table]: { loaded: offset, total: data.total ?? total, state: data.done ? "done" : "loading", removed: data.removed } }));
       if (data.done) return true;
     }
   }
@@ -121,9 +125,24 @@ export default function IntegrationsView() {
         ) : (
           <>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <span className="pill">backend: {health.backend}</span>
+              <span className="pill">state: {health.backend}</span>
               {badge(health.writable, health.writable ? "connected & writable" : "not writable")}
+              {health.data && (
+                <>
+                  <span className="pill">data: {health.data.source}</span>
+                  {health.data.error
+                    ? badge(false, `data read failed — ${health.data.error}`)
+                    : badge(true, `${fmtN(health.data.markets ?? 0)} markets · ${fmtN(health.data.items ?? 0)} items · ${fmtN(health.data.promotions ?? 0)} promotions · ${fmtN(health.data.weeks ?? 0)} NIQ weeks${health.data.data_edge ? ` through ${health.data.data_edge}` : ""}`)}
+                </>
+              )}
             </div>
+            {health.data && (
+              <div className="note">
+                {health.data.source === "supabase"
+                  ? "◇ The pages read the data tables (NIQ facts, items, promotions, price list, shipments) from the connected Supabase project. A table that fails to read answers from the repo fixture and says so in the server log."
+                  : "◇ The pages read the data tables from the repo fixtures. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to read them from Supabase; HH_DATA_SOURCE=fixtures pins the files."}
+              </div>
+            )}
             {!health.writable && (
               <div className="note" style={{ color: "#b3261e" }}>
                 ⚠ {health.reason ?? "Writes are failing."} If this mentions a missing table, run supabase/setup.sql in the
@@ -195,7 +214,7 @@ export default function IntegrationsView() {
                             />
                           </div>
                           <span style={{ fontSize: 11, color: "var(--ink-3)", minWidth: 86, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-                            {p.state === "done" ? `✓ ${fmtN(p.total)} rows` : `${fmtN(p.loaded)} / ${fmtN(p.total)}`}
+                            {p.state === "done" ? `✓ ${fmtN(p.total)} rows${p.removed ? ` · ${fmtN(p.removed)} flagged removed` : ""}` : `${fmtN(p.loaded)} / ${fmtN(p.total)}`}
                           </span>
                         </div>
                       )

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CHUNK, loadChunk, tableCounts } from "@/lib/server/supaload";
+import { invalidateReads } from "@/lib/server/supaRead";
 
 /* Data loader endpoint behind the Integrations screen.
 
@@ -44,6 +45,9 @@ export async function POST(req: Request) {
   if (!table) return NextResponse.json({ error: "table is required" }, { status: 400 });
   try {
     const result = await loadChunk(table, offset);
+    // the pages read these tables through a short memory cache — a finished
+    // load clears it so the next read sees the new rows
+    if (result.done) invalidateReads();
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (e) {
     // surface table/status-shaped messages only — no URLs or keys

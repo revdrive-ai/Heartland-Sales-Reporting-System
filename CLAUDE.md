@@ -12,8 +12,16 @@
   `alignmentKey.ts` for the pattern). localStorage keys keep the demo's names
   (`hhAlign`, `hhObj`, `hhWelcomeDone`).
 - **Views never touch data directly** — they import from `lib/repo/` only.
-  `lib/repo/index.ts` is server-only (reads `data/nielsen/*.json.gz` via fs); call it from
-  server components and pass props down. `lib/repo/client.ts` holds the shared stores
+  `lib/repo/index.ts` is server-only; call it from server components and pass props down.
+  It answers from **Supabase** (the tables in `supabase/setup.sql`, read with the service
+  role through `lib/server/supaRead.ts`, paged 1,000 rows at a time and cached ~10 min)
+  whenever `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set, else from the repo
+  fixtures (`data/nielsen/*.json.gz`, `data/promos/`, `data/shipments/`, `lib/fixtures/`);
+  `HH_DATA_SOURCE=fixtures` pins the files. A failed Supabase read falls back to the
+  fixture for that dataset and logs `[repo] …`. `/api/health` reports the live source with
+  counts; the Integrations loader clears the read cache when a load finishes and flags
+  promotions / promo_lines the fixture no longer carries as `removed_at_source`.
+  `lib/repo/client.ts` holds the shared stores
   (plan events, budgets, adjustments, registrations, price edits) — server-side via
   `/api/state` (`lib/server/appstate.ts`: Supabase when `SUPABASE_URL` +
   `SUPABASE_SERVICE_ROLE_KEY` are set, else `data/store/` on disk), with localStorage
