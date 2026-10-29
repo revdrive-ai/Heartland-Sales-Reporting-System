@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getScope } from "@/lib/server/scope";
 import { buildLeadership, selectionFrom } from "@/lib/server/leadership";
-import { DEFAULT_SELECTION, LEADERSHIP_REPORT, PERIODS } from "@/lib/leadership/report";
+import { DEFAULT_SELECTION, DIM_LABEL, LEADERSHIP_REPORT, PERIODS, measureName } from "@/lib/leadership/report";
 
 /* The Leadership team report as one Excel workbook: a Selection sheet, then
    every page of the report as a sheet of its own, in the order it prints.
@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
   const scope = await getScope();
   const sel = selectionFrom(sp, DEFAULT_SELECTION);
   const data = await buildLeadership(sel, scope.active ? scope.marketCodes : null, scope.active ? scope.label : "All customers");
-  const measure = sel.measure === "dollars" ? "Sales $" : "Units";
+  const measure = measureName(data.source, sel.measure);
+  const money = data.source.money, qty = data.source.qty;
   const chg = (cur: number, ly: number) => (ly ? Math.round((cur / ly - 1) * 1000) / 10 : null);
 
   const wb = XLSX.utils.book_new();
@@ -25,9 +26,9 @@ export async function GET(req: NextRequest) {
     ["Against", data.period.lyLabel],
     ["Customer", customerName],
     ["Brand", sel.brand === "ALL" ? "All brands" : sel.brand],
-    ["Item", sel.item === "ALL" ? "All items" : data.options.items.find((i) => i.upc === sel.item)?.name ?? sel.item],
+    ["Item", sel.item === "ALL" ? "All items" : data.options.items.find((i) => i.key === sel.item)?.name ?? sel.item],
     ["Measure", measure],
-    ["Source", `${data.source.name} through ${data.source.edge}`],
+    ["Source", `${data.source.name} through ${data.source.edge}${data.source.partialWeek ? " (week in progress)" : ""}`],
     ["Note", data.source.note],
     ["Exported", new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC"],
   ]), "Selection");
@@ -39,9 +40,15 @@ export async function GET(req: NextRequest) {
         [page.title, data.period.label, data.period.range],
         [],
         ["Measure", "This period", data.period.lyLabel, "Change %"],
-        ["Sales $", Math.round(k.dollars.cur), Math.round(k.dollars.ly), chg(k.dollars.cur, k.dollars.ly)],
-        ["Units", Math.round(k.units.cur), Math.round(k.units.ly), chg(k.units.cur, k.units.ly)],
-        ["Price per unit", k.units.cur ? Math.round((k.dollars.cur / k.units.cur) * 100) / 100 : null, k.units.ly ? Math.round((k.dollars.ly / k.units.ly) * 100) / 100 : null, null],
+        [money, Math.round(k.dollars.cur), Math.round(k.dollars.ly), chg(k.dollars.cur, k.dollars.ly)],
+        ...(k.offInvoice.cur || k.offInvoice.ly
+          ? [
+              ["Gross sales", Math.round(k.gross.cur), Math.round(k.gross.ly), chg(k.gross.cur, k.gross.ly)],
+              ["Off-invoice", Math.round(k.offInvoice.cur), Math.round(k.offInvoice.ly), chg(k.offInvoice.cur, k.offInvoice.ly)],
+            ]
+          : []),
+        [qty, Math.round(k.units.cur), Math.round(k.units.ly), chg(k.units.cur, k.units.ly)],
+        [qty === "Cases" ? "Net per case" : "Price per unit", k.units.cur ? Math.round((k.dollars.cur / k.units.cur) * 100) / 100 : null, k.units.ly ? Math.round((k.dollars.ly / k.units.ly) * 100) / 100 : null, null],
         ["Customers selling", k.customers, null, null],
         ["Items selling", k.items, null, null],
         [],
@@ -51,11 +58,11 @@ export async function GET(req: NextRequest) {
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Summary");
     } else if (page.kind === "rank") {
       const r = data.ranks[page.key];
-      const head = page.dim === "customer" ? "Customer" : page.dim === "brand" ? "Brand" : "Item";
+      const head = DIM_LABEL[page.dim];
       const rows: (string | number | null)[][] = [
         [page.title, data.period.label, data.period.range],
         [],
-        ["#", head, ...(page.dim === "item" ? ["Brand", "UPC"] : []), measure, `${data.period.lyLabel} ${measure}`, "Change %", "Share %"],
+        ["#", head, ...(page.dim === "item" ? ["Brand", "Code"] : []), measure, `${data.period.lyLabel} ${measure}`, "Change %", "Share %"],
         ...r.rows.map((x, i) => [i + 1, x.name, ...(page.dim === "item" ? [x.sub ?? "", x.key] : []), Math.round(x.cur), Math.round(x.ly), chg(x.cur, x.ly), Math.round(x.share * 10) / 10]),
         ["", "Total", ...(page.dim === "item" ? ["", ""] : []), Math.round(r.total), Math.round(r.totalLy), chg(r.total, r.totalLy), 100],
       ];

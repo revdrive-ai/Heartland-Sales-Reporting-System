@@ -46,9 +46,19 @@ export type ShipmentWeeklyRow = {
   cases: number;          // as shipped
   units_per_case: number | null;
   units: number | null;   // cases × units_per_case; null when the pack is unknown
-  pack_source: "price_list" | "description" | null;  // where the pack came from
+  pack_source: "price_list" | "description" | "dim_product" | null;  // where the pack came from
   source_row: "actual" | "last_year";  // which workbook row it came from — provenance only
   source_file: string;
+};
+
+/** One fiscal period of Heartland's close calendar (dim_fiscal_period from
+    Fabric): FY2026 P1 runs Jan 1 – Feb 1, P12 ends Jan 1, 2027. Periods make
+    quarters in threes. */
+export type FiscalPeriod = {
+  fiscal_year: number;
+  period: number;        // 1–12
+  start_date: string;    // ISO date, inclusive
+  end_date: string;      // ISO date, inclusive
 };
 
 export type NielsenWeeklyRow = {

@@ -25,17 +25,13 @@ export function dataSource(): DataSource {
 
 const PAGE = 1000;
 const TTL_MS = 10 * 60 * 1000;
-const cache = new Map<string, { at: number; rows: Promise<unknown[]> }>();
+const cache = new Map<string, { at: number; rows: Promise<unknown> }>();
+
+const headers = () => ({ apikey: SB_KEY!, authorization: `Bearer ${SB_KEY!}` });
 
 async function page(table: string, query: string, from: number, to: number): Promise<{ rows: unknown[]; total: number | null }> {
   const r = await fetch(`${SB_URL}/rest/v1/${table}?${query}`, {
-    headers: {
-      apikey: SB_KEY!,
-      authorization: `Bearer ${SB_KEY!}`,
-      range: `${from}-${to}`,
-      "range-unit": "items",
-      prefer: "count=exact",
-    },
+    headers: { ...headers(), range: `${from}-${to}`, "range-unit": "items", prefer: "count=exact" },
     cache: "no-store",
   });
   if (!r.ok) throw new Error(`${table} read failed: ${r.status} ${(await r.text()).slice(0, 160)}`);
@@ -61,6 +57,28 @@ export async function sbRows<T>(table: string, query: string): Promise<T[]> {
   cache.set(key, { at: Date.now(), rows });
   rows.catch(() => cache.delete(key)); // a failed read is not kept
   return rows as Promise<T[]>;
+}
+
+/** One call of a database function (PostgREST rpc), cached like a table
+    read. For reads that return one json value — a year of sales as one
+    compact array — instead of sixty pages of rows. */
+export async function sbRpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const key = `rpc:${fn}:${JSON.stringify(args)}`;
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.rows as Promise<T>;
+  const out = (async () => {
+    const r = await fetch(`${SB_URL}/rest/v1/rpc/${fn}`, {
+      method: "POST",
+      headers: { ...headers(), "content-type": "application/json" },
+      body: JSON.stringify(args),
+      cache: "no-store",
+    });
+    if (!r.ok) throw new Error(`${fn} failed: ${r.status} ${(await r.text()).slice(0, 160)}`);
+    return (await r.json()) as T;
+  })();
+  cache.set(key, { at: Date.now(), rows: out });
+  out.catch(() => cache.delete(key));
+  return out;
 }
 
 /** Forget every cached table — called by the loader once a load finishes,

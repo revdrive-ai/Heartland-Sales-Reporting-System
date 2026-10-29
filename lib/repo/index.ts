@@ -22,6 +22,7 @@ import { gunzipSync } from "node:zlib";
 import path from "node:path";
 import type { Market, Item, NielsenWeeklyRow, ShipmentWeeklyRow } from "@/lib/types/db";
 import { dataSource, sbRows } from "@/lib/server/supaRead";
+import * as fabric from "@/lib/server/fabric";
 import marketsJson from "@/lib/fixtures/markets.json";
 import itemsJson from "@/lib/fixtures/items.json";
 import itemXwalkJson from "@/lib/fixtures/item-crosswalk.json";
@@ -287,19 +288,46 @@ export type PriceRow = {
 
 type PriceRowRaw = Omit<PriceRow, "upc">;
 
+/** The app's own price_list table — the workbook prices the ingest loaded. */
+const appPriceRows = async (): Promise<PriceRowRaw[]> =>
+  (await sbRows<Record<string, unknown>>(
+    "price_list",
+    "select=fg,effective_from,upc_core,item,brand,category,form,segment,units_per_case,case_price,unit_price,source&order=fg.asc,effective_from.asc"
+  )).map((r) => ({
+    fg: str(r.fg), upc_core: str(r.upc_core), item: str(r.item), brand: str(r.brand),
+    category: str(r.category), form: str(r.form), segment: str(r.segment),
+    units_per_case: num(r.units_per_case), case_price: num(r.case_price), unit_price: num(r.unit_price),
+    effective_from: str(r.effective_from).slice(0, 10), source: str(r.source),
+  }));
+
+/** Syspro's list price from Fabric (dim_list_price, the LIST contract, dated
+    by start_date) leads; the workbook price list fills in only the items
+    Fabric does not price — by stock code or by UPC — so an item never
+    carries two sources' prices at once. */
 const priceRows = () =>
   viaDb<PriceRowRaw[]>(
     "price list",
-    async () =>
-      (await sbRows<Record<string, unknown>>(
-        "price_list",
-        "select=fg,effective_from,upc_core,item,brand,category,form,segment,units_per_case,case_price,unit_price,source&order=fg.asc,effective_from.asc"
-      )).map((r) => ({
-        fg: str(r.fg), upc_core: str(r.upc_core), item: str(r.item), brand: str(r.brand),
-        category: str(r.category), form: str(r.form), segment: str(r.segment),
-        units_per_case: num(r.units_per_case), case_price: num(r.case_price), unit_price: num(r.unit_price),
-        effective_from: str(r.effective_from).slice(0, 10), source: str(r.source),
-      })),
+    async () => {
+      const [lp, app] = await Promise.all([
+        fabric.listPrices().catch((e) => {
+          console.error(`[repo] list price: Fabric read failed, workbook prices only — ${e instanceof Error ? e.message : e}`);
+          return [] as fabric.ListPriceRow[];
+        }),
+        appPriceRows(),
+      ]);
+      const fromFabric: PriceRowRaw[] = lp
+        .filter((r) => r.start_date && (r.case_price !== null || r.unit_price !== null))
+        .map((r) => ({
+          fg: r.stock_code, upc_core: fabric.productUpcKey(r), item: r.description ?? r.stock_code, brand: r.brand ?? "",
+          category: r.category ?? "", form: r.subcategory ?? "", segment: r.product_class_desc ?? "",
+          units_per_case: r.units_per_case, case_price: r.case_price, unit_price: r.unit_price,
+          effective_from: r.start_date, source: `Fabric list price${r.contract ? ` (${r.contract})` : ""}`,
+        }));
+      const haveFg = new Set(fromFabric.map((r) => r.fg));
+      const haveCore = new Set(fromFabric.map((r) => r.upc_core).filter(Boolean));
+      const rest = app.filter((r) => !haveFg.has(r.fg) && !(r.upc_core && haveCore.has(r.upc_core)));
+      return [...fromFabric, ...rest].sort((a, b) => a.fg.localeCompare(b.fg) || a.effective_from.localeCompare(b.effective_from));
+    },
     () => (priceListJson as { rows: PriceRowRaw[] }).rows
   );
 
@@ -427,25 +455,63 @@ function loadShipmentsFile(account_code: string): ShipmentWeeklyRow[] {
   return rows;
 }
 
-/** Every shipment row for an account, every year on file; [] when none. An
-    account the table does not hold yet answers from the fixture, so the
-    Stand card keeps reading until the loader has run. */
+/** The app's own shipments_weekly table (the Retail Planner workbook rows the
+    loader put there); an account it does not hold answers from the fixture. */
+async function shipmentsTable(account_code: string): Promise<ShipmentWeeklyRow[]> {
+  const rows = await sbRows<Record<string, unknown>>(
+    "shipments_weekly",
+    `account_code=eq.${encodeURIComponent(account_code)}&select=account_code,account_name,item_code,item_name,upc,brand,week_ending,cases,units_per_case,units,pack_source,source_row,source_file&order=week_ending.asc,item_code.asc`
+  );
+  if (!rows.length) return loadShipmentsFile(account_code);
+  return rows.map((r) => ({
+    account_code: str(r.account_code), account_name: str(r.account_name), item_code: str(r.item_code), item_name: str(r.item_name),
+    upc: r.upc === null || r.upc === undefined ? null : str(r.upc), brand: str(r.brand), week_ending: str(r.week_ending).slice(0, 10),
+    cases: Number(r.cases ?? 0), units_per_case: num(r.units_per_case), units: num(r.units),
+    pack_source: (r.pack_source as ShipmentWeeklyRow["pack_source"]) ?? null,
+    source_row: (r.source_row as ShipmentWeeklyRow["source_row"]) ?? "actual", source_file: str(r.source_file),
+  }));
+}
+
+/** Every shipment row for an account, every year on file; [] when none.
+
+    With Fabric's tables on hand the shipments are Syspro's invoiced cases
+    (fact_shipments_weekly) for the ship-tos behind the account — a NIQ
+    market code through customer_xref (ALB-JEWEL → JWL100), or the parent
+    account named like the code (PUBLIX → Publix) — summed per item × week,
+    with the case pack and NIQ UPC tie from dim_product. An account no
+    Syspro customer stands behind, or a deployment without Supabase, answers
+    from the workbook rows (the table, then the fixture). */
 export async function getShipments(account_code: string): Promise<ShipmentWeeklyRow[]> {
   return viaDb<ShipmentWeeklyRow[]>(
     `shipments ${account_code}`,
     async () => {
-      const rows = await sbRows<Record<string, unknown>>(
-        "shipments_weekly",
-        `account_code=eq.${encodeURIComponent(account_code)}&select=account_code,account_name,item_code,item_name,upc,brand,week_ending,cases,units_per_case,units,pack_source,source_row,source_file&order=week_ending.asc,item_code.asc`
-      );
-      if (!rows.length) return loadShipmentsFile(account_code);
-      return rows.map((r) => ({
-        account_code: str(r.account_code), account_name: str(r.account_name), item_code: str(r.item_code), item_name: str(r.item_name),
-        upc: r.upc === null || r.upc === undefined ? null : str(r.upc), brand: str(r.brand), week_ending: str(r.week_ending).slice(0, 10),
-        cases: Number(r.cases ?? 0), units_per_case: num(r.units_per_case), units: num(r.units),
-        pack_source: (r.pack_source as ShipmentWeeklyRow["pack_source"]) ?? null,
-        source_row: (r.source_row as ShipmentWeeklyRow["source_row"]) ?? "actual", source_file: str(r.source_file),
-      }));
+      const codes = await fabric.customerCodesForAccount(account_code);
+      if (!codes.length) return shipmentsTable(account_code);
+      const y = new Date().getUTCFullYear();
+      const [sales, prod, all, mk] = await Promise.all([fabric.sales("2023-01-01", `${y + 1}-12-31`, codes), fabric.products(), items(), markets()]);
+      const prodBy = new Map(prod.map((p) => [p.stock_code, p]));
+      const upcByKey = new Map(all.map((i) => [upcCore(i.upc), i.upc]));
+      const account_name = mk.find((m) => m.code === account_code)?.name ?? account_code;
+      const agg = new Map<string, ShipmentWeeklyRow>();
+      for (const s of sales) {
+        if (!s.cases) continue;
+        const k = `${s.stock_code}|${s.week_ending}`;
+        let r = agg.get(k);
+        if (!r) {
+          const p = prodBy.get(s.stock_code);
+          const pack = p?.units_per_case && p.units_per_case > 0 ? p.units_per_case : null;
+          r = {
+            account_code, account_name, item_code: s.stock_code, item_name: p?.description ?? s.stock_code,
+            upc: (p ? upcByKey.get(fabric.productUpcKey(p)) : undefined) ?? null, brand: p?.brand ?? "",
+            week_ending: s.week_ending, cases: 0, units_per_case: pack, units: pack ? 0 : null,
+            pack_source: pack ? "dim_product" : null, source_row: "actual", source_file: "fabric:fact_shipments_weekly",
+          };
+          agg.set(k, r);
+        }
+        r.cases += s.cases;
+        if (r.units !== null && r.units_per_case) r.units = r.cases * r.units_per_case;
+      }
+      return [...agg.values()].sort((a, b) => a.week_ending.localeCompare(b.week_ending) || a.item_code.localeCompare(b.item_code));
     },
     () => loadShipmentsFile(account_code)
   );

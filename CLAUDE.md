@@ -21,6 +21,23 @@
   fixture for that dataset and logs `[repo] …`. `/api/health` reports the live source with
   counts; the Integrations loader clears the read cache when a load finishes and flags
   promotions / promo_lines the fixture no longer carries as `removed_at_source`.
+- **Fabric is the system of record for internal data.** The POC project is loaded from
+  Fabric (Syspro by way of the warehouse; `etl_load_log` records each load):
+  `fact_shipments_weekly` (invoiced sales by ship-to × stock code × Saturday, net / gross /
+  off-invoice dollars and CASES), `dim_customer` (ship-to → parent account, channel,
+  region), `dim_product` (brand, category, case pack, `nielsen_upc` tie), `dim_list_price`,
+  `dim_fiscal_period`, `customer_xref` (Telus → Syspro codes → NIQ market codes) and the
+  `telus_*` tables. `lib/server/fabric.ts` is the ONLY module that knows those shapes; it
+  reads through migration 00015's objects (`v_sales_weekly`, `rpt_sales_weekly(from, to,
+  customers[])` — one json array per calendar year —, `v_sales_products`, `v_list_price`).
+  What reads Fabric: the Leadership report's sales (`salesFacts.ts`, falling back to the
+  NIQ retail read), `getShipments` (the ship-tos behind an account through `customer_xref`,
+  cases × `dim_product.units_per_case`), and `getPriceList` (Fabric's LIST price first, the
+  workbook `price_list` filling only items Fabric does not price). What still reads the
+  app's own tables: NIQ facts / items / markets, the Telus promotion book (Fabric's
+  `telus_cust_item` carries no planned or actual dollars yet), the crosswalks. UPCs tie by
+  digits with leading zeros dropped (`upcKey`): the NIQ 12-digit upc, `nielsen_upc` (11)
+  and `upc_core` all reduce to the same key.
   `lib/repo/client.ts` holds the shared stores
   (plan events, budgets, adjustments, registrations, price edits) — server-side via
   `/api/state` (`lib/server/appstate.ts`: Supabase when `SUPABASE_URL` +
@@ -36,9 +53,13 @@
   by customer, brand and item — one selection in the URL (period, cust, brand, item, m, sort),
   one page at a time or every page as a printable presentation (`page=all`), and the same
   pages as one Excel workbook (`/api/leadership/export`). Pages are defined in
-  `lib/leadership/report.ts`; the numbers come through ONE seam, `lib/server/salesFacts.ts`,
-  which today reads NIQ retail dollars/units for own items and will read the internal sales
-  table loaded from Fabric — nothing above the seam changes when it does.
+  `lib/leadership/report.ts` (customer = parent account, channel, brand, item, matrix); the
+  numbers come through ONE seam, `lib/server/salesFacts.ts`: internal sales from Fabric
+  (net dollars, cases) when the deployment reads Supabase, else the NIQ retail read
+  (retail dollars, units). The source block carries the words (`money`, `qty`), so the
+  view and the export never hard-code "sales" or "units". Periods resolve against
+  `dim_fiscal_period` when it is on hand (PTD, fiscal QTD/YTD/last FY), calendar otherwise.
+  The top bar's scope (NIQ market codes) reaches Syspro ship-tos through `customer_xref`.
 - **Shipments (sell-in)** come from the Retail Planner export in `data/raw/` (Publix and
   Jewel, weekly by item, Actual + Last Year) via `scripts/ingest_shipments.py` into
   `data/shipments/<ACCOUNT>.json.gz` + `meta.json` (unmatched item codes listed there);

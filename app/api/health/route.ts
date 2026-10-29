@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getState, setState } from "@/lib/server/appstate";
 import { dataSource } from "@/lib/server/supaRead";
+import { fabricOn, fabricStatus } from "@/lib/server/fabric";
 import { listItems, listMarkets, listPromotions, listWeekEndings } from "@/lib/repo";
 
 /* Connection health. Reports which backend the shared state runs on
@@ -22,6 +23,16 @@ export async function GET() {
   } catch (e) {
     data = { source, error: e instanceof Error ? e.message.slice(0, 80) : "unknown" };
   }
+  // the Fabric feed: when it last loaded and how far the invoiced sales run
+  let fabric: Record<string, unknown> | null = null;
+  if (fabricOn()) {
+    try {
+      fabric = await fabricStatus();
+    } catch (e) {
+      fabric = { error: e instanceof Error ? e.message.slice(0, 80) : "unknown" };
+    }
+  }
+  data = { ...data, fabric };
   try {
     const stamp = new Date().toISOString();
     await setState("health", { at: stamp });

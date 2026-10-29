@@ -1,38 +1,38 @@
 import { getSalesFacts, type SalesFact } from "@/lib/server/salesFacts";
-import { LEADERSHIP_REPORT, resolvePeriod, type LeadershipData, type RankRow, type Selection } from "@/lib/leadership/report";
+import { LEADERSHIP_REPORT, PERIOD_KEYS, resolvePeriod, type Dim, type LeadershipData, type RankRow, type Selection } from "@/lib/leadership/report";
 
 /* Build every page of the Leadership team report for one selection. One
    pass over the facts: the period's weeks and their year-ago partners are
-   summed per customer, brand and item, and the pages are cuts of those
-   sums. Cheap enough to do on every request; the facts themselves are
+   summed per customer, channel, brand and item, and the pages are cuts of
+   those sums. Cheap enough to do on every request; the facts themselves are
    cached in the seam. */
 
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export async function buildLeadership(sel: Selection, scopeCustomers: string[] | null, scopeLabel: string): Promise<LeadershipData> {
-  const { rows, source, customers } = await getSalesFacts(scopeCustomers ?? undefined);
-  const period = resolvePeriod(sel.period, source.weeks);
+export async function buildLeadership(sel: Selection, scopeMarkets: string[] | null, scopeLabel: string): Promise<LeadershipData> {
+  const { rows, source, customers } = await getSalesFacts(scopeMarkets ?? undefined);
+  const period = resolvePeriod(sel.period, source.weeks, source.fiscal);
   const cur = new Set(period.weeks), ly = new Set(period.lyWeeks);
-  const val = (r: SalesFact) => (sel.measure === "dollars" ? r.dollars : r.units);
+  const val = (r: SalesFact) => (sel.measure === "dollars" ? r.dollars : r.qty);
 
   // the selectors offer what the scope holds
   const brands = [...new Set(rows.map((r) => r.brand))].sort();
-  const itemMap = new Map<string, { upc: string; name: string; brand: string }>();
-  for (const r of rows) if (!itemMap.has(r.upc) && (sel.brand === "ALL" || r.brand === sel.brand)) itemMap.set(r.upc, { upc: r.upc, name: r.item, brand: r.brand });
+  const itemMap = new Map<string, { key: string; name: string; brand: string }>();
+  for (const r of rows) if (!itemMap.has(r.item) && (sel.brand === "ALL" || r.brand === sel.brand)) itemMap.set(r.item, { key: r.item, name: r.itemName, brand: r.brand });
   const items = [...itemMap.values()].sort((a, b) => a.name.localeCompare(b.name));
 
   // the selection narrows the facts; the ranking pages then cut what is left
   const inSel = (r: SalesFact) =>
-    (sel.customer === "ALL" || r.customer === sel.customer) && (sel.brand === "ALL" || r.brand === sel.brand) && (sel.item === "ALL" || r.upc === sel.item);
+    (sel.customer === "ALL" || r.customer === sel.customer) && (sel.brand === "ALL" || r.brand === sel.brand) && (sel.item === "ALL" || r.item === sel.item);
 
   type Acc = { name: string; sub?: string; cur: number; ly: number };
-  const by: Record<"customer" | "brand" | "item", Map<string, Acc>> = { customer: new Map(), brand: new Map(), item: new Map() };
+  const by: Record<Dim, Map<string, Acc>> = { customer: new Map(), channel: new Map(), brand: new Map(), item: new Map() };
   const bump = (m: Map<string, Acc>, key: string, name: string, sub: string | undefined, v: number, side: "cur" | "ly") => {
     const a = m.get(key) ?? { name, sub, cur: 0, ly: 0 };
     a[side] += v;
     m.set(key, a);
   };
-  const kpi = { dollars: { cur: 0, ly: 0 }, units: { cur: 0, ly: 0 } };
+  const kpi = { dollars: { cur: 0, ly: 0 }, gross: { cur: 0, ly: 0 }, offInvoice: { cur: 0, ly: 0 }, units: { cur: 0, ly: 0 } };
   const monthsCur = Array(12).fill(0) as number[], monthsLy = Array(12).fill(0) as number[];
   const monthSeen = Array(12).fill(false) as boolean[], monthSeenLy = Array(12).fill(false) as boolean[];
   const matrix = new Map<string, { name: string; cells: Map<string, number> }>();
@@ -50,12 +50,13 @@ export async function buildLeadership(sel: Selection, scopeCustomers: string[] |
     if (y === trendYearLy) { monthsLy[m] += v; monthSeenLy[m] = true; }
     const side = cur.has(r.week_ending) ? "cur" : ly.has(r.week_ending) ? "ly" : null;
     if (!side) continue;
-    kpi.dollars[side] += r.dollars; kpi.units[side] += r.units;
+    kpi.dollars[side] += r.dollars; kpi.gross[side] += r.gross; kpi.offInvoice[side] += r.offInvoice; kpi.units[side] += r.qty;
     bump(by.customer, r.customer, r.customerName, undefined, v, side);
+    bump(by.channel, r.channel, r.channel, undefined, v, side);
     bump(by.brand, r.brand, r.brand, undefined, v, side);
-    bump(by.item, r.upc, r.item, r.brand, v, side);
+    bump(by.item, r.item, r.itemName, r.brand, v, side);
     if (side === "cur") {
-      custSeen.add(r.customer); itemSeen.add(r.upc);
+      custSeen.add(r.customer); itemSeen.add(r.item);
       const row = matrix.get(r.customer) ?? { name: r.customerName, cells: new Map() };
       row.cells.set(r.brand, (row.cells.get(r.brand) ?? 0) + v);
       matrix.set(r.customer, row);
@@ -89,7 +90,7 @@ export async function buildLeadership(sel: Selection, scopeCustomers: string[] |
   const totals = mBrands.map((_, i) => mRows.reduce((s, r) => s + r.cells[i], 0));
 
   return {
-    source: { name: source.name, note: source.note, edge: source.edge },
+    source: { name: source.name, note: source.note, edge: source.edge, partialWeek: source.partialWeek, money: source.money, qty: source.qty },
     period,
     selection: sel,
     options: { customers, brands, items },
@@ -106,7 +107,7 @@ export function selectionFrom(sp: Record<string, string | string[] | undefined>,
   const one = (k: string) => (Array.isArray(sp[k]) ? (sp[k] as string[])[0] : (sp[k] as string | undefined));
   const period = one("period"), measure = one("m"), sort = one("sort");
   return {
-    period: (["mtd", "qtd", "ytd", "r13", "r52", "fy"] as const).includes(period as Selection["period"]) ? (period as Selection["period"]) : defaults.period,
+    period: PERIOD_KEYS.includes(period as Selection["period"]) ? (period as Selection["period"]) : defaults.period,
     customer: one("cust") || defaults.customer,
     brand: one("brand") || defaults.brand,
     item: one("item") || defaults.item,

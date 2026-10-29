@@ -11,8 +11,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type Health = {
   backend: string; writable: boolean; reason?: string;
   /** where the data tables are read from, with counts through the repo layer */
-  data?: { source: string; markets?: number; items?: number; promotions?: number; weeks?: number; data_edge?: string | null; error?: string };
+  data?: {
+    source: string; markets?: number; items?: number; promotions?: number; weeks?: number; data_edge?: string | null; error?: string;
+    /** the Fabric feed into the project: last load and the sales edge */
+    fabric?: { loaded_at?: string | null; tables?: number; failed?: number; sales_edge?: string | null; error?: string } | null;
+  };
 };
+
+const fmtWhen = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 type TableInfo = { table: string; rows: number };
 type Progress = { loaded: number; total: number; state: "idle" | "loading" | "done" | "error"; error?: string; removed?: number };
 
@@ -135,11 +141,22 @@ export default function IntegrationsView() {
                     : badge(true, `${fmtN(health.data.markets ?? 0)} markets · ${fmtN(health.data.items ?? 0)} items · ${fmtN(health.data.promotions ?? 0)} promotions · ${fmtN(health.data.weeks ?? 0)} NIQ weeks${health.data.data_edge ? ` through ${health.data.data_edge}` : ""}`)}
                 </>
               )}
+              {health.data?.fabric && (
+                <>
+                  <span className="pill">fabric feed</span>
+                  {health.data.fabric.error
+                    ? badge(false, `not readable — ${health.data.fabric.error}`)
+                    : badge(
+                        (health.data.fabric.failed ?? 0) === 0,
+                        `${fmtN(health.data.fabric.tables ?? 0)} tables${health.data.fabric.loaded_at ? ` loaded ${fmtWhen(health.data.fabric.loaded_at)}` : ""}${(health.data.fabric.failed ?? 0) ? ` · ${health.data.fabric.failed} failed` : ""}${health.data.fabric.sales_edge ? ` · sales through ${health.data.fabric.sales_edge}` : ""}`
+                      )}
+                </>
+              )}
             </div>
             {health.data && (
               <div className="note">
                 {health.data.source === "supabase"
-                  ? "◇ The pages read the data tables (NIQ facts, items, promotions, price list, shipments) from the connected Supabase project. A table that fails to read answers from the repo fixture and says so in the server log."
+                  ? "◇ The pages read the connected Supabase project. Internal sales (the Leadership report), shipments and list prices come from the tables Fabric loads there (fact_shipments_weekly, dim_customer, dim_product, dim_list_price, dim_fiscal_period); NIQ facts, items, the Telus promotion book and the crosswalks from the app's own tables. A table that fails to read answers from the repo fixture and says so in the server log."
                   : "◇ The pages read the data tables from the repo fixtures. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to read them from Supabase; HH_DATA_SOURCE=fixtures pins the files."}
               </div>
             )}

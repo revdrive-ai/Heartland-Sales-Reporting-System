@@ -6,8 +6,8 @@ import { Bar } from "react-chartjs-2";
 import { cssToken, gridOptions, useThemeTick } from "@/components/charts/themed";
 import WeekNote from "@/components/WeekNote";
 import {
-  LEADERSHIP_REPORT, PERIODS, fmtFor, fmtPct, pctChange,
-  type LeadershipData, type RankRow, type ReportPage, type Selection,
+  DIM_LABEL, LEADERSHIP_REPORT, PERIODS, fmtFor, fmtPct, measureName, measureWord, pctChange,
+  type LeadershipData, type RankRow, type ReportPage, type Selection, type SourceWords,
 } from "@/lib/leadership/report";
 
 /* The Leadership team report on screen.
@@ -28,23 +28,27 @@ function Delta({ cur, ly, small }: { cur: number; ly: number; small?: boolean })
 }
 
 function Kpis({ data }: { data: LeadershipData }) {
-  const { kpis, period, selection } = data;
+  const { kpis, period, selection, source } = data;
   const fm = fmtFor("dollars"), fu = fmtFor("units");
   const lyLabel = period.lyLabel;
+  const oiPct = kpis.gross.cur ? (kpis.offInvoice.cur / kpis.gross.cur) * 100 : null;
   return (
     <div className="kpis ldr-kpis">
       <div className="kpi">
-        <div className="k-top"><span className="k-label">Sales · {period.label}</span></div>
+        <div className="k-top"><span className="k-label">{source.money} · {period.label}</span></div>
         <div className="k-val">{fm(kpis.dollars.cur)}</div>
         <div className="k-sub"><Delta cur={kpis.dollars.cur} ly={kpis.dollars.ly} /><span className="dim"> vs {lyLabel} {fm(kpis.dollars.ly)}</span></div>
+        {kpis.offInvoice.cur !== 0 && (
+          <div className="k-sub dim">gross {fm(kpis.gross.cur)} · off-invoice {fm(kpis.offInvoice.cur)}{oiPct !== null ? ` (${oiPct.toFixed(1)}%)` : ""}</div>
+        )}
       </div>
       <div className="kpi">
-        <div className="k-top"><span className="k-label">Units · {period.label}</span></div>
+        <div className="k-top"><span className="k-label">{source.qty} · {period.label}</span></div>
         <div className="k-val">{fu(kpis.units.cur)}</div>
         <div className="k-sub"><Delta cur={kpis.units.cur} ly={kpis.units.ly} /><span className="dim"> vs {lyLabel} {fu(kpis.units.ly)}</span></div>
       </div>
       <div className="kpi">
-        <div className="k-top"><span className="k-label">Price per unit</span></div>
+        <div className="k-top"><span className="k-label">{source.qty === "Cases" ? "Net per case" : "Price per unit"}</span></div>
         <div className="k-val">{kpis.units.cur ? `$${(kpis.dollars.cur / kpis.units.cur).toFixed(2)}` : "—"}</div>
         <div className="k-sub">
           {kpis.units.ly ? <><Delta cur={kpis.dollars.cur / Math.max(kpis.units.cur, 1)} ly={kpis.dollars.ly / kpis.units.ly} /><span className="dim"> vs {lyLabel} ${(kpis.dollars.ly / kpis.units.ly).toFixed(2)}</span></> : <span className="dim">no year-ago read</span>}
@@ -82,24 +86,23 @@ function Trend({ data, id }: { data: LeadershipData; id: string }) {
     <div className="card ldr-trend">
       <div className="c-head" style={{ flexWrap: "wrap", gap: 10 }}>
         <h3>Month by month — FY{year} against FY{+year - 1}<WeekNote year={+year} vs={+year - 1} /></h3>
-        <span className="sub">{data.selection.measure === "dollars" ? "sales dollars" : "units"} · through {data.source.edge}</span>
+        <span className="sub">{measureWord(data.source, data.selection.measure)} · through {data.source.edge}{data.source.partialWeek ? " (week in progress)" : ""}</span>
       </div>
       <div className="chartbox ldr-chart"><Bar key={id + tick} data={ds} options={opts} /></div>
     </div>
   );
 }
 
-function RankTable({ rows, total, totalLy, measure, dim, top }: { rows: RankRow[]; total: number; totalLy: number; measure: Selection["measure"]; dim: string; top?: number }) {
+function RankTable({ rows, total, totalLy, measure, dim, top, src }: { rows: RankRow[]; total: number; totalLy: number; measure: Selection["measure"]; dim: keyof typeof DIM_LABEL; top?: number; src: SourceWords }) {
   const fmt = fmtFor(measure);
-  const head = dim === "customer" ? "Customer" : dim === "brand" ? "Brand" : "Item";
   return (
     <div className="ldr-tablewrap">
       <table className="revtable ldrtable">
         <thead>
           <tr>
             <th className="rk">#</th>
-            <th>{head}</th>
-            <th className="num">{measure === "dollars" ? "Sales" : "Units"}</th>
+            <th>{DIM_LABEL[dim]}</th>
+            <th className="num">{measureName(src, measure)}</th>
             <th className="num">Last year</th>
             <th className="num">Change</th>
             <th className="num sh">Share</th>
@@ -177,9 +180,9 @@ function PageBody({ page, data, sheet }: { page: ReportPage; data: LeadershipDat
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         <div className="c-head" style={{ padding: "12px 16px 8px", flexWrap: "wrap", gap: 8 }}>
           <h3>{page.title}</h3>
-          <span className="sub">{data.period.label} · {data.period.range} · vs {data.period.lyLabel}{page.top ? ` · top ${page.top} by ${data.selection.sort === "change" ? "change" : data.selection.sort === "name" ? "name" : data.selection.measure === "dollars" ? "sales" : "units"}` : ""}</span>
+          <span className="sub">{data.period.label} · {data.period.range} · vs {data.period.lyLabel}{page.top ? ` · top ${page.top} by ${data.selection.sort === "change" ? "change" : data.selection.sort === "name" ? "name" : measureWord(data.source, data.selection.measure)}` : ""}</span>
         </div>
-        <RankTable rows={r.rows} total={r.total} totalLy={r.totalLy} measure={data.selection.measure} dim={page.dim} top={page.top} />
+        <RankTable rows={r.rows} total={r.total} totalLy={r.totalLy} measure={data.selection.measure} dim={page.dim} top={page.top} src={data.source} />
       </div>
     );
   }
@@ -187,7 +190,7 @@ function PageBody({ page, data, sheet }: { page: ReportPage; data: LeadershipDat
     <div className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div className="c-head" style={{ padding: "12px 16px 8px", flexWrap: "wrap", gap: 8 }}>
         <h3>{page.title}</h3>
-        <span className="sub">{data.period.label} · {data.selection.measure === "dollars" ? "sales dollars" : "units"}</span>
+        <span className="sub">{data.period.label} · {measureWord(data.source, data.selection.measure)}</span>
       </div>
       <Matrix data={data} />
     </div>
@@ -218,8 +221,9 @@ export default function LeadershipView({ data, page }: Props) {
   const selLine = [
     sel.customer === "ALL" ? data.scopeLabel : data.options.customers.find((c) => c.code === sel.customer)?.name ?? sel.customer,
     sel.brand === "ALL" ? "all brands" : sel.brand,
-    sel.item === "ALL" ? null : data.options.items.find((i) => i.upc === sel.item)?.name ?? sel.item,
+    sel.item === "ALL" ? null : data.options.items.find((i) => i.key === sel.item)?.name ?? sel.item,
   ].filter(Boolean).join(" · ");
+  const measureLine = measureWord(data.source, sel.measure);
 
   return (
     <div className={"view active ldr" + (all ? " ldrprint" : " ldrone")}>
@@ -256,11 +260,11 @@ export default function LeadershipView({ data, page }: Props) {
         </select>
         <select value={sel.item} onChange={(e) => nav({ item: e.target.value })} aria-label="Item" className="ldr-item">
           <option value="ALL">All items</option>
-          {data.options.items.map((i) => <option key={i.upc} value={i.upc}>{i.name}</option>)}
+          {data.options.items.map((i) => <option key={i.key} value={i.key}>{i.name}</option>)}
         </select>
         <div className="ldr-toggle" role="group" aria-label="Measure">
           <button className={"minichip" + (sel.measure === "dollars" ? " on" : "")} onClick={() => nav({ m: "dollars" })}>$</button>
-          <button className={"minichip" + (sel.measure === "units" ? " on" : "")} onClick={() => nav({ m: "units" })}>Units</button>
+          <button className={"minichip" + (sel.measure === "units" ? " on" : "")} onClick={() => nav({ m: "units" })}>{data.source.qty}</button>
         </div>
         <select value={sel.sort} onChange={(e) => nav({ sort: e.target.value })} aria-label="Sort">
           <option value="value">Sort: largest first</option>
@@ -285,7 +289,7 @@ export default function LeadershipView({ data, page }: Props) {
             <div className="ldr-coverhead"><b>Heartland Foods</b><span>Leadership team report</span></div>
             <h2>{data.period.label}</h2>
             <p className="ldr-coverline">{data.period.range} · against {data.period.lyLabel}</p>
-            <p className="ldr-coverline">{selLine} · {sel.measure === "dollars" ? "sales dollars" : "units"}</p>
+            <p className="ldr-coverline">{selLine} · {measureLine}</p>
             <ol className="ldr-toc">{LEADERSHIP_REPORT.map((p) => <li key={p.key}>{p.title}</li>)}</ol>
             <p className="ldr-coverfoot">Source: {data.source.name} through {data.source.edge}. {data.source.note}{printedAt ? ` Printed ${printedAt}.` : ""}</p>
           </section>
@@ -304,7 +308,7 @@ export default function LeadershipView({ data, page }: Props) {
           <div className="ldr-line noprint"><b>{current.title}</b> · {data.period.label} · {data.period.range} · {selLine}</div>
           <PageBody page={current} data={data} sheet={false} />
           <div className="note" style={{ fontSize: 12 }}>
-            ◇ {data.source.note} The internal sales feed will replace it here without changing the report.
+            ◇ {data.source.note}{data.source.partialWeek ? ` The week ending ${data.source.edge} is still being invoiced.` : ""}
           </div>
         </>
       )}
