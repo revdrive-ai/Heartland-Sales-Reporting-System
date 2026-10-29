@@ -22,7 +22,9 @@ Differences from the transformed template handled here:
   - line_id keeps the promo|component|item recipe; lines that differ only by
     Dist Name (the Mountain West split) append |<dist> to stay unique
 
-Run:  python3 scripts/ingest_promos_raw.py [path-to-xlsx]
+Run:  python3 scripts/ingest_promos_raw.py [path-to-xlsx] [--snapshot=YYYY-MM-DD]
+      The snapshot date is read from the file name (Retail_Promotions_MMDDYYYY…);
+      --snapshot overrides it for a file named some other way.
 """
 import gzip
 import json
@@ -35,7 +37,23 @@ from openpyxl import load_workbook
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 RAW = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "data" / "raw" / "Retail_Promotions_08212026_2_1.xlsx"
 OUT = ROOT / "data" / "promos"
-SNAPSHOT_DATE = "2026-08-21"  # export of 08/21/2026 (filename), revision 2
+
+
+def snapshot_date_of(path: pathlib.Path) -> str:
+    """The export date Telus puts in the file name — Retail_Promotions_MMDDYYYY[_rev].xlsx.
+    A file named some other way takes --snapshot YYYY-MM-DD on the command line."""
+    import re
+    for a in sys.argv[2:]:
+        m = re.fullmatch(r"--snapshot[= ](\d{4}-\d{2}-\d{2})", a)
+        if m:
+            return m.group(1)
+    m = re.search(r"(\d{2})(\d{2})(\d{4})", path.stem)
+    if not m:
+        sys.exit(f"cannot read the export date from {path.name}; pass --snapshot=YYYY-MM-DD")
+    return f"{m.group(3)}-{m.group(1)}-{m.group(2)}"
+
+
+SNAPSHOT_DATE = snapshot_date_of(RAW)  # 2026-08-21 for the August 21 export, revision 2
 
 UOM = {"Cases": "Case", "Percentages": "Percent", "Eaches": "Each", "": "Lump Sum"}
 
