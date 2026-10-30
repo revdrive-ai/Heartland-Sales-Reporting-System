@@ -1,4 +1,4 @@
-import { getPriceList, getPromoOverlays, getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
+import { getPriceList, getPromoOverlays, getWeeklyFacts, listHeartlandBrands, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
 import { getState } from "@/lib/server/appstate";
@@ -18,7 +18,6 @@ import { isNonPerformance } from "@/lib/data/nonPerformanceTypes";
    including future years, which render as a planning view until their NIQ
    weeks land. Controls travel in the URL. */
 
-import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 /* The brand selector's first entry: every Heartland brand at once, so the
    division reads as one business before it is read brand by brand. It is a
    roll-up of exactly the three brands below it — the same weeks, the same
@@ -55,8 +54,9 @@ export default async function Page({
   }
   const mkt = markets.some((m) => m.code === sp.mkt) ? sp.mkt!
     : markets.some((m) => m.code === "ALB-JEWEL") ? "ALB-JEWEL" : markets[0].code;
+  const heartlandBrands = await listHeartlandBrands();
   const brand =
-    sp.brand === ALL_BRANDS || HEARTLAND_BRANDS.includes(sp.brand ?? "") ? sp.brand! : "SPLENDA";
+    sp.brand === ALL_BRANDS || heartlandBrands.includes(sp.brand ?? "") ? sp.brand! : heartlandBrands[0] ?? "SPLENDA";
   const allBrands = brand === ALL_BRANDS;
   // units | dollars (NIQ retail) | gross (units × the dated list price in force)
   const metric = sp.metric === "dollars" ? "dollars" : sp.metric === "gross" ? "gross" : "units";
@@ -141,7 +141,7 @@ export default async function Page({
   // Every week on file for this division × brand — drives the item list and
   // the seasonality card (which always uses full history, not the window).
   const factsAll = allBrands
-    ? (await getWeeklyFacts({ market_code: mkt })).filter((r) => HEARTLAND_BRANDS.includes(r.brand))
+    ? (await getWeeklyFacts({ market_code: mkt })).filter((r) => heartlandBrands.includes(r.brand))
     : await getWeeklyFacts({ market_code: mkt, brand });
   // Item picker: only items that actually moved volume in the latest 52 weeks
   // at this division × brand — dead/delisted items drop out of the list.
@@ -153,11 +153,11 @@ export default async function Page({
      every brand in scope a flat list of 40-odd items would say nothing about
      which business each one belongs to. */
   const items = allItems
-    .filter((i) => (allBrands ? HEARTLAND_BRANDS.includes(i.brand) : i.brand === brand) && upcsWithVolume.has(i.upc))
+    .filter((i) => (allBrands ? heartlandBrands.includes(i.brand) : i.brand === brand) && upcsWithVolume.has(i.upc))
     .map((i) => ({ upc: i.upc, name: i.name, brand: i.brand }))
     .sort((a, b) =>
       allBrands && a.brand !== b.brand
-        ? HEARTLAND_BRANDS.indexOf(a.brand) - HEARTLAND_BRANDS.indexOf(b.brand)
+        ? heartlandBrands.indexOf(a.brand) - heartlandBrands.indexOf(b.brand)
         : a.name.localeCompare(b.name));
   const item = items.some((i) => i.upc === sp.item) ? sp.item! : "ALL";
   const itemName = item === "ALL" ? null : items.find((i) => i.upc === item)!.name;
@@ -337,7 +337,7 @@ export default async function Page({
       ? [...new Set(planScoped.map((r) => r.upc))].filter((u) => upcsWithVolume.has(u))
       : [item];
     const adds = item === "ALL"
-      ? dv.additions.filter((a) => (allBrands ? HEARTLAND_BRANDS.includes(a.brand) : a.brand === brand))
+      ? dv.additions.filter((a) => (allBrands ? heartlandBrands.includes(a.brand) : a.brand === brand))
       : [];
 
     /* Three series, kept apart on purpose. The blue and amber lines are the
@@ -703,7 +703,7 @@ export default async function Page({
 
   const data: BaseData = {
     markets: markets.map((m) => ({ code: m.code, name: m.name })),
-    brands: HEARTLAND_BRANDS,
+    brands: heartlandBrands,
     items,
     mkt,
     brand,

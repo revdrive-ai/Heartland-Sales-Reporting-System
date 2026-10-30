@@ -49,7 +49,7 @@ MARKETS = {
 
 OWN_MANUFACTURER = "HEARTLAND FOOD PRODUCTS GROUP"
 # brands Heartland plans and sells that NIQ files under another manufacturer
-# (Equal sits under Whole Earth Sweetener) — see lib/data/heartlandBrands.ts
+# (Equal sits under Whole Earth Sweetener) — the brand list the tool plans is listHeartlandBrands() in lib/repo (items.is_own)
 OWN_BRANDS = {"EQUAL"}
 
 def week_to_iso(period: str) -> str:

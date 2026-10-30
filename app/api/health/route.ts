@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getState, setState } from "@/lib/server/appstate";
 import { dataSource } from "@/lib/server/supaRead";
 import { fabricOn, fabricStatus } from "@/lib/server/fabric";
-import { listItems, listMarkets, listPromotions, listWeekEndings } from "@/lib/repo";
+import { getFallbacks, listItems, listMarkets, listPromotions, listWeekEndings } from "@/lib/repo";
 
 /* Connection health. Reports which backend the shared state runs on
    (supabase when the env vars are present, else the file store) and whether
@@ -32,7 +32,8 @@ export async function GET() {
       fabric = { error: e instanceof Error ? e.message.slice(0, 80) : "unknown" };
     }
   }
-  data = { ...data, fabric };
+  // reads that answered from a fixture instead of the database on this instance
+  data = { ...data, fabric, fallbacks: getFallbacks() };
   try {
     const stamp = new Date().toISOString();
     await setState("health", { at: stamp });

@@ -1,12 +1,11 @@
 // Global customer scope — the five cascading selectors at the top of every
-// screen, driven by the customer crosswalk. Client-safe (no fs): the topbar
-// facets options with these helpers, and server pages resolve the same scope
-// from the hh-scope cookie via lib/server/scope.ts.
+// screen, driven by the customer crosswalk. Client-safe and PURE: every
+// function takes the crosswalk rows it works on. The rows come from the
+// customer_crosswalk table through lib/repo (server) — the root layout hands
+// them to the topbar, and server pages resolve the same scope from the
+// hh-scope cookie via lib/server/scope.ts.
 
 import type { CrosswalkRow } from "@/lib/types/db";
-import crosswalkJson from "@/lib/fixtures/crosswalk.json";
-
-export const CROSSWALK = crosswalkJson as CrosswalkRow[];
 
 export type Scope = {
   territory?: string;
@@ -36,27 +35,27 @@ export function rowMatches(r: CrosswalkRow, s: Scope, except?: keyof Scope): boo
 }
 
 /** Rows the current scope resolves to (all rows when nothing is selected). */
-export function scopeRows(s: Scope): CrosswalkRow[] {
-  return CROSSWALK.filter((r) => rowMatches(r, s));
+export function scopeRows(rows: CrosswalkRow[], s: Scope): CrosswalkRow[] {
+  return rows.filter((r) => rowMatches(r, s));
 }
 
 /** Options for one dropdown, faceted by every OTHER selection — picking
     Albertsons up top leaves only Albertsons choices below (and vice versa). */
-export function facetOptions(s: Scope, field: keyof Scope): string[] {
+export function facetOptions(rows: CrosswalkRow[], s: Scope, field: keyof Scope): string[] {
   const col = SCOPE_FIELDS.find((f) => f.key === field)!.col;
   const vals = new Set<string>();
-  for (const r of CROSSWALK) {
+  for (const r of rows) {
     if (rowMatches(r, s, field)) vals.add(String(r[col]));
   }
   return [...vals].sort((a, b) => a.localeCompare(b));
 }
 
 /** Apply a new selection, then drop any other selections it invalidated. */
-export function applySelection(s: Scope, field: keyof Scope, value: string | undefined): Scope {
+export function applySelection(rows: CrosswalkRow[], s: Scope, field: keyof Scope, value: string | undefined): Scope {
   const next: Scope = { ...s, [field]: value || undefined };
   for (const f of SCOPE_FIELDS) {
     const v = next[f.key];
-    if (v && !facetOptions(next, f.key).includes(v)) next[f.key] = undefined;
+    if (v && !facetOptions(rows, next, f.key).includes(v)) next[f.key] = undefined;
   }
   return next;
 }
@@ -90,8 +89,8 @@ export function writeScopeCookie(s: Scope) {
   } catch {}
 }
 
-export function resolveScope(s: Scope): ResolvedScope {
-  const rows = scopeRows(s);
+export function resolveScope(all: CrosswalkRow[], s: Scope): ResolvedScope {
+  const rows = scopeRows(all, s);
   return {
     scope: s,
     active: scopeActive(s),

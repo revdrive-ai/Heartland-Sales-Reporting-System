@@ -1,4 +1,4 @@
-import { listItems } from "@/lib/repo";
+import { listItems, telusIdsForMarkets } from "@/lib/repo";
 import { getMode } from "@/lib/server/mode";
 import { getScope } from "@/lib/server/scope";
 import { getModeStatus } from "@/lib/server/modeStatus";
@@ -8,7 +8,6 @@ import { outFromOf, readDistVerification } from "@/lib/distver";
 import { readBaseReview } from "@/lib/basereview";
 import { planSig, readPlanBuilt } from "@/lib/planbuilt";
 import { readPlanChoice } from "@/lib/planlock";
-import { CROSSWALK } from "@/lib/scope";
 import type { PlanAdjustment, PlanEvent } from "@/lib/repo/client";
 import ReviewView, { type ReviewData } from "@/components/review/ReviewView";
 import type { PlanSnapshotVersion } from "@/lib/server/planSnapshot";
@@ -24,11 +23,6 @@ import type { ReviewVersion, VersionFacts } from "@/components/review/PlanVersio
    same construction the four steps before it wrote and showed, so what is
    submitted is exactly what was reviewed. */
 
-const telusIdsFor = (code: string) => {
-  const set = new Set<string>();
-  for (const r of CROSSWALK) if (r.market_code === code) for (const id of r.telus_customer_ids) set.add(id);
-  return set;
-};
 
 export default async function Page() {
   const [mode, scope, items] = await Promise.all([getMode(), getScope(), listItems()]);
@@ -59,7 +53,7 @@ export default async function Page() {
   const planBuilt = readPlanBuilt(pbRaw);
   const dv = readDistVerification(dvRaw);
   const adjs = (Array.isArray(adjRaw) ? adjRaw : []) as PlanAdjustment[];
-  const ids = telusIdsFor(one.code);
+  const ids = await telusIdsForMarkets([one.code]);
   const events = ((Array.isArray(evRaw) ? evRaw : []) as PlanEvent[])
     .filter((e) => !!e.customer_id && ids.has(e.customer_id))
     .sort((a, b) => a.start.localeCompare(b.start));

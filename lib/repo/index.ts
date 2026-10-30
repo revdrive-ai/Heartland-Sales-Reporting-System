@@ -20,28 +20,44 @@
 import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import path from "node:path";
-import type { Market, Item, NielsenWeeklyRow, ShipmentWeeklyRow } from "@/lib/types/db";
+import type { Market, Item, NielsenWeeklyRow, ShipmentWeeklyRow, CrosswalkRow } from "@/lib/types/db";
 import { dataSource, sbRows } from "@/lib/server/supaRead";
 import * as fabric from "@/lib/server/fabric";
+import { promoMapFrom, type PromoMap, type PromoMapRow } from "@/lib/promoMap";
 import marketsJson from "@/lib/fixtures/markets.json";
 import itemsJson from "@/lib/fixtures/items.json";
 import itemXwalkJson from "@/lib/fixtures/item-crosswalk.json";
 import priceListJson from "@/lib/fixtures/price-list.json";
+import crosswalkJson from "@/lib/fixtures/crosswalk.json";
+import promoMapJson from "@/lib/fixtures/promo-map.json";
 
 const MARKETS = marketsJson as Market[];
 const ITEMS = itemsJson as Item[];
 
+/** A read that fell back to its fixture: what, when, why. */
+export type FallbackNote = { label: string; at: string; error: string };
+const fallbacks: FallbackNote[] = [];
+
 /** Run the Supabase read when that is the source, else the fixture; a
-    failed Supabase read logs and answers from the fixture. */
+    failed Supabase read logs, is remembered for /api/health, and answers
+    from the fixture so a half-loaded database never blanks a page. */
 async function viaDb<T>(label: string, db: () => Promise<T>, file: () => T | Promise<T>): Promise<T> {
   if (dataSource() !== "supabase") return file();
   try {
     return await db();
   } catch (e) {
-    console.error(`[repo] ${label}: Supabase read failed, answering from the fixture — ${e instanceof Error ? e.message : e}`);
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`[repo] ${label}: Supabase read failed, answering from the fixture — ${error}`);
+    fallbacks.unshift({ label, at: new Date().toISOString(), error: error.slice(0, 160) });
+    if (fallbacks.length > 20) fallbacks.length = 20;
     return file();
   }
 }
+
+/** The reads that fell back to a fixture on this server instance, newest
+    first — the Integrations screen shows them, so a page quietly reading a
+    file instead of the database is never a secret. */
+export const getFallbacks = (): FallbackNote[] => [...fallbacks];
 
 const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
 const num = (v: unknown) => (v === null || v === undefined || v === "" ? null : Number(v));
@@ -58,6 +74,56 @@ export async function listMarkets(opts?: { activeOnly?: boolean }): Promise<Mark
 
 export async function getMarket(code: string): Promise<Market | undefined> {
   return (await markets()).find((m) => m.code === code);
+}
+
+/* ------------------------------------------------------- CUSTOMER CROSSWALK
+   One customer tied together across systems — the internal hierarchy the
+   top bar's scope selectors facet on, the NIQ trading area, and the Telus
+   customer ids. Tables customer_crosswalk + crosswalk_telus_customers
+   (fixture lib/fixtures/crosswalk.json, scripts/ingest_crosswalk.py). */
+
+const crosswalk = () =>
+  viaDb<CrosswalkRow[]>(
+    "customer crosswalk",
+    async () => {
+      const [rows, telus] = await Promise.all([
+        sbRows<Record<string, unknown>>(
+          "customer_crosswalk",
+          "select=id,customer_name,customer_class,territory,parent_account,sales_account,team_lead,account_lead,niq_match,market_code&order=id.asc"
+        ),
+        sbRows<Record<string, unknown>>("crosswalk_telus_customers", "select=crosswalk_id,telus_customer_id,telus_customer_name&order=crosswalk_id.asc,telus_customer_id.asc"),
+      ]);
+      const byId = new Map<string, { ids: string[]; names: string[] }>();
+      for (const t of telus) {
+        const e = byId.get(str(t.crosswalk_id)) ?? { ids: [], names: [] };
+        e.ids.push(str(t.telus_customer_id));
+        e.names.push(str(t.telus_customer_name));
+        byId.set(str(t.crosswalk_id), e);
+      }
+      return rows.map((r) => ({
+        id: str(r.id), customer_name: str(r.customer_name), customer_class: str(r.customer_class) as CrosswalkRow["customer_class"],
+        territory: str(r.territory), parent_account: str(r.parent_account), sales_account: str(r.sales_account),
+        team_lead: str(r.team_lead), account_lead: str(r.account_lead),
+        niq_match: r.niq_match === null || r.niq_match === undefined ? null : str(r.niq_match),
+        market_code: r.market_code === null || r.market_code === undefined ? null : str(r.market_code),
+        telus_customer_ids: byId.get(str(r.id))?.ids ?? [], telus_customer_names: byId.get(str(r.id))?.names ?? [],
+      }));
+    },
+    () => crosswalkJson as CrosswalkRow[]
+  );
+
+/** Every crosswalk row — the scope selectors and the server-side scope
+    resolver work on exactly this list. */
+export async function getCustomerCrosswalk(): Promise<CrosswalkRow[]> {
+  return crosswalk();
+}
+
+/** The Telus customer ids behind a set of NIQ market codes. */
+export async function telusIdsForMarkets(codes: string[]): Promise<Set<string>> {
+  const ids = new Set<string>();
+  if (!codes.length) return ids;
+  for (const r of await crosswalk()) if (r.market_code && codes.includes(r.market_code)) for (const id of r.telus_customer_ids) ids.add(id);
+  return ids;
 }
 
 /* -------------------------------------------------------------------- ITEMS */
@@ -83,6 +149,19 @@ export async function listBrands(opts?: { ownOnly?: boolean }): Promise<string[]
   const all = await items();
   const src = opts?.ownOnly ? all.filter((i) => i.is_own) : all;
   return [...new Set(src.map((i) => i.brand))].sort();
+}
+
+/** Display order for the brands Heartland plans; a brand on file but not
+    named here follows alphabetically. Membership is the items table's
+    is_own flag, never a list in code. */
+const BRAND_ORDER = ["SPLENDA", "SLIMFAST", "JAVA HOUSE", "EQUAL"];
+
+/** The brands the tool plans and estimates as Heartland's — the brand lists
+    on the Base Business Review, the planner, the base export and the
+    estimate all come from here. */
+export async function listHeartlandBrands(): Promise<string[]> {
+  const rank = (b: string) => { const i = BRAND_ORDER.indexOf(b); return i < 0 ? BRAND_ORDER.length : i; };
+  return (await listBrands({ ownOnly: true })).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
 /* ---------------------------------------------------------- ITEM CROSSWALK */
@@ -431,14 +510,6 @@ export async function listWeekEndings(market_code: string): Promise<string[]> {
    (data/shipments/<ACCOUNT>.json.gz, scripts/ingest_shipments.py; table
    shipments_weekly). An account here may have no NIQ market (Publix). */
 
-export type ShipmentsMeta = {
-  source_file: string;
-  accounts: { account_code: string; account_name: string; workbook_year: number; years: number[]; first_week: string; last_week: string; edge: string | null; items: number; items_with_upc: number; items_without_pack: number; rows: number; overlap_dropped: number }[];
-  unmatched_items: { item_code: string; item_name: string }[];
-  ambiguous_items: { item_code: string; upcs: string[] }[];
-  items_without_pack: { item_code: string; item_name: string }[];
-};
-
 const shipCache = new Map<string, ShipmentWeeklyRow[]>();
 
 function loadShipmentsFile(account_code: string): ShipmentWeeklyRow[] {
@@ -515,14 +586,6 @@ export async function getShipments(account_code: string): Promise<ShipmentWeekly
     },
     () => loadShipmentsFile(account_code)
   );
-}
-
-export async function getShipmentsMeta(): Promise<ShipmentsMeta | null> {
-  try {
-    return JSON.parse(readFileSync(path.join(process.cwd(), "data", "shipments", "meta.json"), "utf-8")) as ShipmentsMeta;
-  } catch {
-    return null;
-  }
 }
 
 /* -------------------------------------------------------------- PROMOTIONS
@@ -657,21 +720,45 @@ export async function listPromoCustomers(): Promise<
   return [...by.values()].sort((a, b) => b.planned - a.planned);
 }
 
+/** The export's controlled vocabulary (the Valid Values tab) — table
+    promo_enums, one row per field × value in the tab's order. */
 export async function getPromoEnums(): Promise<PromoEnums> {
-  return promoEnumsJson as PromoEnums;
+  return viaDb<PromoEnums>(
+    "promo enums",
+    async () => {
+      const rows = await sbRows<{ field: string; value: string; sort_order: number }>("promo_enums", "select=field,value,sort_order&order=field.asc,sort_order.asc,value.asc");
+      if (!rows.length) throw new Error("promo_enums is empty — load it from the Integrations screen");
+      const out: PromoEnums = {};
+      for (const r of rows) (out[r.field] ??= []).push(r.value);
+      return out;
+    },
+    () => promoEnumsJson as PromoEnums
+  );
 }
 
-/** The snapshot's provenance (source file, export date) comes from the
-    fixture's meta.json; the counts and totals are whatever the live source
-    holds, so the Integrations screen reads the database when that is live. */
+const promoMetaFile = () => JSON.parse(readFileSync(path.join(process.cwd(), "data", "promos", "meta.json"), "utf-8")) as PromoMeta;
+
+/** The snapshot's provenance (source file, export date, book year) is the
+    latest promo_import_batches row — the loader writes one per export — and
+    the counts and totals are whatever the live tables hold. */
 export async function getPromoMeta(): Promise<PromoMeta> {
-  const file = path.join(process.cwd(), "data", "promos", "meta.json");
-  const meta = JSON.parse(readFileSync(file, "utf-8")) as PromoMeta;
-  if (dataSource() !== "supabase") return meta;
+  if (dataSource() !== "supabase") return promoMetaFile();
+  const prov = await viaDb<Pick<PromoMeta, "source_file" | "snapshot_date" | "fiscal_year">>(
+    "promo snapshot",
+    async () => {
+      const b = await sbRows<Record<string, unknown>>("promo_import_batches", "select=source_file,snapshot_date,fiscal_year&order=snapshot_date.desc,created_at.desc&limit=1");
+      if (!b.length) throw new Error("promo_import_batches is empty — load it from the Integrations screen");
+      return { source_file: str(b[0].source_file), snapshot_date: str(b[0].snapshot_date).slice(0, 10), fiscal_year: Number(b[0].fiscal_year) };
+    },
+    () => {
+      const m = promoMetaFile();
+      return { source_file: m.source_file, snapshot_date: m.snapshot_date, fiscal_year: m.fiscal_year };
+    }
+  );
   const [ps, ls] = await Promise.all([promos(), promoLines()]);
   const withLines = new Set(ls.map((l) => l.promo_id));
   return {
-    ...meta,
+    ...prov,
     promotions: ps.length,
     promo_lines: ls.length,
     planned_total: Math.round(ls.reduce((s, l) => s + l.planned_amount, 0) * 100) / 100,
@@ -682,10 +769,24 @@ export async function getPromoMeta(): Promise<PromoMeta> {
 
 /* ------------------------------------------------------- PROMO ↔ NIELSEN JOIN
    Overlay the Telus promotion windows onto a division's Nielsen weekly trend.
-   The division ←→ customer mapping lives in lib/data/albertsonsPromoMap.ts
-   (mirrored by supabase/migrations/00003). */
+   The division ←→ customer mapping is the market_promo_customers table
+   (fixture lib/fixtures/promo-map.json); lib/promoMap.ts answers the
+   questions about it. */
 
-import { ALBERTSONS_CORPORATE, MARKET_DIST_SPLIT, normBrand, promoAppliesTo, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
+import { normBrand, promoAppliesTo, promoCustomersFor } from "@/lib/promoMap";
+
+const promoMapRows = () =>
+  viaDb<PromoMapRow[]>(
+    "promo map",
+    () => sbRows<PromoMapRow>("market_promo_customers", "select=market_code,customer_id,scope,dist_name&order=market_code.asc,customer_id.asc"),
+    () => promoMapJson as PromoMapRow[]
+  );
+
+/** Which Telus customers' promotions overlay which division, and the Dist
+    Name split for shared planners. */
+export async function getPromoMap(): Promise<PromoMap> {
+  return promoMapFrom(await promoMapRows());
+}
 
 export type PromoOverlay = {
   promo_id: string;
@@ -722,16 +823,18 @@ export type PromoOverlayFilter = {
 };
 
 export async function getPromoOverlays(f: PromoOverlayFilter): Promise<PromoOverlay[]> {
-  const customers = new Set(promoCustomersFor(f.market_code));
+  const map = await getPromoMap();
+  const customers = new Set(promoCustomersFor(map, f.market_code));
   if (customers.size === 0) return [];
   const wantBrand = f.brand ? normBrand(f.brand) : null;
   const [ps, lines] = await Promise.all([promos(), promoLines()]);
   const brands = promoBrandsOf(lines);
+  const corporate = new Set(map.corporate);
   return ps
     .filter((p) => {
       if (!customers.has(p.customer_id)) return false;
       // Dist Name splits shared planners (Safeway Mountain West → Denver/IMW)
-      if (!promoAppliesTo(f.market_code, p)) return false;
+      if (!promoAppliesTo(map, f.market_code, p)) return false;
       if (f.to && p.start_date > f.to) return false;
       if (f.from && p.end_date < f.from) return false;
       if (wantBrand && !(brands.get(p.promo_id)?.has(wantBrand) ?? false)) return false;
@@ -741,7 +844,7 @@ export async function getPromoOverlays(f: PromoOverlayFilter): Promise<PromoOver
       // a promo booked to several dists (Safeway Mountain West → Denver + IMW)
       // shows only this division's share of the money, not the double-counted total
       let planned = p.planned_amount, actual = p.actual_amount;
-      const split = MARKET_DIST_SPLIT[f.market_code];
+      const split = map.distSplit[f.market_code];
       if (split && p.customer_id === split.customer_id && (p.dist_names?.length ?? 0) > 1) {
         const own = lines.filter((l) => l.promo_id === p.promo_id && l.dist_name === split.dist_name);
         if (own.length) {
@@ -755,7 +858,7 @@ export async function getPromoOverlays(f: PromoOverlayFilter): Promise<PromoOver
         promo_status: p.promo_status,
         performance_type: p.performance_type,
         customer_name: p.customer_name,
-        corporate: p.customer_id === ALBERTSONS_CORPORATE,
+        corporate: corporate.has(p.customer_id),
         start_date: p.start_date,
         end_date: p.end_date,
         planned_amount: planned,

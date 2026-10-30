@@ -121,10 +121,35 @@ def rows_shipments_weekly():
     return out
 
 
+def rows_market_promo_customers():
+    return read_json(f"{ROOT}/lib/fixtures/promo-map.json")
+
+
+def rows_promo_enums():
+    out = []
+    for field, values in read_json(f"{ROOT}/lib/fixtures/promo-enums.json").items():
+        for i, value in enumerate(values):
+            out.append({"field": field, "value": value, "sort_order": i})
+    return out
+
+
+def rows_promo_import_batches():
+    m = read_json(f"{ROOT}/data/promos/meta.json")
+    return [{
+        "source_file": m["source_file"], "snapshot_date": m["snapshot_date"], "fiscal_year": m["fiscal_year"],
+        "promo_count": m.get("promotions"), "line_count": m.get("promo_lines"),
+        "planned_total": m.get("planned_total"), "actual_total": m.get("actual_total"),
+        "note": "loaded by scripts/load_supabase.py",
+    }]
+
+
 TABLES = [
     ("markets", rows_markets, "code"),
+    ("market_promo_customers", rows_market_promo_customers, "market_code,customer_id"),
     ("items", rows_items, "upc"),
     ("nielsen_weekly", rows_nielsen_weekly, "week_ending,upc,market_code"),
+    ("promo_enums", rows_promo_enums, "field,value"),
+    ("promo_import_batches", rows_promo_import_batches, "source_file,snapshot_date"),
     ("promotions", rows_promotions, "promo_id"),
     ("promo_lines", rows_promo_lines, "line_id"),
     ("item_crosswalk", rows_item_crosswalk, "item_number,upc_core"),

@@ -12,6 +12,7 @@ import {
   applySelection, facetOptions, SCOPE_FIELDS, scopeActive, scopeRows, writeScopeCookie,
   type Scope,
 } from "@/lib/scope";
+import type { CrosswalkRow } from "@/lib/types/db";
 import { parseWorkPath } from "@/lib/process";
 
 function Chip({
@@ -59,7 +60,9 @@ function Chip({
   );
 }
 
-export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
+/** `rows` is the customer crosswalk as the server read it from the database —
+    the selectors facet on it and never touch a file of their own. */
+export default function ScopeBar({ initialScope, rows }: { initialScope: Scope; rows: CrosswalkRow[] }) {
   const [scope, setScope] = useState<Scope>(initialScope);
   const router = useRouter();
   const pathname = usePathname();
@@ -99,7 +102,7 @@ export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
   }
 
   const pick = (field: keyof Scope, value?: string) => {
-    const next = applySelection(scope, field, value);
+    const next = applySelection(rows, scope, field, value);
     setScope(next);
     writeScopeCookie(next);
     router.refresh();
@@ -111,7 +114,7 @@ export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
     router.refresh();
   };
 
-  const n = scopeRows(scope).length;
+  const n = scopeRows(rows, scope).length;
 
   return (
     <div className="filters">
@@ -120,7 +123,7 @@ export default function ScopeBar({ initialScope }: { initialScope: Scope }) {
           key={f.key}
           label={f.label}
           value={scope[f.key]}
-          options={facetOptions(scope, f.key)}
+          options={facetOptions(rows, scope, f.key)}
           onPick={(v) => pick(f.key, v)}
         />
       ))}

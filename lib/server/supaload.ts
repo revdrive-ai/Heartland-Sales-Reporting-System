@@ -72,8 +72,28 @@ function rowsShipmentsWeekly(): Row[] {
     export" rule. */
 export const TABLES: { table: string; onConflict: string; rows: () => Row[]; reconcile?: string }[] = [
   { table: "markets", onConflict: "code", rows: () => readJson<Row[]>("lib/fixtures/markets.json") },
+  { table: "market_promo_customers", onConflict: "market_code,customer_id", rows: () => readJson<Row[]>("lib/fixtures/promo-map.json") },
   { table: "items", onConflict: "upc", rows: () => readJson<Row[]>("lib/fixtures/items.json") },
   { table: "nielsen_weekly", onConflict: "week_ending,upc,market_code", rows: rowsNielsenWeekly },
+  {
+    table: "promo_enums",
+    onConflict: "field,value",
+    rows: () => Object.entries(readJson<Record<string, string[]>>("lib/fixtures/promo-enums.json")).flatMap(([field, vals]) => vals.map((value, i) => ({ field, value, sort_order: i }))),
+  },
+  {
+    // the snapshot's provenance — one row per export, so the pages can say
+    // which file and which export date the book came from
+    table: "promo_import_batches",
+    onConflict: "source_file,snapshot_date",
+    rows: () => {
+      const m = readJson<Record<string, unknown>>("data/promos/meta.json");
+      return [{
+        source_file: m.source_file, snapshot_date: m.snapshot_date, fiscal_year: m.fiscal_year,
+        promo_count: m.promotions, line_count: m.promo_lines, planned_total: m.planned_total, actual_total: m.actual_total,
+        note: "loaded from the Integrations screen",
+      }];
+    },
+  },
   {
     table: "promotions",
     onConflict: "promo_id",

@@ -7,6 +7,7 @@ import Sidebar from "./Sidebar";
 import AskPanel from "./AskPanel";
 import { Toast } from "./toast";
 import type { Scope } from "@/lib/scope";
+import type { CrosswalkRow } from "@/lib/types/db";
 import type { WorkMode } from "@/lib/mode";
 import type { SessionUser } from "@/lib/supabase/server";
 import { WORK_PREFIX } from "@/lib/process";
@@ -22,6 +23,7 @@ import { WORK_PREFIX } from "@/lib/process";
 export default function AppShell({
   children,
   initialScope,
+  crosswalk,
   mode,
   user,
   strip,
@@ -29,6 +31,8 @@ export default function AppShell({
 }: {
   children: React.ReactNode;
   initialScope: Scope;
+  /** the customer crosswalk, read from the database by the root layout */
+  crosswalk: CrosswalkRow[];
   mode: WorkMode;
   user: SessionUser;
   strip?: React.ReactNode;
@@ -46,6 +50,7 @@ export default function AppShell({
         <Topbar
           onAsk={() => setAskOpen(true)}
           initialScope={initialScope}
+          crosswalk={crosswalk}
           user={user}
           showScope={!atStart}
         />

@@ -76,7 +76,20 @@
 - **Global scope**: the topbar's five cascading selectors (lib/scope.ts + components/ScopeBar)
   persist in the `hh-scope` cookie; server pages call `getScope()` (lib/server/scope.ts) and
   intersect their reads with `marketCodes` / `telusCustomerIds`. New views must do the same.
-  The crosswalk fixture is the source of truth for cross-system customer identity
-  (re-run scripts/ingest_crosswalk.py after replacing the raw workbook).
+  lib/scope.ts is pure — every function takes the crosswalk rows — and the rows come from the
+  `customer_crosswalk` + `crosswalk_telus_customers` tables through `getCustomerCrosswalk()`
+  (the root layout hands them to the topbar; `telusIdsForMarkets()` answers the Telus ids
+  behind a market). The fixture is the loader's source (re-run scripts/ingest_crosswalk.py
+  after replacing the raw workbook, then Load it), never read by a page.
+- **Everything a page shows comes from the database.** Reference data that used to be code
+  or a fixture is a table the loader fills and the repo reads: `market_promo_customers`
+  (division ↔ Telus customer, with `dist_name` for shared planners; pure helpers in
+  lib/promoMap.ts), `promo_enums` (the export's Valid Values), `promo_import_batches` (the
+  snapshot's source file and export date), and the Heartland brand list is
+  `listHeartlandBrands()` = the brands of `items.is_own` (BRAND_ORDER in the repo is only
+  display order). Pages that read data are rendered on request, never frozen at build. The
+  repo fixtures remain as the loader's source and as the fallback when a table read fails;
+  every such fallback is remembered and shown on the Integrations screen and in
+  `/api/health` (`data.fallbacks`), so a page quietly answering from a file is never a secret.
 - Build-out order is Albertsons division by division; Randy directs which piece comes
   next. `docs/HANDOFF.md` holds the full teardown.

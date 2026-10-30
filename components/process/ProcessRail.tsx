@@ -123,10 +123,13 @@ export default function ProcessRail({
   status,
   scopeLabel,
   inScope,
+  telusIds,
 }: {
   status: RailStatus | null;
   scopeLabel: string;
   inScope: string[];
+  /** the Telus customer ids behind the in-scope accounts (customer crosswalk) */
+  telusIds: string[];
 }) {
   const pathname = usePathname();
   const loc = parseWorkPath(pathname);
@@ -241,6 +244,7 @@ export default function ProcessRail({
           <StepReset
             year={year}
             markets={inScope}
+            telusIds={telusIds}
             scopeLabel={scopeLabel}
             restartHref={processPath(proc.kind, proc.steps[0].key, year)}
           />

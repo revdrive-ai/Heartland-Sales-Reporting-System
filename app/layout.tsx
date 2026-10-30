@@ -8,6 +8,7 @@ import { getModeStatus } from "@/lib/server/modeStatus";
 import ModeStrip from "@/components/ModeStrip";
 import ProcessRail, { type RailStatus } from "@/components/process/ProcessRail";
 import { currentUser } from "@/lib/supabase/server";
+import { getCustomerCrosswalk, telusIdsForMarkets } from "@/lib/repo";
 
 export const metadata: Metadata = {
   title: "Heartland Foods — Trade Platform",
@@ -30,10 +31,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // Read the persisted customer scope server-side so the selectors render
   // with the saved values on first paint (no hydration flicker).
-  const [resolved, mode] = await Promise.all([getScope(), getMode()]);
+  const [resolved, mode, crosswalk] = await Promise.all([getScope(), getMode(), getCustomerCrosswalk()]);
   /* The rollup follows the top bar: scope to one account and the steps
      report that account, not all thirteen. */
-  const status = await getModeStatus(mode, resolved.marketCodes);
+  const [status, telusIds] = await Promise.all([getModeStatus(mode, resolved.marketCodes), telusIdsForMarkets(resolved.marketCodes)]);
 
   /* The rail works out its own position from the pathname — steps of a
      process share an underlying view, so moving between them does not
@@ -69,6 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <AppShell
           initialScope={resolved.scope}
+          crosswalk={crosswalk}
           mode={mode}
           user={user}
           strip={<ModeStrip status={status} />}
@@ -77,6 +79,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               status={rail}
               scopeLabel={resolved.label}
               inScope={status?.customers.map((c) => c.code) ?? []}
+              telusIds={[...telusIds]}
             />
           }
         >

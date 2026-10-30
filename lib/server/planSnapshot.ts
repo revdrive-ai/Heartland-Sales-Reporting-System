@@ -1,4 +1,4 @@
-import { getWeeklyFacts, listItems, listWeekEndings } from "@/lib/repo";
+import { getWeeklyFacts, listItems, listWeekEndings, telusIdsForMarkets } from "@/lib/repo";
 import { getState, setState } from "@/lib/server/appstate";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import { outFromOf, readDistVerification, type DistAddition, type DistVerification } from "@/lib/distver";
@@ -9,7 +9,6 @@ import { DAY, priorYearWeek, saturdaysOfYear, utcOf } from "@/lib/weeks";
 import { fy, leRollup } from "@/lib/server/leRollup";
 import { readPlanBuilt, planSig } from "@/lib/planbuilt";
 import { readPlanChoice, type PlanChoice } from "@/lib/planlock";
-import { CROSSWALK } from "@/lib/scope";
 import type { PlanEvent } from "@/lib/repo/client";
 
 /* Plan-base snapshots — the sign-off & Latest Estimate mechanism.
@@ -293,8 +292,7 @@ export async function getSnapshots(mkt: string, year: number): Promise<PlanSnaps
     trade, and Build the plan's money when that was submitted for exactly
     these events. */
 async function freezePlan(mkt: string, year: number): Promise<{ plan: PlanFrozen; distDetail: { out: string[]; added: string[] } }> {
-  const ids = new Set<string>();
-  for (const r of CROSSWALK) if (r.market_code === mkt) for (const id of r.telus_customer_ids) ids.add(id);
+  const ids = await telusIdsForMarkets([mkt]);
   const [evRaw, pbRaw, dvRaw, items] = await Promise.all([
     getState(`events:${year}`).catch(() => undefined),
     getState(`planbuilt:${mkt}:${year}`).catch(() => undefined),

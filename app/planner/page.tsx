@@ -1,8 +1,8 @@
-import { getItemCrosswalk, getPriceList, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, listWeekEndings, priceAsOf } from "@/lib/repo";
+import { getItemCrosswalk, getPriceList, getPromoMap, getPromoOverlays, getWeeklyFacts, listAllPromoLines, listHeartlandBrands, listItems, listMarkets, listPromotions, listPromoCustomers, getPromoMeta, getPromoEnums, listWeekEndings, priceAsOf } from "@/lib/repo";
 import { fyWeeklyByItem } from "@/lib/server/fyForecast";
 import { itemRatio, projectItemWeek, trendOf } from "@/lib/server/projection";
 import { priorYearWeek, saturdaysOfYear } from "@/lib/weeks";
-import { normBrand, promoCustomersFor } from "@/lib/data/albertsonsPromoMap";
+import { normBrand, promoCustomersFor } from "@/lib/promoMap";
 import { isAlwaysOn, isNonPerformance } from "@/lib/data/nonPerformanceTypes";
 import { getScope } from "@/lib/server/scope";
 import { getMode } from "@/lib/server/mode";
@@ -38,11 +38,9 @@ function allocateByMonth(totalByMonth: number[], amount: number, startISO: strin
   }
 }
 
-import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
-
 export default async function Page() {
-  const [allPromos, allCustomers, meta, enums, gscope, mode] = await Promise.all([
-    listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(), getScope(), getMode(),
+  const [allPromos, allCustomers, meta, enums, gscope, mode, heartlandBrands, promoMap] = await Promise.all([
+    listPromotions(), listPromoCustomers(), getPromoMeta(), getPromoEnums(), getScope(), getMode(), listHeartlandBrands(), getPromoMap(),
   ]);
 
   // Year: the working mode (top bar) decides — Plan mode opens the plan
@@ -170,7 +168,7 @@ export default async function Page() {
       dvAdded += (d.additions ?? []).length;
     }
     const priorPrefix = `${bookYear}-`;
-    for (const brand of HEARTLAND_BRANDS) {
+    for (const brand of heartlandBrands) {
       // week → sums across the scoped divisions, plus per-item base totals and
       // per-tactic lift sums measured from the Telus windows on each division
       const wk = new Map<string, { bu: number; bd: number; au: number; promo: boolean }>();
@@ -388,7 +386,7 @@ export default async function Page() {
     // Brand and items per promo, from its Telus component lines: exactly one
     // own NIQ brand → that brand; the item crosswalk resolves line item
     // numbers to NIQ UPCs on file, so carried events score at item level.
-    const ownByNorm = new Map(HEARTLAND_BRANDS.map((b) => [normBrand(b), b]));
+    const ownByNorm = new Map(heartlandBrands.map((b) => [normBrand(b), b]));
     const xwalk = await getItemCrosswalk();
     const promoBrandSets = new Map<string, Set<string>>();
     const promoUpcs = new Map<string, Set<string>>();
@@ -419,7 +417,7 @@ export default async function Page() {
     // Telus customer → the scoped divisions it covers (corporate → all)
     const custMarkets: Record<string, string[]> = {};
     for (const m of markets) {
-      for (const cid of promoCustomersFor(m.code)) (custMarkets[cid] ??= []).push(m.code);
+      for (const cid of promoCustomersFor(promoMap, m.code)) (custMarkets[cid] ??= []).push(m.code);
     }
 
     // UPC-resolved dated prices for the client + a run-rate-weighted brand
@@ -429,7 +427,7 @@ export default async function Page() {
       .map((r) => ({ upc: r.upc!, unit_price: r.unit_price!, effective_from: r.effective_from }));
     const jan1 = `${year}-01-01`;
     const brandListPrice: Record<string, number | null> = {};
-    for (const b of HEARTLAND_BRANDS) {
+    for (const b of heartlandBrands) {
       let pw = 0, w = 0;
       for (const it of brandStats[b].items) {
         const p = priceAsOf(priceRows, jan1, { upc: it.upc })?.unit_price ?? null;
@@ -459,7 +457,7 @@ export default async function Page() {
       const latestW = allW[allW.length - 1];
       if (!latestW) continue;
       if (latestW > fyEdge) fyEdge = latestW;
-      for (const b of HEARTLAND_BRANDS) {
+      for (const b of heartlandBrands) {
         const byItem = await fyWeeklyByItem(m.code, b, fyWeeks, allW, latestW);
         const mon = Array(12).fill(0);
         for (const [upc, series] of byItem) {
@@ -532,6 +530,7 @@ export default async function Page() {
       priorPlannedByMonth: plannedByMonth.map((v) => Math.round(v)),
       priorPlannedTotal: Math.round(scopedMeta.planned_total),
       brandStats,
+      brands: heartlandBrands,
       divBrandWk,
       divItemWk,
       custMarkets,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { getWeeklyFacts, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
+import { getWeeklyFacts, listHeartlandBrands, listItems, listMarkets, listWeekEndings } from "@/lib/repo";
 import { getScope } from "@/lib/server/scope";
 import { itemRatio, projectItemWeek, trendOf, type Trend } from "@/lib/server/projection";
 import { DAY, priorYearWeek, saturdaysOfYear, utcOf } from "@/lib/weeks";
@@ -13,7 +13,6 @@ import { DAY, priorYearWeek, saturdaysOfYear, utcOf } from "@/lib/weeks";
    the column header).
    Planner adjustments are browser-local and are NOT applied here. */
 
-import { HEARTLAND_BRANDS } from "@/lib/data/heartlandBrands";
 const ALL_BRANDS = "ALL"; // the selection's all-brands roll-up
 const ROLLING: Record<string, number> = { "4w": 4, "13w": 13, "26w": 26, "52w": 52 };
 
@@ -57,9 +56,10 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
   const mkt = sp.get("mkt") ?? "";
   const market = allowed.find((m) => m.code === mkt);
   if (!market) return NextResponse.json({ error: "unknown or out-of-scope market" }, { status: 400 });
+  const heartlandBrands = await listHeartlandBrands();
   const brandParam = sp.get("brand") ?? "";
   const brand =
-    brandParam === ALL_BRANDS || HEARTLAND_BRANDS.includes(brandParam) ? brandParam : "SPLENDA";
+    brandParam === ALL_BRANDS || heartlandBrands.includes(brandParam) ? brandParam : heartlandBrands[0] ?? "SPLENDA";
   const allBrands = brand === ALL_BRANDS;
   const brandLabel = allBrands ? "All brands" : brand;
   const gran = sp.get("gran") === "month" ? "month" : "week";
@@ -94,17 +94,17 @@ async function buildExport(params: Record<string, string | undefined>, adjustmen
   }
 
   const factsAll = allBrands
-    ? (await getWeeklyFacts({ market_code: mkt })).filter((r) => HEARTLAND_BRANDS.includes(r.brand))
+    ? (await getWeeklyFacts({ market_code: mkt })).filter((r) => heartlandBrands.includes(r.brand))
     : await getWeeklyFacts({ market_code: mkt, brand });
   const recentFrom = allWeeks[Math.max(allWeeks.length - 52, 0)];
   const withVolume = new Set(factsAll.filter((r) => r.week_ending >= recentFrom && (r.units ?? 0) > 0).map((r) => r.upc));
   const itemParam = sp.get("item") ?? "ALL";
   const items = allItems
-    .filter((i) => (allBrands ? HEARTLAND_BRANDS.includes(i.brand) : i.brand === brand)
+    .filter((i) => (allBrands ? heartlandBrands.includes(i.brand) : i.brand === brand)
       && withVolume.has(i.upc) && (itemParam === "ALL" || i.upc === itemParam))
     .sort((a, b) =>
       allBrands && a.brand !== b.brand
-        ? HEARTLAND_BRANDS.indexOf(a.brand) - HEARTLAND_BRANDS.indexOf(b.brand)
+        ? heartlandBrands.indexOf(a.brand) - heartlandBrands.indexOf(b.brand)
         : a.name.localeCompare(b.name));
   if (items.length === 0) return NextResponse.json({ error: "no items in this selection" }, { status: 400 });
   const itemSet = new Set(items.map((i) => i.upc));

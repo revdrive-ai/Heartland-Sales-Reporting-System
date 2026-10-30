@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CROSSWALK } from "@/lib/scope";
 import {
   getDistVerification, saveDistVerification,
   getPlanAdjustments, deletePlanAdjustment,
@@ -37,27 +36,21 @@ import { OPEN_DISTRIBUTION_EVENT } from "@/lib/process";
 type Counts = { decisions: number; out: number; additions: number; answered: boolean;
                 verified: number; adjustments: number; events: number; reviewed: boolean; built: boolean };
 
-const telusIdsFor = (marketCodes: string[]) => {
-  const set = new Set<string>();
-  for (const r of CROSSWALK) {
-    if (r.market_code && marketCodes.includes(r.market_code)) {
-      for (const id of r.telus_customer_ids) set.add(id);
-    }
-  }
-  return set;
-};
-
 const isMine = (e: PlanEvent, ids: Set<string>) =>
   e.origin === "manual" && !!e.customer_id && ids.has(e.customer_id);
 
 export default function StepReset({
   year,
   markets,
+  telusIds,
   scopeLabel,
   restartHref,
 }: {
   year: number;
   markets: string[];
+  /** the Telus customer ids behind the in-scope accounts — the server reads
+      them from the customer crosswalk and hands them down */
+  telusIds: string[];
   scopeLabel: string;
   restartHref: string;
 }) {
@@ -72,7 +65,7 @@ export default function StepReset({
     setOpen(true);
     setCounts(null);
     if (markets.length !== 1) return;
-    const ids = telusIdsFor(markets);
+    const ids = new Set(telusIds);
     const c: Counts = { decisions: 0, out: 0, additions: 0, answered: false, verified: 0, adjustments: 0, events: 0, reviewed: false, built: false };
     for (const code of markets) {
       const dv = await getDistVerification(code, year);
@@ -93,7 +86,7 @@ export default function StepReset({
   const clear = async () => {
     setBusy(true);
     try {
-      const ids = telusIdsFor(markets);
+      const ids = new Set(telusIds);
       for (const code of markets) {
         await saveDistVerification(code, year, { ...DV_EMPTY });
         for (const a of await getPlanAdjustments(code, year)) {

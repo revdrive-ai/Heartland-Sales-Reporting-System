@@ -15,6 +15,8 @@ type Health = {
     source: string; markets?: number; items?: number; promotions?: number; weeks?: number; data_edge?: string | null; error?: string;
     /** the Fabric feed into the project: last load and the sales edge */
     fabric?: { loaded_at?: string | null; tables?: number; failed?: number; sales_edge?: string | null; error?: string } | null;
+    /** reads that answered from a repo fixture instead of the database, newest first */
+    fallbacks?: { label: string; at: string; error: string }[];
   };
 };
 
@@ -158,6 +160,17 @@ export default function IntegrationsView() {
                 {health.data.source === "supabase"
                   ? "◇ The pages read the connected Supabase project. Internal sales (the Leadership report), shipments and list prices come from the tables Fabric loads there (fact_shipments_weekly, dim_customer, dim_product, dim_list_price, dim_fiscal_period); NIQ facts, items, the Telus promotion book and the crosswalks from the app's own tables. A table that fails to read answers from the repo fixture and says so in the server log."
                   : "◇ The pages read the data tables from the repo fixtures. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to read them from Supabase; HH_DATA_SOURCE=fixtures pins the files."}
+              </div>
+            )}
+            {health.data?.fallbacks && health.data.fallbacks.length > 0 && (
+              <div className="note" style={{ color: "#b3261e", display: "block" }}>
+                ⚠ {health.data.fallbacks.length} read{health.data.fallbacks.length === 1 ? "" : "s"} answered from a repo fixture instead of the database on this server:
+                {health.data.fallbacks.slice(0, 5).map((f) => (
+                  <div key={f.at + f.label} style={{ marginLeft: 16, fontSize: 11.5 }}>
+                    <b>{f.label}</b> · {fmtWhen(f.at)} · {f.error}
+                  </div>
+                ))}
+                <span style={{ marginLeft: 16, fontSize: 11.5 }}>Load the named table below, or run supabase/setup.sql if it does not exist, then re-check.</span>
               </div>
             )}
             {!health.writable && (

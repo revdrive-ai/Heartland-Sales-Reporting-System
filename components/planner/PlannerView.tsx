@@ -34,6 +34,7 @@ export type PlannerData = {
       tactics: Record<string, { lift: number; reads: number }>; // measured lift by performance type
       items: { upc: string; name: string; wk: number }[];  // per-item weekly base in scope
     }>;
+    brands: string[];                                    // Heartland's brands on file (items.is_own), display order
     divBrandWk: Record<string, Record<string, number>>;  // market → brand → weekly base (latest 52w)
     divItemWk: Record<string, Record<string, number>>;   // market → upc → weekly base (latest 52w)
     custMarkets: Record<string, string[]>;               // Telus customer id → scoped divisions covered
